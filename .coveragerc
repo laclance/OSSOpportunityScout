@@ -1,0 +1,12 @@
+[run]
+branch = True
+source =
+    bountyscout
+    opportunity_scout
+
+[report]
+show_missing = True
+skip_covered = False
+fail_under = 100
+exclude_lines =
+    if __name__ == .__main__.:

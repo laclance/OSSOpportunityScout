@@ -1,0 +1,62 @@
+name: OSS Opportunity Scout Hourly
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  scout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Check out scanner
+        uses: actions/checkout@v7
+
+      - name: Restore scout state
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin scout-state
+          git show origin/scout-state:seen_bounties.json > seen_bounties.json
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Run scanner
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python opportunity_scout.py
+
+      - name: Persist scout state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          state_copy="$RUNNER_TEMP/seen_bounties.json"
+          state_worktree="$RUNNER_TEMP/scout-state"
+
+          cp seen_bounties.json "$state_copy"
+
+          git fetch --no-tags origin scout-state
+          git worktree add --detach "$state_worktree" origin/scout-state
+          cp "$state_copy" "$state_worktree/seen_bounties.json"
+
+          git -C "$state_worktree" add seen_bounties.json
+          if git -C "$state_worktree" diff --cached --quiet; then
+            exit 0
+          fi
+
+          git -C "$state_worktree" config user.name "github-actions[bot]"
+          git -C "$state_worktree" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "$state_worktree" commit -m "chore: update seen bounties state [skip ci]"
+          git -C "$state_worktree" push origin HEAD:scout-state

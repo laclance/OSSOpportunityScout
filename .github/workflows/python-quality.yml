@@ -1,0 +1,67 @@
+name: Python Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/*.py"
+      - ".coveragerc"
+      - "mypy.ini"
+      - "ruff.toml"
+      - "requirements-dev.txt"
+      - "Makefile"
+      - "CODEBASE_MAP.md"
+      - ".github/workflows/python-quality.yml"
+      - ".github/workflows/oss-opportunity-scout.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Check Ruff formatting
+        run: ruff format --check .
+
+      - name: Lint with Ruff
+        run: ruff check .
+
+      - name: Check generated codebase map
+        run: |
+          if ! python scripts/generate_codebase_map.py --check; then
+            python scripts/generate_codebase_map.py
+            git diff -- CODEBASE_MAP.md
+            exit 1
+          fi
+
+      - name: Compile Python
+        run: python -m compileall -q opportunity_scout.py bountyscout tests scripts
+
+      - name: Type check with mypy
+        run: mypy
+
+      - name: Run tests with branch coverage
+        run: coverage run --branch -m unittest -v
+
+      - name: Enforce coverage
+        run: coverage report
