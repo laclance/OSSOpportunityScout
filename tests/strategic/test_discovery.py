@@ -52,6 +52,75 @@ class StrategicDiscoveryTests(unittest.TestCase):
         discovery.add_audit(audit, strong, "two", limit=1)
         self.assertEqual([item["reason"] for item in audit], ["one"])
 
+    def test_possible_miss_ignores_automated_ci_incident(self) -> None:
+        cmux = issue(
+            title="cmux NIGHTLY build is failing on main",
+            body="This issue closes itself on the next successful publish.",
+            labels=[{"name": "bug"}, {"name": "nightly-failure"}, {"name": "help wanted"}],
+            user={"login": "github-actions[bot]"},
+            comments=178,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.assertFalse(discovery.possible_miss_signal(cmux))
+
+    def test_possible_miss_ignores_manual_umbrella_tracker(self) -> None:
+        grpc_umbrella = issue(
+            title=(
+                "xds/clients: API refinements and cleanup before externalizing "
+                "generic xDS and LRS clients"
+            ),
+            body=(
+                "Track and resolve the following API refinements and bug fixes:\n\n"
+                "- [ ] #8314\n"
+                "- [ ] #9456\n"
+                "- [ ] #9457\n"
+                "- [ ] #9458\n"
+                "- [ ] #9459\n"
+            ),
+            comments=0,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        self.assertFalse(discovery.possible_miss_signal(grpc_umbrella))
+
+    def test_possible_miss_ignores_security_disclosure(self) -> None:
+        security = issue(
+            html_url="https://github.com/kubernetes-sigs/external-dns/issues/6780",
+            title="[Security Disclosure] Annotation-driven DNS record injection in external-dns",
+            body=(
+                "Severity: HIGH. CWE: CWE-285. CVSS 3.1: 8.1. "
+                "Disclosure timeline: vulnerability discovered today."
+            ),
+            comments=0,
+        )
+        self.assertFalse(discovery.possible_miss_signal(security))
+
+    def test_possible_miss_ignores_reward_history(self) -> None:
+        hall_of_fame = issue(
+            title="🏆 Hall of Fame — October 2026",
+            labels=[{"name": "hall-of-fame"}],
+            body="Top Contributors\nMonthly Stats\nTotal Bounty Distributed: $4770",
+        )
+        self.assertFalse(discovery.possible_miss_signal(hall_of_fame))
+
+    def test_possible_miss_ignores_automated_monitoring_tracker(self) -> None:
+        tracker = issue(
+            html_url="https://github.com/kubestellar/docs/issues/7162",
+            title="[aw] Detection Runs",
+            user={"login": "github-actions[bot]"},
+            labels=[{"name": "help wanted"}, {"name": "agentic-workflows"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+            body=(
+                "This issue tracks all runs where threat detection flagged problems in "
+                "agentic workflows in this repository. Each workflow run that completes "
+                "with a detection warning or failure posts a comment here.\n\n"
+                "This issue helps monitor the health of the threat detection system.\n\n"
+                "This issue is automatically managed by GitHub Agentic Workflows. "
+                "Do not close this issue manually.\n\n"
+                "No action to take - Do not assign to an agent."
+            ),
+        )
+        self.assertFalse(discovery.possible_miss_signal(tracker))
+
     def test_global_search_results_preserve_query_order_and_page_budget(self) -> None:
         calls: list[tuple[str, str | None, int]] = []
 
