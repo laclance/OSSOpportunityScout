@@ -4,10 +4,7 @@ import unittest
 from pathlib import Path
 
 WORKFLOW = (
-    Path(__file__).resolve().parents[1]
-    / ".github"
-    / "workflows"
-    / "oss-opportunity-scout.yml"
+    Path(__file__).resolve().parents[1] / ".github" / "workflows" / "oss-opportunity-scout.yml"
 )
 
 
@@ -20,13 +17,11 @@ class ProductionWorkflowConfigurationTests(unittest.TestCase):
         self.assertIn("    permissions:\n      contents: write\n", workflow)
         self.assertNotIn("      issues: write\n", workflow)
         self.assertIn(
-            "PRIVATE_GITHUB_REPORTS_REPOSITORY: "
-            "${{ secrets.PRIVATE_GITHUB_REPORTS_REPOSITORY }}",
+            "PRIVATE_GITHUB_REPORTS_REPOSITORY: ${{ secrets.PRIVATE_GITHUB_REPORTS_REPOSITORY }}",
             workflow,
         )
         self.assertIn(
-            "PRIVATE_GITHUB_REPORTS_TOKEN: "
-            "${{ secrets.PRIVATE_GITHUB_REPORTS_TOKEN }}",
+            "PRIVATE_GITHUB_REPORTS_TOKEN: ${{ secrets.PRIVATE_GITHUB_REPORTS_TOKEN }}",
             workflow,
         )
         self.assertNotIn("GITHUB_REPORTS_ENABLED:", workflow)
