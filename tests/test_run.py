@@ -6,7 +6,7 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from bountyscout import run, state
+from bountyscout import run, sources, state
 from bountyscout.types import (
     GitHubIssue,
     IssueLifecycleStatus,
@@ -125,6 +125,34 @@ class QueueAssemblyTests(unittest.TestCase):
         queue = run.assemble_queue([original], [higher, other])
         self.assertEqual(queue[0]["url"], other["url"])
         self.assertEqual(queue[1]["title"], "higher")
+
+    def test_queue_ranking_uses_canonical_candidate_rank_key(self) -> None:
+        first = candidate(
+            url="https://github.com/example/project/issues/41",
+            issue_number=41,
+            priority_score=70,
+        )
+        second = candidate(
+            url="https://github.com/example/project/issues/42",
+            issue_number=42,
+            priority_score=80,
+        )
+        original_rank_key = sources.candidate_rank_key
+        with patch.object(
+            sources,
+            "candidate_rank_key",
+            wraps=original_rank_key,
+        ) as rank_key:
+            queue = run.assemble_queue([first, second], [])
+
+        self.assertEqual(
+            [item["url"] for item in queue],
+            [second["url"], first["url"]],
+        )
+        self.assertEqual(
+            [call.args[0] for call in rank_key.call_args_list],
+            [first, second],
+        )
 
     def test_queue_report_limit_remains_eight(self) -> None:
         items = [

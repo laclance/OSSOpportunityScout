@@ -235,12 +235,7 @@ def verify_strategic_selection(
     for repo in ranked_by_repo:
         verified_repo = verified_by_repo[repo]
         verified_repo.sort(
-            key=lambda item: (
-                item["priority_score"],
-                item["career_score"],
-                item["cash_score"],
-                -item["comments"],
-            ),
+            key=sources.candidate_rank_key,
             reverse=True,
         )
         found.extend(verified_repo[:keep_per_repo])

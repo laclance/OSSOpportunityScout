@@ -309,17 +309,55 @@ class AdaptiveInspectionTests(unittest.TestCase):
 
 
 class VerificationSettlementTests(unittest.TestCase):
-    def test_candidate_rank_key_matches_queue_order(self) -> None:
-        self.assertEqual(
-            sources.candidate_rank_key(
-                candidate(
-                    priority_score=80,
-                    career_score=70,
-                    cash_score=0,
-                    comments=2,
-                )
+    def test_candidate_rank_key_orders_priority_career_cash_then_fewer_comments(self) -> None:
+        ranked = [
+            candidate(
+                title="priority",
+                priority_score=91,
+                career_score=1,
+                cash_score=1,
+                comments=99,
             ),
-            (80, 70, 0, -2),
+            candidate(
+                title="career",
+                priority_score=90,
+                career_score=91,
+                cash_score=1,
+                comments=99,
+            ),
+            candidate(
+                title="cash",
+                priority_score=90,
+                career_score=90,
+                cash_score=91,
+                comments=99,
+            ),
+            candidate(
+                title="comments",
+                priority_score=90,
+                career_score=90,
+                cash_score=90,
+                comments=1,
+            ),
+            candidate(
+                title="later equal",
+                priority_score=90,
+                career_score=90,
+                cash_score=90,
+                comments=1,
+            ),
+        ]
+
+        ordered = sorted(ranked, key=sources.candidate_rank_key, reverse=True)
+
+        self.assertEqual(
+            [item["title"] for item in ordered],
+            ["priority", "career", "cash", "comments", "later equal"],
+        )
+        self.assertEqual(sources.candidate_rank_key(ranked[3]), (90, 90, 90, -1))
+        self.assertEqual(
+            sources.candidate_rank_key(ranked[3]),
+            sources.candidate_rank_key(ranked[4]),
         )
 
     def test_verification_upper_bound_accounts_for_score_uplift(self) -> None:

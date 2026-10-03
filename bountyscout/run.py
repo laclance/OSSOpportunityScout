@@ -8,7 +8,7 @@ from datetime import datetime
 from time import monotonic
 from typing import Final
 
-from bountyscout import reporting, state
+from bountyscout import reporting, sources, state
 from bountyscout.types import (
     Candidate,
     GitHubIssue,
@@ -137,12 +137,7 @@ def assemble_queue(
 
     return sorted(
         by_url.values(),
-        key=lambda candidate: (
-            candidate["priority_score"],
-            candidate["career_score"],
-            candidate["cash_score"],
-            -candidate["comments"],
-        ),
+        key=sources.candidate_rank_key,
         reverse=True,
     )[:limit]
 

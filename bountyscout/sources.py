@@ -296,7 +296,7 @@ def strategic_inspection_items(
 
 
 def candidate_rank_key(candidate: Candidate) -> tuple[int, int, int, int]:
-    """Return the final strategic queue ordering key for a verified candidate."""
+    """Return the canonical final-candidate ordering key."""
     return (
         int(candidate["priority_score"]),
         int(candidate["career_score"]),
