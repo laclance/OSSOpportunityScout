@@ -154,11 +154,14 @@ class PlatformAdapterTests(unittest.TestCase):
             "https://app.opire.dev/home": (
                 r"https:\/\/github.com\/direct\/repo\/issues\/1 "
                 '<a href="/issues/A">a</a><a href="/issues/B">b</a>'
+                '<a href="/issues/C">c</a><a href="/issues/D">d</a>'
             ),
             "https://app.opire.dev/issues/A": "",
             "https://app.opire.dev/issues/B": (
                 "$50 bounty https://github.com/acme/widget/issues/2"
             ),
+            "https://app.opire.dev/issues/C": ("funded https://github.com/acme/widget/issues/3"),
+            "https://app.opire.dev/issues/D": "no github source here",
         }
         refs = sources.opire_platform_refs(
             lambda url: pages.get(url, ""),
@@ -171,6 +174,10 @@ class PlatformAdapterTests(unittest.TestCase):
             "confirmed bounty platform feed (Opire): $50",
         )
         self.assertEqual(
+            refs["https://github.com/acme/widget/issues/3"],
+            "confirmed bounty platform feed (Opire)",
+        )
+        self.assertEqual(
             sources.opire_platform_refs(lambda _: "", fetch_limit=20, network_workers=2),
             {},
         )
@@ -180,11 +187,16 @@ class PlatformAdapterTests(unittest.TestCase):
             "https://www.bountyhub.dev/en/bounties": (
                 r"https:\/\/github.com\/direct\/repo\/issues\/1 "
                 '<a href="/en/bounty/view/A">a</a><a href="/en/bounty/view/B">b</a>'
+                '<a href="/en/bounty/view/C">c</a><a href="/en/bounty/view/D">d</a>'
             ),
             "https://www.bountyhub.dev/en/bounty/view/A": "",
             "https://www.bountyhub.dev/en/bounty/view/B": (
                 "Reward $125 https://github.com/acme/widget/issues/2"
             ),
+            "https://www.bountyhub.dev/en/bounty/view/C": (
+                "funded https://github.com/acme/widget/issues/3"
+            ),
+            "https://www.bountyhub.dev/en/bounty/view/D": "no github source here",
         }
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
         refs = sources.bountyhub_platform_refs(
@@ -197,6 +209,10 @@ class PlatformAdapterTests(unittest.TestCase):
         self.assertEqual(
             refs["https://github.com/acme/widget/issues/2"],
             "confirmed bounty platform feed (BountyHub): $125",
+        )
+        self.assertEqual(
+            refs["https://github.com/acme/widget/issues/3"],
+            "confirmed bounty platform feed (BountyHub)",
         )
         self.assertEqual(
             sources.bountyhub_platform_refs(

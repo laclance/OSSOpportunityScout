@@ -11,7 +11,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import bountyscout.app as scout
-from bountyscout import delivery, github, run
+from bountyscout import delivery, github, run, sources
 from bountyscout import paid as paid_policy
 from bountyscout import paid_verification
 from bountyscout import state
@@ -225,12 +225,6 @@ class HttpAndPlatformTests(unittest.TestCase):
         with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertIsNone(scout.github_get_optional("https://x", None))
 
-    def test_fetch_text_success_and_failure(self) -> None:
-        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
-            self.assertEqual(scout.fetch_text("https://x"), "hello")
-        with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
-            self.assertEqual(scout.fetch_text("https://x"), "")
-
     def test_issue_comments_paths(self) -> None:
         self.assertEqual(scout.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
         self.assertEqual(scout.issue_comments(issue(comments=0), "t"), [])
@@ -346,72 +340,23 @@ class HttpAndPlatformTests(unittest.TestCase):
             )
             self.assertIn("/repos/a/b/issues/1", get.call_args.args[0])
 
-    def test_issuehunt_parser_empty_pagination_amount_and_no_amount(self) -> None:
-        pages = {
-            "https://oss.issuehunt.io/issues": (
-                '<a href="/r/apache/superset/issues/3821">x</a><span>$17.00</span>'
-            ),
-            "https://oss.issuehunt.io/issues?page=2": (
-                '<a href="/r/acme/widget/issues/9">x</a><span>funded</span>'
-            ),
-        }
-        with patch.object(scout, "fetch_text", side_effect=pages.get):
-            refs = scout.issuehunt_platform_refs()
-        self.assertEqual(
-            refs["https://github.com/apache/superset/issues/3821"],
-            "confirmed bounty platform feed (IssueHunt): $17.00",
-        )
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/9"],
-            "confirmed bounty platform feed (IssueHunt)",
-        )
-
-        with patch.object(scout, "fetch_text", return_value=""):
-            self.assertEqual(scout.issuehunt_platform_refs(), {})
-
-    def test_opire_parser_direct_details_missing_and_no_amount(self) -> None:
-        pages = {
-            "https://app.opire.dev/home": (
-                "https:\\/\\/github.com\\/direct\\/repo\\/issues\\/1 "
-                '<a href="/issues/A">a</a><a href="/issues/B">b</a>'
-            ),
-            "https://app.opire.dev/issues/A": "no github source here",
-            "https://app.opire.dev/issues/B": "https://github.com/acme/widget/issues/2 funded",
-        }
-        with patch.object(scout, "fetch_text", side_effect=pages.get):
-            refs = scout.opire_platform_refs()
-        self.assertIn("https://github.com/direct/repo/issues/1", refs)
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/2"],
-            "confirmed bounty platform feed (Opire)",
-        )
-        with patch.object(scout, "fetch_text", return_value=""):
-            self.assertEqual(scout.opire_platform_refs(), {})
-
-    def test_bountyhub_parser_direct_details_missing_and_amount(self) -> None:
-        pages = {
-            "https://www.bountyhub.dev/en/bounties": (
-                "https:\\/\\/github.com\\/direct\\/repo\\/issues\\/1 "
-                '<a href="/en/bounty/view/A">a</a><a href="/en/bounty/view/B">b</a>'
-            ),
-            "https://www.bountyhub.dev/en/bounty/view/A": "no github",
-            "https://www.bountyhub.dev/en/bounty/view/B": "Reward $125 https://github.com/acme/widget/issues/2",
-        }
-        with patch.object(scout, "fetch_text", side_effect=pages.get):
-            refs = scout.bountyhub_platform_refs()
-        self.assertIn("https://github.com/direct/repo/issues/1", refs)
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/2"],
-            "confirmed bounty platform feed (BountyHub): $125",
-        )
-        with patch.object(scout, "fetch_text", return_value=""):
-            self.assertEqual(scout.bountyhub_platform_refs(), {})
-
     def test_platform_paid_refs_merge_precedence(self) -> None:
         with (
-            patch.object(scout, "issuehunt_platform_refs", return_value={"u": "issuehunt"}),
-            patch.object(scout, "opire_platform_refs", return_value={"v": "opire"}),
-            patch.object(scout, "bountyhub_platform_refs", return_value={"u": "bountyhub"}),
+            patch.object(
+                sources,
+                "issuehunt_platform_refs",
+                return_value={"u": "issuehunt"},
+            ),
+            patch.object(
+                sources,
+                "opire_platform_refs",
+                return_value={"v": "opire"},
+            ),
+            patch.object(
+                sources,
+                "bountyhub_platform_refs",
+                return_value={"u": "bountyhub"},
+            ),
         ):
             self.assertEqual(scout.platform_paid_refs(), {"u": "bountyhub", "v": "opire"})
 
@@ -3129,53 +3074,6 @@ class CoverageGapTests(unittest.TestCase):
                 scout.comment_payment_signal(issue(), "t"),
                 "explicit /reward comment: $7",
             )
-
-    def test_platform_detail_empty_amount_and_no_amount_branches(self) -> None:
-        opire_pages = {
-            "https://app.opire.dev/home": (
-                '<a href="/issues/A">a</a><a href="/issues/B">b</a><a href="/issues/C">c</a>'
-            ),
-            "https://app.opire.dev/issues/A": "",
-            "https://app.opire.dev/issues/B": (
-                "$50 bounty https://github.com/acme/widget/issues/2"
-            ),
-            "https://app.opire.dev/issues/C": ("funded https://github.com/acme/widget/issues/3"),
-        }
-        with patch.object(scout, "fetch_text", side_effect=opire_pages.get):
-            refs = scout.opire_platform_refs()
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/2"],
-            "confirmed bounty platform feed (Opire): $50",
-        )
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/3"],
-            "confirmed bounty platform feed (Opire)",
-        )
-
-        bountyhub_pages = {
-            "https://www.bountyhub.dev/en/bounties": (
-                '<a href="/en/bounty/view/A">a</a>'
-                '<a href="/en/bounty/view/B">b</a>'
-                '<a href="/en/bounty/view/C">c</a>'
-            ),
-            "https://www.bountyhub.dev/en/bounty/view/A": "",
-            "https://www.bountyhub.dev/en/bounty/view/B": (
-                "$75 https://github.com/acme/widget/issues/4"
-            ),
-            "https://www.bountyhub.dev/en/bounty/view/C": (
-                "funded https://github.com/acme/widget/issues/5"
-            ),
-        }
-        with patch.object(scout, "fetch_text", side_effect=bountyhub_pages.get):
-            refs = scout.bountyhub_platform_refs()
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/4"],
-            "confirmed bounty platform feed (BountyHub): $75",
-        )
-        self.assertEqual(
-            refs["https://github.com/acme/widget/issues/5"],
-            "confirmed bounty platform feed (BountyHub)",
-        )
 
     def test_verify_success_with_comment_signal_cached_repo_and_guide(self) -> None:
         fresh = issue(body="", title="Task", comments=1)
