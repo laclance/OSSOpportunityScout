@@ -943,6 +943,8 @@ def main() -> None:
         github_reports_enabled=(
             os.environ.get("GITHUB_REPORTS_ENABLED", "").strip().casefold() == "true"
         ),
+        private_github_reports_repository=os.environ.get("PRIVATE_GITHUB_REPORTS_REPOSITORY"),
+        private_github_reports_token=os.environ.get("PRIVATE_GITHUB_REPORTS_TOKEN"),
     )
     dependencies = run.RunDependencies(
         discover_paid=discover_paid,
@@ -953,6 +955,7 @@ def main() -> None:
         send_discord=delivery.send_discord_notification,
         send_github_report=delivery.create_github_issue,
         issue_lifecycle=lambda url: github.issue_lifecycle(url, token).status,
+        send_private_github_report=delivery.create_private_github_issue,
     )
     run.run_combined_scan(
         config,
