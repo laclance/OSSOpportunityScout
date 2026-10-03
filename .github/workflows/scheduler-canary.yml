@@ -1,0 +1,16 @@
+name: Scheduler Canary
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+
+    steps:
+      - name: Prove scheduler event
+        run: echo "scheduler-canary $(date -u +%Y-%m-%dT%H:%M:%SZ)"
