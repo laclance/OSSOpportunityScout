@@ -73,13 +73,13 @@ def has_existing_implementation_pr(
     *,
     fetch_json: FetchJson | None = None,
 ) -> str | None:
-    """Return a reason when the issue timeline references an open implementation PR."""
+    """Consume all timeline pages; reject open implementation PRs or incomplete evidence."""
     url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/timeline?per_page=100"
     timeline: object = (
-        github.github_get(url, token) if fetch_json is None else fetch_json(url, token)
+        github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
     )
     if not isinstance(timeline, list):
-        return None
+        return "could not verify open implementation PR timeline"
 
     for raw_event in timeline:
         if not isinstance(raw_event, dict):
@@ -112,7 +112,11 @@ def active_claim_reason(
     *,
     fetch_json: FetchJson | None = None,
 ) -> str | None:
-    """Return a reason when recent comments clearly claim or implement the task."""
+    """Inspect the existing bounded first page (at most 30 comments) for claims.
+
+    Issue-specific comments do not document sort/direction support; retain the
+    historical request and bound without claiming it guarantees recent comments.
+    """
     if not comments_count:
         return None
 

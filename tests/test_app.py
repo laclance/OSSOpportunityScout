@@ -234,9 +234,9 @@ class HttpAndPlatformTests(unittest.TestCase):
     def test_issue_comments_paths(self) -> None:
         self.assertEqual(scout.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
         self.assertEqual(scout.issue_comments(issue(comments=0), "t"), [])
-        with patch.object(github, "github_get", return_value={"not": "list"}):
+        with patch.object(github, "github_collection", return_value={"not": "list"}):
             self.assertEqual(scout.issue_comments(issue(comments=1), "t"), [])
-        with patch.object(github, "github_get", return_value=[{"body": "x"}]):
+        with patch.object(github, "github_collection", return_value=[{"body": "x"}]):
             self.assertEqual(scout.issue_comments(issue(comments=1), "t"), [{"body": "x"}])
 
     def test_supplemental_payment_signals(self) -> None:

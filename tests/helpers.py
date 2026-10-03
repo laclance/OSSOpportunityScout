@@ -10,6 +10,7 @@ class FakeResponse:
 
     def __init__(self, body: bytes = b"{}") -> None:
         self.body = body
+        self.headers: dict[str, str] = {}
 
     def __enter__(self) -> "FakeResponse":
         return self

@@ -158,7 +158,7 @@ def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
     if not repo or not number:
         return "could not identify repository/issue number"
 
-    timeline = github.github_get(
+    timeline = github.github_collection(
         f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
         token,
     )

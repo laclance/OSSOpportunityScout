@@ -440,13 +440,13 @@ class TimelinePullRequestTests(unittest.TestCase):
                 },
             },
         ]
-        with patch.object(github, "github_get", return_value=timeline):
+        with patch.object(github, "github_collection", return_value=timeline):
             self.assertEqual(
                 competition.timeline_open_pr_reason(issue(), "t"),
                 "existing open implementation PR: https://github.com/example/project/pull/9",
             )
 
-        with patch.object(github, "github_get", return_value={}):
+        with patch.object(github, "github_collection", return_value={}):
             self.assertEqual(
                 competition.timeline_open_pr_reason(issue(), "t"),
                 "could not verify open implementation PR timeline",
@@ -462,7 +462,7 @@ class TimelinePullRequestTests(unittest.TestCase):
             "could not identify repository/issue number",
         )
 
-        with patch.object(github, "github_get", return_value={}):
+        with patch.object(github, "github_collection", return_value={}):
             self.assertEqual(
                 competition.timeline_open_pr_reason(issue(), "t"),
                 "could not verify open implementation PR timeline",
@@ -493,7 +493,7 @@ class TimelinePullRequestTests(unittest.TestCase):
                 },
             },
         ]
-        with patch.object(github, "github_get", return_value=no_match_timeline):
+        with patch.object(github, "github_collection", return_value=no_match_timeline):
             self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
 
 
