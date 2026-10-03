@@ -235,17 +235,3 @@
 ## `scripts/__init__.py`
 
 - No public top-level classes or functions.
-
-## `scripts/close_legacy_scan_reports.py`
-
-- **class** `ReportIssue` — line 27
-- **class** `EnumerationResult` — line 41
-- **class** `CleanupResult` — line 49
-- **class** `CleanupError` — line 58
-- **function** `validate_repository()` — line 62
-- **function** `normalize_issue()` — line 100
-- **function** `is_confirmed_generated_report()` — line 139
-- **function** `fetch_open_bounty_alert_issues()` — line 182
-- **function** `close_report()` — line 213
-- **function** `cleanup_reports()` — line 227
-- **function** `main()` — line 267
