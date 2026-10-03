@@ -11,7 +11,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 import bountyscout.app as scout
-from bountyscout import delivery, github
+from bountyscout import delivery, github, run
 from bountyscout import paid as paid_policy
 from bountyscout import paid_verification
 from bountyscout import state
@@ -2634,7 +2634,11 @@ class FormattingAndMainTests(unittest.TestCase):
             order.append("strategic")
             return [], {}, [], []
 
-        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/repo",
+            "GITHUB_REPORTS_ENABLED": "true",
+        }
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
@@ -2647,6 +2651,34 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertEqual(order, ["searches", "paid", "strategic"])
         self.assertIs(paid_discovery.call_args.args[4], paid_prefetch)
         self.assertIs(strategic.call_args.args[5], strategic_prefetch)
+
+    def test_main_github_report_flag_accepts_only_explicit_true(self) -> None:
+        for value, expected in (
+            (None, False),
+            ("false", False),
+            ("yes", False),
+            ("1", False),
+            ("TRUE", True),
+            (" true ", True),
+        ):
+            with self.subTest(value=value):
+                env = {
+                    "GITHUB_TOKEN": "tok",
+                    "GITHUB_REPOSITORY": "me/repo",
+                }
+                if value is not None:
+                    env["GITHUB_REPORTS_ENABLED"] = value
+
+                with (
+                    patch.dict(os.environ, env, clear=True),
+                    patch.object(run, "run_combined_scan") as combined,
+                ):
+                    scout.main()
+
+                config = combined.call_args.args[0]
+                self.assertEqual(config.token, "tok")
+                self.assertEqual(config.repo_fullname, "me/repo")
+                self.assertIs(config.github_reports_enabled, expected)
 
     def test_main_state_load_error_stops_before_discovery(self) -> None:
         with (
@@ -2689,6 +2721,7 @@ class FormattingAndMainTests(unittest.TestCase):
         env = {
             "GITHUB_TOKEN": "tok",
             "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
             "TELEGRAM_BOT_TOKEN": "tb",
             "TELEGRAM_CHAT_ID": "chat",
             "DISCORD_WEBHOOK_URL": "hook",
@@ -2759,6 +2792,7 @@ class FormattingAndMainTests(unittest.TestCase):
         env = {
             "GITHUB_TOKEN": "tok",
             "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
         }
         buf = io.StringIO()
         with (
@@ -2795,7 +2829,11 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
     def test_main_paid_search_failure_warns_and_preserves_seen_state(self) -> None:
-        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
+        }
         strategic = candidate(paid=False)
         with (
             patch.dict(os.environ, env, clear=True),
@@ -2827,6 +2865,7 @@ class FormattingAndMainTests(unittest.TestCase):
         env = {
             "GITHUB_TOKEN": "tok",
             "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
         }
         buf = io.StringIO()
         audit = [
@@ -2866,7 +2905,11 @@ class FormattingAndMainTests(unittest.TestCase):
 
     def test_main_github_delivery_failure_does_not_advance_state(self) -> None:
         paid = candidate()
-        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
+        }
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
@@ -3019,7 +3062,11 @@ class FormattingAndMainTests(unittest.TestCase):
         lifecycle.assert_not_called()
         save.assert_not_called()
 
-        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/BountyScout"}
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPORTS_ENABLED": "true",
+        }
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(
@@ -3233,7 +3280,11 @@ class CoverageGapTests(unittest.TestCase):
     def test_main_keeps_higher_duplicate_and_github_report_without_examples(self) -> None:
         high = candidate(priority_score=90)
         low = candidate(priority_score=40)
-        env = {"GITHUB_TOKEN": "tok", "GITHUB_REPOSITORY": "me/repo"}
+        env = {
+            "GITHUB_TOKEN": "tok",
+            "GITHUB_REPOSITORY": "me/repo",
+            "GITHUB_REPORTS_ENABLED": "true",
+        }
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState()),

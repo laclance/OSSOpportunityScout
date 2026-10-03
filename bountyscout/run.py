@@ -74,6 +74,7 @@ class RunConfig:
     telegram_token: str | None
     telegram_chat_id: str | None
     discord_webhook: str | None
+    github_reports_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -231,7 +232,7 @@ def _deliver(
             or delivered
         )
 
-    if config.token and config.repo_fullname:
+    if config.github_reports_enabled and config.token and config.repo_fullname:
         attempted = True
         body = reporting.github_report_body(
             queue,
