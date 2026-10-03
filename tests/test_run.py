@@ -212,7 +212,9 @@ class RunLifecycleTests(unittest.TestCase):
         self.assertFalse(result.state_saved)
         save.assert_not_called()
 
-    def test_successful_delivery_commits_maintenance_and_new_urls_atomically(self) -> None:
+    def test_telegram_only_successful_delivery_commits_maintenance_and_new_urls_atomically(
+        self,
+    ) -> None:
         old_url = "https://github.com/example/project/issues/99"
         new = candidate(url="https://github.com/example/project/issues/100", issue_number=100)
         saved: list[state.SeenState] = []
@@ -302,6 +304,142 @@ class RunLifecycleTests(unittest.TestCase):
             maintain.assert_not_called()
             save.assert_not_called()
 
+    def test_github_credentials_alone_do_not_attempt_public_delivery(self) -> None:
+        item = candidate()
+        github_calls: list[str] = []
+
+        def paid(
+            _token: str | None,
+            _seen: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.PaidDiscoveryResult:
+            return [item], {}, []
+
+        def github_report(_repo: str, _token: str, _title: str, _body: str) -> bool:
+            github_calls.append("github")
+            return True
+
+        deps = run.RunDependencies(
+            discover_paid=paid,
+            discover_strategic=empty_strategic,
+            prefetch_discovery_searches=empty_prefetch,
+            append_audit=append_audit,
+            send_telegram=false_telegram,
+            send_discord=false_discord,
+            send_github_report=github_report,
+            issue_lifecycle=open_lifecycle,
+        )
+        with (
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "maintain_seen_state") as maintain,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig("tok", "me/repo", None, None, None),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertEqual(github_calls, [])
+        self.assertFalse(result.delivery.attempted)
+        self.assertFalse(result.delivery.delivered)
+        maintain.assert_not_called()
+        save.assert_not_called()
+
+    def test_explicit_github_report_enablement_preserves_delivery(self) -> None:
+        item = candidate()
+        github_calls: list[str] = []
+
+        def paid(
+            _token: str | None,
+            _seen: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.PaidDiscoveryResult:
+            return [item], {}, []
+
+        def github_report(_repo: str, _token: str, _title: str, _body: str) -> bool:
+            github_calls.append("github")
+            return True
+
+        deps = run.RunDependencies(
+            discover_paid=paid,
+            discover_strategic=empty_strategic,
+            prefetch_discovery_searches=empty_prefetch,
+            append_audit=append_audit,
+            send_telegram=false_telegram,
+            send_discord=false_discord,
+            send_github_report=github_report,
+            issue_lifecycle=open_lifecycle,
+        )
+        with (
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "save_seen_state") as save,
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    None,
+                    None,
+                    None,
+                    github_reports_enabled=True,
+                ),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertEqual(github_calls, ["github"])
+        self.assertTrue(result.delivery.attempted)
+        self.assertTrue(result.delivery.delivered)
+        self.assertTrue(result.state_saved)
+        save.assert_called_once()
+
+    def test_discord_only_successful_delivery_advances_state(self) -> None:
+        item = candidate()
+
+        def paid(
+            _token: str | None,
+            _seen: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.PaidDiscoveryResult:
+            return [item], {}, []
+
+        def discord(_webhook: str, _message: str) -> bool:
+            return True
+
+        deps = run.RunDependencies(
+            discover_paid=paid,
+            discover_strategic=empty_strategic,
+            prefetch_discovery_searches=empty_prefetch,
+            append_audit=append_audit,
+            send_telegram=false_telegram,
+            send_discord=discord,
+            send_github_report=false_github,
+            issue_lifecycle=open_lifecycle,
+        )
+        saved: list[state.SeenState] = []
+        with (
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "save_seen_state", side_effect=saved.append),
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig(None, None, None, None, "hook"),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertTrue(result.delivery.attempted)
+        self.assertTrue(result.delivery.delivered)
+        self.assertTrue(result.state_saved)
+        self.assertEqual(len(saved), 1)
+        self.assertTrue(saved[0].contains(item["url"]))
+
     def test_incomplete_coverage_can_deliver_but_never_advances_state(self) -> None:
         reports: list[str] = []
 
@@ -342,7 +480,14 @@ class RunLifecycleTests(unittest.TestCase):
             redirect_stdout(buf),
         ):
             result = run.run_combined_scan(
-                run.RunConfig("tok", "me/repo", None, None, None),
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    None,
+                    None,
+                    None,
+                    github_reports_enabled=True,
+                ),
                 deps,
                 FIXED_TIME,
             )
@@ -390,7 +535,14 @@ class RunLifecycleTests(unittest.TestCase):
             patch.object(state, "save_seen_state") as save,
         ):
             result = run.run_combined_scan(
-                run.RunConfig("tok", "me/repo", None, None, None),
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    None,
+                    None,
+                    None,
+                    github_reports_enabled=True,
+                ),
                 deps,
                 FIXED_TIME,
             )
@@ -438,7 +590,14 @@ class RunLifecycleTests(unittest.TestCase):
             patch.object(state, "save_seen_state"),
         ):
             result = run.run_combined_scan(
-                run.RunConfig("tok", "me/repo", "tb", "chat", "hook"),
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    "tb",
+                    "chat",
+                    "hook",
+                    github_reports_enabled=True,
+                ),
                 deps,
                 FIXED_TIME,
             )

@@ -30,7 +30,7 @@ GitHub + bounty-platform sources
  ranked queue + audit diagnostics
             |
             v
- GitHub issue / optional notifications
+ private notifications / optional GitHub report
             |
             v
       seen_bounties.json
@@ -44,7 +44,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | --- | --- | --- |
 | `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `bountyscout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
-| `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `bountyscout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks |
+| `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `bountyscout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks and GitHub report delivery is explicitly gated by runtime config |
 | `bountyscout/github.py` | Canonical GitHub JSON and Issues Search transport with one request identity, plus generic issue/timestamp parsing and keyed per-scan cache-fill primitives | No scanner policy; all normal GitHub API traffic uses `github_get()` with `OSSOpportunityScout`; injectable fetchers remain deterministic test seams |
 | `bountyscout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `bountyscout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
@@ -115,7 +115,7 @@ New leaf modules should follow the same rule. The orchestration layer may compos
 
 Phases 3B through 4E moved reusable parsing, paid policy, verification, delivery, state, and transport into canonical package ownership. OSS Cleanup 1 removed the now-unused legacy root compatibility scanner; `opportunity_scout.py` remains the supported root runtime shim.
 
-Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. Current generated reports are auto-closed during normal delivery, and there is no recurring cleanup service.
+Historical generated queue reports from before the current auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. When explicitly enabled, generated GitHub reports are auto-closed during delivery; default standalone operation does not create them, and there is no recurring cleanup service.
 
 Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unified all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
 
@@ -133,7 +133,8 @@ Phase 4C established package-owned strategic discovery, verification, and combin
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
 - `bountyscout.state` knows only the local state file. Scheduled production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
-- Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. A GitHub report whose auto-close step fails remains a failed delivery for this transaction.
+- GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. A default standalone deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
+- Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
 - Tests must cover scanner policy without live network access.
 - Ruff, strict mypy, and 100% statement + branch coverage are repository-wide quality gates.
 

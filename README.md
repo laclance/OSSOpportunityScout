@@ -5,7 +5,7 @@ A lightweight GitHub scanner for finding open-source work worth doing, across tw
 - **Cash now:** explicit paid bounties and sponsored issues.
 - **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
-The scout runs hourly, ranks new opportunities, creates a GitHub issue report, and only marks reported items as seen after at least one notification channel succeeds.
+The scout runs hourly, ranks new opportunities, and delivers them only through configured channels. Public GitHub issue reports are disabled by default; seen-state advances only after at least one configured delivery succeeds.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Production scanner implementation lives under the `bountyscout/` package, with f
 - `bountyscout/run.py` — combined scan lifecycle, delivery aggregation, and seen-state commit.
 - `bountyscout/paid.py` — paid-opportunity eligibility and payment-signal policy.
 - `bountyscout/paid_verification.py` — paid rejection and competition verification.
-- `bountyscout/delivery.py` — Telegram, Discord, and generated GitHub report delivery.
+- `bountyscout/delivery.py` — Telegram/Discord notification transport plus optional GitHub issue report transport.
 - `bountyscout/github.py` — shared GitHub JSON access and keyed per-scan cache fills.
 - `bountyscout/types.py` — canonical internal domain literals and mapping contracts.
 - `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
@@ -84,7 +84,7 @@ Each reported candidate includes:
 - scoring reasons
 - contribution-guide link when found
 
-The GitHub issue report also includes examples rejected during final verification. Repeated source/comment/competition-verification failures produce a prominent incomplete-coverage warning, and incomplete runs do not advance seen-state.
+When explicitly enabled, the GitHub issue report also includes examples rejected during final verification. Repeated source/comment/competition-verification failures produce a prominent incomplete-coverage warning, and incomplete runs do not advance seen-state.
 
 ## Workflow
 
@@ -119,6 +119,8 @@ python -m pip install -r requirements-dev.txt
 make quality
 GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 ```
+
+`GITHUB_TOKEN` authenticates scanner GitHub API access and `GITHUB_REPOSITORY` identifies the host repository. Neither enables public report publishing. GitHub issue reports are opt-in only with `GITHUB_REPORTS_ENABLED=true`; when the variable is absent, no GitHub report issue is created.
 
 Run `make format` after Python edits and `make map` when production modules or top-level symbols change. Ruff is the canonical Python formatter; strict mypy, the generated code map, and 100% statement + branch coverage are enforced in CI.
 

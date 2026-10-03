@@ -100,13 +100,13 @@
 ## `bountyscout/run.py`
 
 - **class** `RunConfig` — line 69
-- **class** `RunDependencies` — line 80
-- **class** `CoverageStatus` — line 94
-- **class** `DeliveryResult` — line 104
-- **class** `CombinedRunResult` — line 112
-- **function** `assemble_queue()` — line 121
-- **function** `coverage_status()` — line 146
-- **function** `run_combined_scan()` — line 257
+- **class** `RunDependencies` — line 81
+- **class** `CoverageStatus` — line 95
+- **class** `DeliveryResult` — line 105
+- **class** `CombinedRunResult` — line 113
+- **function** `assemble_queue()` — line 122
+- **function** `coverage_status()` — line 147
+- **function** `run_combined_scan()` — line 258
 
 ## `bountyscout/scoring.py`
 

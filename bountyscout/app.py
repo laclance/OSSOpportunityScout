@@ -940,6 +940,9 @@ def main() -> None:
         telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
         discord_webhook=os.environ.get("DISCORD_WEBHOOK_URL"),
+        github_reports_enabled=(
+            os.environ.get("GITHUB_REPORTS_ENABLED", "").strip().casefold() == "true"
+        ),
     )
     dependencies = run.RunDependencies(
         discover_paid=discover_paid,
