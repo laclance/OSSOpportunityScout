@@ -55,7 +55,7 @@
 - **function** `send_telegram_notification()` — line 62
 - **function** `send_discord_notification()` — line 76
 - **function** `create_github_issue()` — line 81
-- **function** `create_private_github_issue()` — line 120
+- **function** `create_private_github_issue()` — line 121
 
 ## `bountyscout/github.py`
 
