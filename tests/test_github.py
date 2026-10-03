@@ -53,6 +53,16 @@ class GitHubParsingTests(unittest.TestCase):
 
 
 class GitHubHttpTests(unittest.TestCase):
+    def test_canonical_github_api_identity(self) -> None:
+        self.assertEqual(
+            dict(github.GITHUB_API_HEADERS),
+            {
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "OSSOpportunityScout",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+
     def test_github_get_uses_standard_headers_and_auth(self) -> None:
         with patch.object(
             urllib.request,

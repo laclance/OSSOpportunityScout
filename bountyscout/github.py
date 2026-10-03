@@ -11,7 +11,7 @@ import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
 from dataclasses import dataclass
 from datetime import datetime
 from threading import Lock
@@ -27,7 +27,14 @@ from bountyscout.types import (
 
 T = TypeVar("T")
 
-DEFAULT_USER_AGENT: Final = "OSSOpportunityScout"
+GITHUB_ACCEPT: Final = "application/vnd.github+json"
+GITHUB_USER_AGENT: Final = "OSSOpportunityScout"
+GITHUB_API_VERSION: Final = "2022-11-28"
+GITHUB_API_HEADERS: Final[Mapping[str, str]] = {
+    "Accept": GITHUB_ACCEPT,
+    "User-Agent": GITHUB_USER_AGENT,
+    "X-GitHub-Api-Version": GITHUB_API_VERSION,
+}
 
 
 @dataclass(frozen=True)
@@ -67,11 +74,7 @@ def cached_value(
 
 
 def _github_headers(token: str | None) -> dict[str, str]:
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": DEFAULT_USER_AGENT,
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
+    headers = dict(GITHUB_API_HEADERS)
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers

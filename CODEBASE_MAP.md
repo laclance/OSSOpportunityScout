@@ -52,26 +52,26 @@
 
 ## `bountyscout/delivery.py`
 
-- **function** `send_telegram_notification()` — line 62
-- **function** `send_discord_notification()` — line 76
-- **function** `create_github_issue()` — line 81
-- **function** `create_private_github_issue()` — line 121
+- **function** `send_telegram_notification()` — line 58
+- **function** `send_discord_notification()` — line 72
+- **function** `create_github_issue()` — line 77
+- **function** `create_private_github_issue()` — line 117
 
 ## `bountyscout/github.py`
 
-- **class** `IssueLifecycleResult` — line 34
-- **class** `KeyedLockPool` — line 38
-- **function** `cached_value()` — line 51
-- **function** `github_get()` — line 80
-- **function** `search_github()` — line 101
-- **function** `issue_repo_and_number()` — line 123
-- **function** `parse_github_datetime()` — line 130
-- **function** `issue_lifecycle()` — line 140
-- **function** `repo_metadata()` — line 172
-- **function** `issue_comments_checked()` — line 178
-- **function** `issue_comments()` — line 198
-- **function** `contribution_guide()` — line 207
-- **function** `issue_from_github_url()` — line 224
+- **class** `IssueLifecycleResult` — line 41
+- **class** `KeyedLockPool` — line 45
+- **function** `cached_value()` — line 58
+- **function** `github_get()` — line 83
+- **function** `search_github()` — line 104
+- **function** `issue_repo_and_number()` — line 126
+- **function** `parse_github_datetime()` — line 133
+- **function** `issue_lifecycle()` — line 143
+- **function** `repo_metadata()` — line 175
+- **function** `issue_comments_checked()` — line 181
+- **function** `issue_comments()` — line 201
+- **function** `contribution_guide()` — line 210
+- **function** `issue_from_github_url()` — line 227
 
 ## `bountyscout/paid.py`
 

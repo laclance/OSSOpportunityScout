@@ -6,7 +6,7 @@ from typing import Any, cast
 import unittest
 from unittest.mock import patch
 
-from bountyscout import delivery
+from bountyscout import delivery, github
 from tests.helpers import FakeResponse
 
 
@@ -159,14 +159,20 @@ class DeliveryTests(unittest.TestCase):
         )
         self.assertEqual(metadata_req.method, "GET")
         self.assertIsNone(metadata_req.data)
-        self.assertEqual(metadata_req.get_header("Authorization"), "Bearer report-token")
+        for request in (metadata_req, create_req):
+            self.assertEqual(request.get_header("Accept"), github.GITHUB_ACCEPT)
+            self.assertEqual(request.get_header("User-agent"), github.GITHUB_USER_AGENT)
+            self.assertEqual(
+                request.get_header("X-github-api-version"),
+                github.GITHUB_API_VERSION,
+            )
+            self.assertEqual(request.get_header("Authorization"), "Bearer report-token")
         self.assertEqual(
             create_req.full_url,
             "https://api.github.com/repos/owner/private-reports/issues",
         )
         self.assertEqual(create_req.method, "POST")
         self.assertEqual(request_json(create_req), {"title": "title", "body": "body"})
-        self.assertEqual(create_req.get_header("Authorization"), "Bearer report-token")
 
     def test_private_github_report_fails_closed_for_unverified_privacy(self) -> None:
         for body in (b'{"private": false}', b"{}", b"[]", b"not json"):
