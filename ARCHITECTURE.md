@@ -30,7 +30,7 @@ GitHub + bounty-platform sources
  ranked queue + audit diagnostics
             |
             v
- private notifications / optional host or private GitHub report
+ configured delivery channels (private GitHub in bundled production)
             |
             v
       seen_bounties.json
@@ -111,14 +111,9 @@ package/domain modules -X-> bountyscout.app
 
 New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `bountyscout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
 
-## Refactoring direction
+## Historical context
 
-Phases 3B through 4E moved reusable parsing, paid policy, verification, delivery, state, and transport into canonical package ownership. OSS Cleanup 1 removed the now-unused legacy root compatibility scanner; `opportunity_scout.py` remains the supported root runtime shim.
-
-Historical generated queue reports from before the current host-report auto-close lifecycle were cleaned once with `scripts/close_legacy_scan_reports.py` after explicit report-identity verification. When explicitly enabled, host-repository GitHub reports retain that auto-close behavior. Private-repository reports are a separate inbox channel: the destination must be verified private before publication, created issues remain open, and no pre-created label is required.
-
-Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unified all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
-
+For migration history and the standalone repository boundary, see `PROVENANCE.md`. Current architecture is defined by the module boundaries and contracts in this document.
 
 ## GitHub integration contract
 
