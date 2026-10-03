@@ -1,4 +1,4 @@
-name: OSS Opportunity Scout Hourly
+name: OSS Opportunity Scout
 
 on:
   workflow_dispatch:
