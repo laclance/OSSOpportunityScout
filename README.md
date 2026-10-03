@@ -5,7 +5,7 @@ A lightweight GitHub scanner for finding open-source work worth doing, across tw
 - **Cash now:** explicit paid bounties and sponsored issues.
 - **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
-The scout runs hourly, ranks new opportunities, and delivers them only through configured channels. Public GitHub issue reports are disabled by default; seen-state advances only after at least one configured delivery succeeds.
+The scout runs hourly, ranks new opportunities, and delivers them only through configured channels. Ranked output can be sent to a separately configured private GitHub reports repository. Public host-repository issue reports are disabled by default; seen-state advances only after at least one configured delivery succeeds.
 
 ## Architecture
 
@@ -16,7 +16,7 @@ Production scanner implementation lives under the `bountyscout/` package, with f
 - `bountyscout/run.py` — combined scan lifecycle, delivery aggregation, and seen-state commit.
 - `bountyscout/paid.py` — paid-opportunity eligibility and payment-signal policy.
 - `bountyscout/paid_verification.py` — paid rejection and competition verification.
-- `bountyscout/delivery.py` — Telegram/Discord notification transport plus optional GitHub issue report transport.
+- `bountyscout/delivery.py` — Telegram/Discord transport, optional host-repository GitHub reports, and privacy-verified private-repository GitHub reports.
 - `bountyscout/github.py` — shared GitHub JSON access and keyed per-scan cache fills.
 - `bountyscout/types.py` — canonical internal domain literals and mapping contracts.
 - `bountyscout/reporting.py` — GitHub queue reports, reject/audit summaries, and length-safe notification formatting.
@@ -120,7 +120,9 @@ make quality
 GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 ```
 
-`GITHUB_TOKEN` authenticates scanner GitHub API access and `GITHUB_REPOSITORY` identifies the host repository. Neither enables public report publishing. GitHub issue reports are opt-in only with `GITHUB_REPORTS_ENABLED=true`; when the variable is absent, no GitHub report issue is created.
+`GITHUB_TOKEN` authenticates scanner GitHub API access and `GITHUB_REPOSITORY` identifies the host repository. Neither enables public report publishing. Host-repository GitHub issue reports are opt-in only with `GITHUB_REPORTS_ENABLED=true`; when the variable is absent, no host-repository report issue is created.
+
+Private GitHub reports use a separate authentication context. Set both `PRIVATE_GITHUB_REPORTS_REPOSITORY=owner/private-reports` and `PRIVATE_GITHUB_REPORTS_TOKEN=...` to configure that channel. Before every private-report issue creation, the scanner inspects the configured repository with the private reporting credential and requires GitHub metadata to report `"private": true`. Public, missing, malformed, unauthenticated, or otherwise unverifiable destinations fail closed. Private report issues remain open and do not require a pre-created label. Scope the private credential only to the intended reports repository with the minimum Issues write permission needed.
 
 Run `make format` after Python edits and `make map` when production modules or top-level symbols change. Ruff is the canonical Python formatter; strict mypy, the generated code map, and 100% statement + branch coverage are enforced in CI.
 
