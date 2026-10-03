@@ -59,19 +59,19 @@
 
 ## `bountyscout/github.py`
 
-- **class** `IssueLifecycleResult` — line 41
-- **class** `KeyedLockPool` — line 45
-- **function** `cached_value()` — line 58
-- **function** `github_get()` — line 83
-- **function** `search_github()` — line 104
-- **function** `issue_repo_and_number()` — line 126
-- **function** `parse_github_datetime()` — line 133
-- **function** `issue_lifecycle()` — line 143
-- **function** `repo_metadata()` — line 175
-- **function** `issue_comments_checked()` — line 181
-- **function** `issue_comments()` — line 201
-- **function** `contribution_guide()` — line 210
-- **function** `issue_from_github_url()` — line 227
+- **class** `IssueLifecycleResult` — line 47
+- **class** `KeyedLockPool` — line 58
+- **function** `cached_value()` — line 71
+- **function** `github_get()` — line 96
+- **function** `search_github()` — line 110
+- **function** `issue_repo_and_number()` — line 132
+- **function** `parse_github_datetime()` — line 139
+- **function** `issue_lifecycle()` — line 149
+- **function** `repo_metadata()` — line 174
+- **function** `issue_comments_checked()` — line 180
+- **function** `issue_comments()` — line 200
+- **function** `contribution_guide()` — line 209
+- **function** `issue_from_github_url()` — line 226
 
 ## `bountyscout/paid.py`
 

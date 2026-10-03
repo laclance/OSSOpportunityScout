@@ -116,27 +116,23 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
 
 def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a report only after GitHub confirms the destination is private."""
+    metadata = github.github_get(
+        f"https://api.github.com/repos/{repo_fullname}",
+        token,
+        timeout=GITHUB_TIMEOUT_SECONDS,
+        log_errors=False,
+    )
+    if not isinstance(metadata, dict):
+        print("Failed to verify private GitHub report destination.")
+        return False
+    if metadata.get("private") is not True:
+        print("Private GitHub report destination is not verified private.")
+        return False
+
     headers = {
         **github.GITHUB_API_HEADERS,
         "Authorization": f"Bearer {token}",
     }
-    try:
-        metadata_body = _request_json(
-            f"https://api.github.com/repos/{repo_fullname}",
-            None,
-            method="GET",
-            headers=headers,
-            timeout=GITHUB_TIMEOUT_SECONDS,
-        )
-        metadata: object = json.loads(metadata_body.decode("utf-8"))
-    except Exception:
-        print("Failed to verify private GitHub report destination.")
-        return False
-
-    if not isinstance(metadata, dict) or metadata.get("private") is not True:
-        print("Private GitHub report destination is not verified private.")
-        return False
-
     try:
         _request_json(
             f"https://api.github.com/repos/{repo_fullname}/issues",
