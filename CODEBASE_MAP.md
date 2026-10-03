@@ -60,18 +60,19 @@
 ## `bountyscout/github.py`
 
 - **class** `IssueLifecycleResult` — line 47
-- **class** `KeyedLockPool` — line 58
-- **function** `cached_value()` — line 71
-- **function** `github_get()` — line 96
-- **function** `search_github()` — line 110
-- **function** `issue_repo_and_number()` — line 132
-- **function** `parse_github_datetime()` — line 139
-- **function** `issue_lifecycle()` — line 149
-- **function** `repo_metadata()` — line 174
-- **function** `issue_comments_checked()` — line 180
-- **function** `issue_comments()` — line 200
-- **function** `contribution_guide()` — line 209
-- **function** `issue_from_github_url()` — line 226
+- **function** `github_collection()` — line 121
+- **class** `KeyedLockPool` — line 164
+- **function** `cached_value()` — line 177
+- **function** `github_get()` — line 202
+- **function** `search_github()` — line 216
+- **function** `issue_repo_and_number()` — line 238
+- **function** `parse_github_datetime()` — line 245
+- **function** `issue_lifecycle()` — line 255
+- **function** `repo_metadata()` — line 280
+- **function** `issue_comments_checked()` — line 286
+- **function** `issue_comments()` — line 306
+- **function** `contribution_guide()` — line 315
+- **function** `issue_from_github_url()` — line 332
 
 ## `bountyscout/paid.py`
 
@@ -82,7 +83,7 @@
 
 - **function** `has_existing_implementation_pr()` — line 69
 - **function** `active_claim_reason()` — line 107
-- **function** `candidate_rejection_reason()` — line 147
+- **function** `candidate_rejection_reason()` — line 151
 
 ## `bountyscout/reporting.py`
 

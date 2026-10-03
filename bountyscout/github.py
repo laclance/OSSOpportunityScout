@@ -53,6 +53,112 @@ class _GitHubReadResult:
     payload: object | None
     failure: str | None = None
     status: int | None = None
+    link: str | None = None
+
+
+class _NoPaginationRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        """Pagination fails closed on redirects before forwarding credentials."""
+        raise urllib.error.URLError("pagination redirect refused")
+
+
+def _pagination_open(request: urllib.request.Request, *, timeout: int) -> Any:
+    return urllib.request.build_opener(_NoPaginationRedirect()).open(request, timeout=timeout)
+
+
+def _next_link(link: str | None) -> str | None:
+    """Reject unusable pagination metadata rather than claiming complete evidence."""
+    if link is None:
+        return None
+    next_url = None
+    for part in link.split(","):
+        match = re.fullmatch(r'\s*<([^<>\s]+)>;\s*rel="(next|prev|first|last)"\s*', part)
+        if match is None:
+            raise ValueError("malformed pagination Link")
+        if match.group(2) == "next":
+            if next_url is not None:
+                raise ValueError("multiple next links")
+            next_url = match.group(1)
+    return next_url
+
+
+def _pagination_identity(url: str) -> tuple[str, tuple[tuple[str, str], ...], int]:
+    """Only HTTPS GitHub API URLs with an unambiguous numeric page are usable."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.netloc != "api.github.com" or parsed.fragment:
+        raise ValueError("untrusted pagination URL")
+    params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    pages = [value for key, value in params if key == "page"]
+    if len(pages) > 1 or (pages and not re.fullmatch(r"[1-9]\d*", pages[0])):
+        raise ValueError("unusable pagination page")
+    return (
+        parsed.path,
+        tuple(sorted((k, v) for k, v in params if k != "page")),
+        int(pages[0] if pages else "1"),
+    )
+
+
+def _verified_repository_alias(path: str, next_path: str, token: str | None) -> bool:
+    """GitHub's numeric repository Links must identify the requested repository."""
+    original = re.fullmatch(r"/repos/([^/]+/[^/]+)(/.*)", path)
+    alias = re.fullmatch(r"/repositories/([1-9]\d*)(/.*)", next_path)
+    if original is None or alias is None or original[2] != alias[2]:
+        return False
+    metadata = _github_json_get(
+        f"https://api.github.com/repos/{original[1]}", token, 20, pagination=True
+    ).payload
+    return isinstance(metadata, dict) and metadata.get("id") == int(alias[1])
+
+
+def github_collection(
+    url: str,
+    token: str | None = None,
+    *,
+    max_pages: int | None = None,
+) -> list[Any] | None:
+    """Follow collection Links explicitly; discard partial evidence on failure.
+
+    max_pages is an intentional caller bound. Complete traversal has a 1000-page
+    safety ceiling that fails closed, rather than returning truncated evidence.
+    """
+    items: list[Any] = []
+    if max_pages is not None and max_pages < 1:
+        return None
+    try:
+        path, query, page = _pagination_identity(url)
+        allowed_paths = {path}
+        visited = {page}
+        for count in range(1, 1001):
+            result = _github_json_get(url, token, 20, pagination=True)
+            if result.failure is not None or not isinstance(result.payload, list):
+                return None
+            items.extend(result.payload)
+            if max_pages is not None and count >= max_pages:
+                return items
+            next_url = _next_link(result.link)
+            if next_url is None:
+                return items
+            next_path, next_query, next_page = _pagination_identity(next_url)
+            if next_path not in allowed_paths:
+                if not _verified_repository_alias(path, next_path, token):
+                    return None
+                allowed_paths.add(next_path)
+            if next_query != query or next_page in visited or next_page != page + 1:
+                return None
+            visited.add(next_page)
+            page = next_page
+            url = next_url
+    except ValueError:
+        return None
+    return None
 
 
 class KeyedLockPool:
@@ -114,7 +220,7 @@ def search_github(
     *,
     fetch_json: Callable[[str, str | None], Any] | None = None,
 ) -> GitHubSearchResult:
-    """Fetch one GitHub Issues Search page with canonical request normalization."""
+    """Fetch one intentionally bounded GitHub Issues Search page."""
     url = "https://api.github.com/search/issues?" + urllib.parse.urlencode(
         {"q": query, "per_page": per_page}
     )
@@ -181,14 +287,14 @@ def issue_comments_checked(
     item: GitHubIssue,
     token: str | None,
 ) -> tuple[list[GitHubComment], str | None]:
-    """Fetch issue comments and distinguish source failure from a real empty thread."""
+    """Consume all comment pages for verification; distinguish failure from emptiness."""
     repo, number = issue_repo_and_number(item)
     if not repo or not number:
         return [], "could not identify repository/issue number"
     if not int(item.get("comments") or 0):
         return [], None
 
-    comments = github_get(
+    comments = github_collection(
         f"https://api.github.com/repos/{repo}/issues/{number}/comments?per_page=100",
         token,
     )
@@ -304,15 +410,19 @@ def _github_json_get(
     url: str,
     token: str | None,
     timeout: int,
+    *,
+    pagination: bool = False,
 ) -> _GitHubReadResult:
     attempt = 0
     while True:
         request = urllib.request.Request(url, headers=_github_headers(token), method="GET")
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            open_url = _pagination_open if pagination else urllib.request.urlopen
+            with open_url(request, timeout=timeout) as response:
                 raw = response.read()
+                link = response.headers.get("Link")
             try:
-                return _GitHubReadResult(json.loads(raw.decode("utf-8")))
+                return _GitHubReadResult(json.loads(raw.decode("utf-8")), status=200, link=link)
             except (UnicodeDecodeError, json.JSONDecodeError):
                 return _GitHubReadResult(None, "malformed response", 200)
         except urllib.error.HTTPError as exc:

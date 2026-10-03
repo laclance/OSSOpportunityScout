@@ -315,13 +315,13 @@ class GitHubResourceTests(unittest.TestCase):
         self.assertEqual(github.issue_comments_checked(issue(comments=0), "t"), ([], None))
         self.assertEqual(github.issue_comments(issue(comments=0), "t"), [])
 
-        with patch.object(github, "github_get", return_value={"bad": "shape"}):
+        with patch.object(github, "github_collection", return_value={"bad": "shape"}):
             self.assertEqual(
                 github.issue_comments_checked(issue(), "t"),
                 ([], "could not refresh issue comments"),
             )
             self.assertEqual(github.issue_comments(issue(), "t"), [])
-        with patch.object(github, "github_get", return_value=[{"body": "x"}]) as getter:
+        with patch.object(github, "github_collection", return_value=[{"body": "x"}]) as getter:
             self.assertEqual(
                 github.issue_comments_checked(issue(), "t"),
                 ([{"body": "x"}], None),

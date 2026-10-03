@@ -66,21 +66,22 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ],
         )
 
-    def test_failed_or_non_list_timeline_returns_none(self) -> None:
+    def test_failed_or_non_list_timeline_fails_closed(self) -> None:
         values: tuple[object, ...] = (None, {})
         for value in values:
             with self.subTest(value=value):
-                self.assertIsNone(
+                self.assertEqual(
                     paid_verification.has_existing_implementation_pr(
                         "acme/widget",
                         42,
                         "tok",
                         fetch_json=lambda *_args, value=value: value,
-                    )
+                    ),
+                    "could not verify open implementation PR timeline",
                 )
 
     def test_default_transport_is_used_once(self) -> None:
-        with patch.object(github, "github_get", return_value=[]) as getter:
+        with patch.object(github, "github_collection", return_value=[]) as getter:
             self.assertIsNone(
                 paid_verification.has_existing_implementation_pr("acme/widget", 42, "tok")
             )
