@@ -117,6 +117,7 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
     print("GitHub Issue notification created and auto-closed successfully.")
     return True
 
+
 def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a report only after GitHub confirms the destination is private."""
     headers = {
