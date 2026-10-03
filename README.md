@@ -5,7 +5,7 @@ A lightweight GitHub scanner for finding open-source work worth doing, across tw
 - **Cash now:** explicit paid bounties and sponsored issues.
 - **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
-The scout runs hourly, ranks new opportunities, and delivers them only through configured channels. Ranked output can be sent to a separately configured private GitHub reports repository. Public host-repository issue reports are disabled by default; seen-state advances only after at least one configured delivery succeeds.
+The scout runs when triggered, ranks new opportunities, and delivers them only through configured channels. Ranked output can be sent to a separately configured private GitHub reports repository. Public host-repository issue reports are disabled by default; seen-state advances only after at least one configured delivery succeeds.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ Production scanner implementation lives under the `bountyscout/` package, with f
 - `bountyscout/strategic/competition.py` — active-claim and implementation-PR competition checks.
 - `bountyscout/strategic/readiness.py` — pure maintainer-readiness and lifecycle policy.
 - `seen_bounties.json` — shared notification state.
-- `.github/workflows/oss-opportunity-scout.yml` — hourly runner.
+- `.github/workflows/oss-opportunity-scout.yml` — production runner (currently manual-only while native GitHub scheduling is paused).
 
 See `ARCHITECTURE.md` for data flow and module boundaries, `ROADMAP.md` for planned improvements, `AGENTS.md` for AI/human implementation rules, and `CODEBASE_MAP.md` for the generated structural index.
 
@@ -110,7 +110,7 @@ Keep no more than two issues actively being implemented at once.
 
 ## Running
 
-The GitHub Action runs hourly and can also be triggered manually from **Actions → OSS Opportunity Scout Hourly**.
+The GitHub Action is currently manual-only while native GitHub scheduling is paused. Trigger it from **Actions → OSS Opportunity Scout**.
 
 Locally:
 
