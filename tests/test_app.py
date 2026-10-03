@@ -442,17 +442,6 @@ class CalibrationTests(unittest.TestCase):
             )
         )
 
-    def test_real_queue_calibration_examples(self) -> None:
-        connection_pool = issue(
-            title="Client-go: Add support for Connection Pool",
-            body="I would like to propose adding support.",
-            labels=[{"name": "kind/feature"}, {"name": "needs-triage"}],
-        )
-        self.assertEqual(
-            scout.strategic_rejection(connection_pool, "t"),
-            "awaiting maintainer triage",
-        )
-
     def test_verify_resolves_aggregator_wrapper_to_upstream(self) -> None:
         wrapper = issue(
             html_url="https://github.com/aggregator/jobs/issues/4",
@@ -554,6 +543,10 @@ class VerificationTests(unittest.TestCase):
             "support/triage issue rather than a contributor task",
         )
         self.assertEqual(
+            scout.strategic_rejection(issue(labels=["claimed"]), "t"),
+            "issue is marked claimed by the project",
+        )
+        self.assertEqual(
             scout.strategic_rejection(
                 {"html_url": "bad", "title": "x", "body": "", "labels": []}, "t"
             ),
@@ -590,156 +583,51 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
-    def test_readiness_gate_known_false_positive_classes(self) -> None:
-        loki = issue(
-            title="Interpretation of date range in Grafana UI vs query_range API is wrong",
-            labels=[{"name": "type/bug"}],
-        )
-        loki_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "This particular issue came up as needs discussion, so I'm going to "
-                    "hand it off to the Engineering team to look at."
-                ),
-                "author_association": "CONTRIBUTOR",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(loki, "t", loki_comments),
-            "maintainer says issue still needs discussion",
-        )
-
-        argo = issue(
-            title="chore: upgrade golang to 1.26.3",
-            body=(
-                "PR #27737 (merged 2026-05-07) already bumps Go to 1.26.3 on master "
-                "but a new release tag has not yet been published. "
-                "Request: please tag a new ArgoCD release from the current master."
-            ),
-        )
-        self.assertEqual(
-            scout.strategic_rejection(argo, "t", []),
-            "implementation already merged; only release/tagging remains",
-        )
-
-        traefik = issue(
-            title="Per-ingress request metrics",
-            labels=[{"name": "kind/proposal"}],
-        )
-        traefik_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "We'd like to gauge community interest before committing. "
-                    "We'll reevaluate based on the feedback. "
-                    "This discussion is time-boxed to 6 months."
-                ),
-                "author_association": "OWNER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(traefik, "t", traefik_comments),
-            "proposal is still gathering feedback",
-        )
-
-        dashboard = issue(
-            title="Dependency Dashboard",
-            labels=[{"name": "dependencies"}],
-            user={"login": "renovate-sh-app[bot]"},
-            comments=0,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(dashboard, "t", []),
-            "automated dependency dashboard, not an implementation task",
-        )
-
-        moby = issue(
-            title="docker cp copy-out can write outside the destination",
-            labels=[{"name": "status/needs-reproduction"}],
-        )
-        self.assertEqual(
-            scout.strategic_rejection(moby, "t", []),
-            "awaiting reproduction confirmation",
-        )
-
-        undici = issue(
-            title="HTTP/1.1 304 with Content-Length closes the connection",
-            labels=[{"name": "bug"}],
-        )
-        undici_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Looks like this was fixed on main by #5864. "
-                    "It's just not released yet. Should be good with the next release."
-                ),
-                "author_association": "NONE",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(undici, "t", undici_comments),
-            "implementation already merged; only release/tagging remains",
-        )
-
-        flux = issue(
-            title="ResourceSet and kustomize.toolkit.fluxcd.io/ssa",
-            labels=[],
-        )
-        flux_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "A merge option would be the wrong solution for this. "
-                    "The profile should be defined in Git instead."
-                ),
-                "author_association": "MEMBER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(flux, "t", flux_comments),
-            "maintainer indicates the proposed implementation approach is not wanted",
-        )
-
-    def test_fresh_1128_run_false_positive_regressions(self) -> None:
-        prometheus = issue(
-            title="storage/remote: ensure metadata instrumentation make sense for PRW2",
-            body=(
-                "This issue is to decide what these metrics should mean "
-                "(or whether they should exist) for PRW2 before we call PRW2 stable."
-            ),
-            author_association="MEMBER",
-            labels=[{"name": "component/remote storage"}],
-            comments=3,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(prometheus, "t", []),
-            "maintainer-authored issue is still deciding implementation semantics",
-        )
-
-        external_dns = issue(
-            html_url="https://github.com/kubernetes-sigs/external-dns/issues/6718",
-            title="TXT records are write-once",
-            body=(
-                "PR https://github.com/kubernetes-sigs/external-dns/pull/6293 "
-                "fixes exactly this and has been open for six months."
-            ),
-            labels=[],
-            comments=0,
-        )
         with (
-            patch.object(paid_verification, "has_existing_implementation_pr", return_value=None),
+            patch.object(scout, "abandoned_lifecycle_reason", return_value="abandoned"),
+            patch.object(scout, "readiness_pending_label_reason", return_value="readiness"),
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "abandoned")
+
+        with (
+            patch.object(scout, "readiness_pending_label_reason", return_value="readiness"),
             patch.object(
-                github,
-                "github_get",
-                return_value={
-                    "state": "open",
-                    "html_url": "https://github.com/kubernetes-sigs/external-dns/pull/6293",
-                },
+                scout, "_strategic_classification_rejection", return_value="classification"
             ),
         ):
-            self.assertEqual(
-                scout.strategic_rejection(external_dns, "t", []),
-                "existing open implementation PR: "
-                "https://github.com/kubernetes-sigs/external-dns/pull/6293",
-            )
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "readiness")
 
+        with (
+            patch.object(
+                scout, "_strategic_classification_rejection", return_value="classification"
+            ),
+            patch.object(scout, "reporter_resolution_reason", return_value="resolved"),
+            patch.object(
+                scout,
+                "maintainer_readiness_comment_state",
+                return_value=(False, "comment hold"),
+            ),
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "classification")
+
+        with (
+            patch.object(scout, "reporter_resolution_reason", return_value="resolved"),
+            patch.object(
+                scout,
+                "maintainer_readiness_comment_state",
+                return_value=(False, "comment hold"),
+            ),
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "resolved")
+
+        with patch.object(
+            scout,
+            "maintainer_readiness_comment_state",
+            return_value=(False, "comment hold"),
+        ):
+            self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
+
+    def test_possible_miss_signal_ignores_automated_ci_incident(self) -> None:
         cmux = issue(
             title="cmux NIGHTLY build is failing on main",
             body="This issue closes itself on the next successful publish.",
@@ -748,13 +636,9 @@ class VerificationTests(unittest.TestCase):
             comments=178,
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.assertEqual(
-            scout.strategic_rejection(cmux, "t", []),
-            "automated CI/release incident, not an implementation task",
-        )
         self.assertFalse(scout.possible_miss_signal(cmux))
 
-    def test_fresh_1140_run_claim_and_tracker_regressions(self) -> None:
+    def test_possible_miss_signal_ignores_umbrella_tracker(self) -> None:
         grpc_umbrella = issue(
             title=(
                 "xds/clients: API refinements and cleanup before externalizing "
@@ -771,143 +655,9 @@ class VerificationTests(unittest.TestCase):
             comments=0,
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
-        self.assertEqual(
-            scout.strategic_rejection(grpc_umbrella, "t", []),
-            "umbrella tracking issue, not a single implementation task",
-        )
         self.assertFalse(scout.possible_miss_signal(grpc_umbrella))
 
-        client_golang = issue(
-            title="api: no way to get query stats",
-            comments=1,
-        )
-        client_golang_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "I'd like to pick this up. On current main, WithStats sends stats=all, "
-                    "but queryResult does not retain data.stats. I'll wait for direction on "
-                    "the public interface before publishing an implementation."
-                ),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "user": {"login": "fzlzjerry"},
-            }
-        ]
-        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
-            self.assertEqual(
-                scout.strategic_rejection(client_golang, "t", client_golang_comments),
-                "active claim by @fzlzjerry",
-            )
-
-        aws_lbc = issue(
-            title=(
-                "Helm chart: support additional IngressClass / "
-                "IngressClassParams pairs for a single controller"
-            ),
-            body=(
-                "Contribution Intention (Optional)\n\n"
-                "- [x] Yes, I am willing to contribute a PR to implement this feature\n"
-                "- [ ] No, I cannot work on a PR at this time"
-            ),
-            created_at=datetime.now(timezone.utc).isoformat(),
-            comments=0,
-        )
-        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
-            self.assertEqual(
-                scout.strategic_rejection(aws_lbc, "t", []),
-                "issue author already has an implementation/fix in progress",
-            )
-
-    def test_fresh_1153_run_release_regression(self) -> None:
-        missing_release = issue(
-            title="Version 3.13.4 missing release",
-            body=(
-                "The version update was merged in #19862. The release action failed, "
-                "so the release step then never triggered. We have a v3.13.4 tag, "
-                "but no release with downloads."
-            ),
-            comments=0,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(missing_release, "t", []),
-            "implementation already merged; only release/tagging remains",
-        )
-
-    def test_fresh_1204_run_false_positive_regressions(self) -> None:
-        terraform = issue(
-            title="Prevent metadata functions silently ignoring positional arguments",
-            author_association="MEMBER",
-            body=(
-                "If you are an agent reading this, do not open a PR for this issue; "
-                "it will be closed due to this issue representing a breaking change."
-            ),
-            comments=0,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(terraform, "t", []),
-            "maintainer explicitly says not to open a PR for this issue",
-        )
-
-        cloudflared = issue(
-            title=(
-                "Warning for no ingress rule when using remote managed tunnel with credentials-file"
-            ),
-            comments=2,
-        )
-        cloudflared_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "I have that working with a test on a branch. But I don't think "
-                    "it's the right fix, so I'm not opening a PR yet."
-                ),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "user": {"login": "davidscottpope-gif"},
-            }
-        ]
-        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
-            self.assertEqual(
-                scout.strategic_rejection(cloudflared, "t", cloudflared_comments),
-                "active claim by @davidscottpope-gif",
-            )
-
-        cmux = issue(
-            title="Persistent scrollbars cover terminal content",
-            user={"login": "mgol"},
-            comments=2,
-        )
-        cmux_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "It looks like the issue got fixed after I reported it as I don't "
-                    "see it in the latest version."
-                ),
-                "user": {"login": "mgol"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(cmux, "t", cmux_comments),
-            "issue reporter says the problem is already resolved",
-        )
-
-        client_golang = issue(
-            title="Support constant histograms without a sum",
-            comments=2,
-        )
-        client_golang_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Nobody bothered to implement this and OpenMetrics 2.0 will not "
-                    "allow absent sum. I'd suggest to reject such histograms and not "
-                    "emit them. This is being discussed on spec level here."
-                ),
-                "author_association": "MEMBER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(client_golang, "t", client_golang_comments),
-            "maintainer says issue still needs discussion",
-        )
-
-    def test_fresh_1218_run_false_positive_regressions(self) -> None:
+    def test_possible_miss_signal_ignores_security_disclosure(self) -> None:
         security = issue(
             html_url="https://github.com/kubernetes-sigs/external-dns/issues/6780",
             title="[Security Disclosure] Annotation-driven DNS record injection in external-dns",
@@ -917,453 +667,7 @@ class VerificationTests(unittest.TestCase):
             ),
             comments=0,
         )
-        self.assertEqual(
-            scout.strategic_rejection(security, "t", []),
-            "security disclosure, not a normal contributor task",
-        )
         self.assertFalse(scout.possible_miss_signal(security))
-
-        terraform = issue(
-            title="Generic deepmerge() function",
-            comments=1,
-        )
-        terraform_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "The prevailing wisdom on the maintainer team is that there is no "
-                    "correct answer for one perfect implementation of a deep merge. "
-                    "This is a use case for provider functions."
-                ),
-                "author_association": "CONTRIBUTOR",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(terraform, "t", terraform_comments),
-            "maintainer indicates the proposed implementation approach is not wanted",
-        )
-
-        release_announcement = issue(
-            title="Planned SDK 3.0 Release (Important Dates and Information)",
-            labels=[{"name": "announcement 📢"}],
-            comments=1,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(release_announcement, "t", []),
-            "release planning/tracking issue, not implementation work",
-        )
-
-    def test_fresh_1326_run_false_positive_regressions(self) -> None:
-        otel_js = issue(
-            html_url="https://github.com/open-telemetry/opentelemetry-js/issues/6957",
-            title="support ConsoleMetricExporter options from declarative config",
-            comments=2,
-        )
-        otel_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "I poked at this locally. No breaking change needed. "
-                    "I made the explicit selector win and moved the preference logic "
-                    "into sdk-metrics."
-                ),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "user": {"login": "neoLsH"},
-            }
-        ]
-
-        cloudflared = issue(
-            html_url="https://github.com/cloudflare/cloudflared/issues/1728",
-            title="QUIC connections intermittently terminate in Azure Container Apps",
-            body=(
-                "We would like to determine whether this is expected behavior, an Azure "
-                "networking interaction, a cloudflared issue, or configuration. "
-                "We would particularly appreciate guidance on:\n"
-                "1. Is this expected for established QUIC connections?\n"
-                "2. Are there known UDP idle-timeout issues?\n"
-                "3. Could Azure networking cause this?\n"
-                "4. Would switching to HTTP/2 be recommended?\n"
-            ),
-            comments=0,
-        )
-
-        aws_lbc = issue(
-            html_url=(
-                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4870"
-            ),
-            title="manage controller CRD upgrades",
-            comments=1,
-        )
-        aws_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Thanks for filing this. I agree the current CRD lifecycle experience "
-                    "isn't great. It is worth discussion. Like to hear from the community "
-                    "which approach is preferable."
-                ),
-                "author_association": "COLLABORATOR",
-            }
-        ]
-
-        controller_runtime = issue(
-            html_url="https://github.com/kubernetes-sigs/controller-runtime/issues/3220",
-            title="Feature: Warmup for controllers",
-            body=(
-                "### Tasks\n"
-                "- [x] Design\n"
-                "- [x] Initial implementation\n"
-                "- [ ] Further improvements\n"
-            ),
-            comments=1,
-        )
-        controller_comments: list[GitHubComment] = [
-            {
-                "body": "Let me know if I should add additional tasks to this umbrella issue.",
-                "author_association": "MEMBER",
-            }
-        ]
-
-        undici = issue(
-            html_url="https://github.com/nodejs/undici/issues/5912",
-            title="Should Fetch retry reusable request bodies after HTTP/2 GOAWAY?",
-            comments=1,
-        )
-        undici_comments: list[GitHubComment] = [
-            {
-                "body": "https://github.com/KhafraDev/undici/tree/fetch/issue-5912",
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "user": {"login": "KhafraDev"},
-                "author_association": "MEMBER",
-            }
-        ]
-
-        with patch.object(paid_verification, "has_existing_implementation_pr", return_value=None):
-            self.assertEqual(
-                scout.strategic_rejection(otel_js, "t", otel_comments),
-                "active claim by @neoLsH",
-            )
-            self.assertEqual(
-                scout.strategic_rejection(undici, "t", undici_comments),
-                "active implementation branch linked by @KhafraDev",
-            )
-
-        self.assertEqual(
-            scout.strategic_rejection(cloudflared, "t", []),
-            "support/triage issue rather than a contributor task",
-        )
-        self.assertEqual(
-            scout.strategic_rejection(aws_lbc, "t", aws_comments),
-            "maintainer says issue still needs discussion",
-        )
-        self.assertEqual(
-            scout.strategic_rejection(controller_runtime, "t", controller_comments),
-            "umbrella tracking issue, not a single implementation task",
-        )
-
-    def test_fresh_1525_run_false_positive_regressions(self) -> None:
-        controller_runtime = issue(
-            html_url="https://github.com/kubernetes-sigs/controller-runtime/issues/3054",
-            title="Metrics improvements",
-            body=(
-                "This is an umbrella issue to (try) to keep an overview over current "
-                "feature requests and limitations around metrics."
-            ),
-            author_association="MEMBER",
-            labels=[{"name": "lifecycle/frozen"}],
-            comments=2,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(controller_runtime, "t", []),
-            "umbrella tracking issue, not a single implementation task",
-        )
-
-        etcd_release = issue(
-            html_url="https://github.com/etcd-io/etcd/issues/22449",
-            title="Plan to release v3.5.34",
-            body="The patch release criteria has been met, so we should release v3.5.34.",
-            author_association="MEMBER",
-            labels=[{"name": "area/security"}, {"name": "type/feature"}],
-            comments=2,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(etcd_release, "t", []),
-            "release planning/tracking issue, not implementation work",
-        )
-
-        claimed = issue(
-            html_url="https://github.com/lacs-project/sysknife/issues/474",
-            title="The plan summary an operator approves is never sanitised",
-            labels=[{"name": "bug"}, {"name": "help wanted"}, {"name": "claimed"}],
-            comments=3,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(claimed, "t", []),
-            "issue is marked claimed by the project",
-        )
-
-    def test_fresh_1414_run_false_positive_regressions(self) -> None:
-        undici_tracker = issue(
-            html_url="https://github.com/nodejs/undici/issues/5177",
-            title="[2026] Tracking issue for flaky tests",
-            body=(
-                "This is 2026 equivalent of the previous flaky-test tracker where maintainers "
-                "had reduced flaky tests. We can use this issue for tracking, and create "
-                "sub-issues per test failure?"
-            ),
-            author_association="MEMBER",
-            comments=4,
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-        self.assertEqual(
-            scout.strategic_rejection(undici_tracker, "t", []),
-            "umbrella tracking issue, not a single implementation task",
-        )
-
-    def test_fresh_1350_run_false_positive_regressions(self) -> None:
-        soup = issue(
-            html_url="https://github.com/MakazhanAlpamys/Soup/issues/1530",
-            title="from-traces file input silently writes zero pairs",
-            labels=[{"name": "bug"}, {"name": "help wanted"}, {"name": "good first issue"}],
-            comments=1,
-        )
-        soup_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Taking this one — I'll trace why --logs <file> yields an empty "
-                    "dataset and fix the parsing."
-                ),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-                "user": {"login": "vaputa"},
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(soup, "t", soup_comments),
-            "active claim by @vaputa",
-        )
-
-        republish = issue(
-            html_url="https://github.com/nodejs/undici/issues/5919",
-            title=(
-                "undici-types 6.21.x: a trusted-publisher re-release would unblock current users"
-            ),
-            body=(
-                "Suggestion: publish undici-types@6.21.1 with the same content as 6.21.0 "
-                "through the current trusted-publisher workflow."
-            ),
-            comments=0,
-        )
-        self.assertEqual(
-            scout.strategic_rejection(republish, "t", []),
-            "existing package content; only release/publication remains",
-        )
-
-        aws_cni = issue(
-            html_url="https://github.com/aws/amazon-vpc-cni-k8s/issues/3833",
-            title="ipamd attaches ENIs but never registers them",
-            comments=1,
-        )
-        aws_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Could you share the node logs if you have collected them from the "
-                    "affected instance?"
-                ),
-                "author_association": "COLLABORATOR",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(aws_cni, "t", aws_comments),
-            "maintainer is waiting for requested diagnostic evidence",
-        )
-
-        undici_core = issue(
-            html_url="https://github.com/nodejs/undici/issues/2558",
-            title="Enhancement of IPv6 Connectivity and Address Selection",
-            comments=1,
-        )
-        undici_core_comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Closing it here would help it being backported to previous node. "
-                    "But I think we should do it in core."
-                ),
-                "author_association": "MEMBER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(undici_core, "t", undici_core_comments),
-            "maintainer redirected implementation/discussion to another project",
-        )
-
-    def test_readiness_gate_targeted_live_refinements(self) -> None:
-        profile_request: list[GitHubComment] = [
-            {
-                "body": "Would it be possible to provide a profile from the affected binary?",
-                "author_association": "MEMBER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(issue(title="Memory leak"), "t", profile_request),
-            "maintainer is waiting for requested diagnostic evidence",
-        )
-
-        redirect: list[GitHubComment] = [
-            {
-                "body": (
-                    "This requires a change in the specification defined in "
-                    "https://github.com/distribution/reference. "
-                    "Probably best to open a ticket there for discussion."
-                ),
-                "author_association": "COLLABORATOR",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(issue(title="IPv6 reference parsing"), "t", redirect),
-            "maintainer redirected implementation/discussion to another project",
-        )
-
-        duplicate: list[GitHubComment] = [
-            {
-                "body": (
-                    "Looks like a (possible) duplicate of #123. "
-                    "The discussion is being tracked there."
-                ),
-                "author_association": "OWNER",
-            }
-        ]
-        self.assertEqual(
-            scout.strategic_rejection(issue(title="Prune behavior"), "t", duplicate),
-            "maintainer indicates this is probably tracked by another canonical issue",
-        )
-
-        self.assertEqual(
-            scout.strategic_rejection(
-                issue(title="Gateway cert", labels=[{"name": "lifecycle/rotten"}]),
-                "t",
-                [],
-            ),
-            "issue is in an abandoned/rotten lifecycle state",
-        )
-
-        supplied = profile_request + [
-            {
-                "body": "I've attached the requested heap profile here: https://example.test/heap.",
-                "author_association": "NONE",
-            }
-        ]
-        approved = supplied + [
-            {
-                "body": "Thanks, this looks valid. A PR in this repository is welcome.",
-                "author_association": "MEMBER",
-            }
-        ]
-        redirect_then_ready = redirect + [
-            {
-                "body": "The spec concern is resolved. A PR in this repository is welcome.",
-                "author_association": "MEMBER",
-            }
-        ]
-        revival: list[GitHubComment] = [
-            {
-                "body": "We are reviving this issue; this issue is active again.",
-                "author_association": "MEMBER",
-            }
-        ]
-
-        with patch.object(scout, "strategic_competition_reason", return_value=None):
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Memory leak"),
-                    "t",
-                    [
-                        {
-                            "body": "Could you provide a heap profile?",
-                            "author_association": "CONTRIBUTOR",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="API question"),
-                    "t",
-                    [
-                        {
-                            "body": "Could you clarify whether this also affects v2?",
-                            "author_association": "MEMBER",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(scout.strategic_rejection(issue(title="Memory leak"), "t", supplied))
-            self.assertIsNone(scout.strategic_rejection(issue(title="Memory leak"), "t", approved))
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Parser bug"),
-                    "t",
-                    [
-                        {
-                            "body": "Related code is in distribution/reference for context.",
-                            "author_association": "MEMBER",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Parser bug"),
-                    "t",
-                    redirect_then_ready,
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Prune behavior"),
-                    "t",
-                    [
-                        {
-                            "body": "Related to #123, but this report has different symptoms.",
-                            "author_association": "MEMBER",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Prune behavior"),
-                    "t",
-                    [
-                        {
-                            "body": "Looks like a duplicate of #123.",
-                            "author_association": "NONE",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Prune behavior"),
-                    "t",
-                    [
-                        {
-                            "body": "This is not a duplicate of #123.",
-                            "author_association": "MEMBER",
-                        }
-                    ],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Old issue", labels=[{"name": "stale"}]),
-                    "t",
-                    [],
-                )
-            )
-            self.assertIsNone(
-                scout.strategic_rejection(
-                    issue(title="Gateway cert", labels=[{"name": "lifecycle/rotten"}]),
-                    "t",
-                    revival,
-                )
-            )
 
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])

@@ -43,6 +43,18 @@ class ReadinessLabelTests(unittest.TestCase):
         )
         self.assertIsNone(readiness.abandoned_lifecycle_reason(rotten, ready_override=True))
 
+    def test_connection_pool_regression_remains_pending_triage(self) -> None:
+        connection_pool = issue(
+            title="Client-go: Add support for Connection Pool",
+            body="I would like to propose adding support.",
+            labels=[{"name": "kind/feature"}, {"name": "needs-triage"}],
+        )
+        labels_text = " ".join(readiness.issue_label_set(connection_pool))
+        self.assertTrue(readiness.triage_pending_signal(labels_text))
+
+    def test_stale_label_is_not_abandoned_lifecycle(self) -> None:
+        self.assertIsNone(readiness.abandoned_lifecycle_reason(issue(labels=[{"name": "stale"}])))
+
     def test_label_set_handles_dict_string_and_empty_labels(self) -> None:
         self.assertEqual(
             readiness.issue_label_set(
@@ -216,6 +228,89 @@ class MaintainerReadinessTests(unittest.TestCase):
         self.assertEqual(
             readiness.maintainer_readiness_comment_state(issue(), untrusted),
             (None, None),
+        )
+
+    def test_live_comment_regressions_cover_authority_holds_and_ready_signals(self) -> None:
+        contributor_handoff: list[GitHubComment] = [
+            {
+                "body": (
+                    "This particular issue came up as needs discussion, so I'm going to "
+                    "hand it off to the Engineering team to look at."
+                ),
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), contributor_handoff),
+            (False, "maintainer says issue still needs discussion"),
+        )
+
+        profile_request: list[GitHubComment] = [
+            {
+                "body": "Would it be possible to provide a profile from the affected binary?",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), profile_request),
+            (False, "maintainer is waiting for requested diagnostic evidence"),
+        )
+
+        clarification_question: list[GitHubComment] = [
+            {
+                "body": "Could you clarify whether this also affects v2?",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), clarification_question),
+            (None, None),
+        )
+
+        redirect: list[GitHubComment] = [
+            {
+                "body": (
+                    "This requires a change in the specification defined in "
+                    "https://github.com/distribution/reference. "
+                    "Probably best to open a ticket there for discussion."
+                ),
+                "author_association": "COLLABORATOR",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), redirect),
+            (
+                False,
+                "maintainer redirected implementation/discussion to another project",
+            ),
+        )
+
+        duplicate: list[GitHubComment] = [
+            {
+                "body": (
+                    "Looks like a (possible) duplicate of #123. "
+                    "The discussion is being tracked there."
+                ),
+                "author_association": "OWNER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), duplicate),
+            (
+                False,
+                "maintainer indicates this is probably tracked by another canonical issue",
+            ),
+        )
+
+        revival: list[GitHubComment] = [
+            {
+                "body": "We are reviving this issue; this issue is active again.",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), revival),
+            (True, None),
         )
 
     def test_wrong_solution_from_maintainer_blocks_requested_approach(self) -> None:
