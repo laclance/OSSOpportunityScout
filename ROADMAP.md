@@ -1,209 +1,105 @@
 # Roadmap
 
-This file describes deliberate future improvements. It is not a description of the
-current runtime architecture.
+This file is intentionally forward-looking.
 
-- `ARCHITECTURE.md` describes what exists today.
-- `ROADMAP.md` describes planned work and sequencing.
+- `README.md` explains what the project does and how to run it.
+- `ARCHITECTURE.md` describes the current system and its invariants.
+- `PROVENANCE.md` records project history and the standalone boundary.
 - `CODEBASE_MAP.md` is generated symbol navigation.
-- `AGENTS.md` contains implementation and contributor rules.
+- `AGENTS.md` contains implementation rules.
 
-## Product direction
+## Current baseline
 
-The supported runtime entry point is:
+OSS Opportunity Scout is now a standalone, package-owned scanner with:
 
-```bash
-python opportunity_scout.py
-```
+- a stable `python opportunity_scout.py` entry point
+- typed/versioned transactional seen-state
+- a dedicated `scout-state` persistence branch
+- privacy-verified private GitHub report delivery
+- public host-repository reports disabled by default
+- hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
+- strict Ruff, mypy, generated-map, and 100% statement/branch coverage gates
 
-Paid and strategic scanning are package-owned. The project originated from
-`dev-kp-eloper/BountyScout` and subsequently underwent an OSS-independence cleanup
-before standalone release preparation. The historical fork remains development
-provenance rather than the definition of the current architecture.
+Production is currently **manual-only via `workflow_dispatch`**.
 
-## Phase 4A — strong domain typing
+Native GitHub `schedule` events are paused while GitHub investigates a reproducible scheduler-delivery failure. The preserved reproduction repository is `laclance/actions-scheduler-probe`.
 
-Keep raw transport/API data dynamic until it is validated, then use explicit internal
-domain records through policy, scoring, reporting, and orchestration. Preserve current
-dictionary runtime shapes during this phase; prefer standard-library typing tools such
-as `TypedDict`, `Literal`, and `TypeAlias` over runtime model dependencies.
+## Near term
 
-Broad result-object conversion is intentionally deferred.
+### Restore native scheduling only when GitHub's scheduler path is proven healthy
 
-## Phase 4B — state lifecycle
+Keep production manual-only until the external scheduler issue is resolved.
 
-### Phase 4B.1 — canonical versioned state — complete
+When native scheduling is reconsidered:
 
-- `bountyscout.state` owns typed seen-state parsing, logical access, mutation, and persistence
-- schema version 2 stores per-URL lifecycle fields without inventing legacy timestamps
-- the historical JSON URL list remains loadable and migrates on the next successful save
-- malformed, unreadable, or unsupported existing state fails closed instead of becoming empty
-- `scout-state` remains authoritative scheduled-workflow persistence
-- Python remains branch-agnostic and local execution still uses ordinary `seen_bounties.json`
+- verify the minimal probe receives real `schedule` events
+- restore the production cron in a focused change
+- preserve private-only report delivery and transactional state behavior
+- verify the first automatic production run before treating scheduling as restored
 
-### Phase 4B.2 — bounded retention and compaction — complete
+Do not add an external scheduler unless the deployment strategy is explicitly changed.
 
-- bounded direct issue revalidation uses a 20-call maximum per successful run
-- entries are rechecked no more often than every 30 days, with unknown legacy timestamps treated as oldest
-- deterministic ordering walks never-checked entries first, then oldest checked entries, then URL
-- only confirmed closed GitHub issues are pruned; failures, 404s, and non-GitHub URLs remain seen
-- complete quiet runs can compact state, while failed delivery or incomplete combined coverage persists no maintenance changes
-- confirmed-closed entries may surface again if the issue is later reopened
+### Decommission the historical development repository
 
-### Phase 4B.3 — legacy generated-report cleanup — complete
+The historical `laclance/BountyScout` scanner is disabled and is no longer part of the production runtime.
 
-- one-time cleanup requires explicit repository, open-state, non-PR, label, title/body, and automation-author identity signals
-- the 28 historical pre-auto-close combined queue reports were closed as `not_planned`; paid-only alert artifacts were intentionally left untouched
-- current generated reports remain owned by the normal auto-close delivery lifecycle; no recurring cleanup service exists
+Before archive or deletion, perform one preservation audit covering:
 
-## Phase 4C — app decomposition
+- unique issues/PR context
+- workflow history
+- repository settings/configuration worth retaining
+- provenance/reference value
+- any unique documentation
 
-Further split cohesive orchestration boundaries out of `bountyscout.app` where that
-improves readability and testability.
+Then choose archive or deletion deliberately.
 
-### Phase 4C.1 — strategic discovery orchestration — complete
+### Establish a release baseline
 
-- `bountyscout.strategic.discovery` owns strategic source-pool collection, near-miss auditing, adaptive inspection selection, and deterministic pre-verification ranking
-- `bountyscout.app` passes narrow paid-lane callbacks between package-owned components
-- discovery queries, request budgets, ordering, and cache lifetime remain unchanged
+Consider tagging the current standalone state as the first stable OSS release once the desired public release/versioning convention is chosen.
 
-### Phase 4C.2 — strategic verification orchestration — complete
+A release should summarize the standalone boundary, private-reporting model, GitHub API contract, and manual-only production status without reproducing internal migration history.
 
-- `bountyscout.strategic.verification` owns ranked deep-verification orchestration, bounded per-repository settlement, source-failure handling, and final strategic selection
-- `bountyscout.app.verify()` remains the mixed paid/strategic verification adapter and is supplied as a narrow callback
-- verification request budgets, source-failure semantics, upper-bound pruning, repo-slot settlement, and final per-repo ordering remain unchanged
+## Product improvements
 
-### Phase 4C.3 — combined run lifecycle — complete
+Prioritize improvements that materially increase the quality of the opportunity queue:
 
-- `bountyscout.run` owns combined discovery coordination, final queue assembly, coverage accounting, delivery aggregation, and the transactional seen-state commit
-- `bountyscout.app.main()` is now a thin environment/callback assembly layer
-- delivery/state semantics, Search budgets, cache lifetime, report lifecycle, and paid-lane behavior remain unchanged
-- paid operations enter the run layer only through narrow typed callbacks
+- use report/audit feedback to reduce false positives and false negatives
+- improve source adapters where they add unique paid or strategic opportunities
+- refine ranking only with regression-backed evidence
+- improve report readability and decision support without exposing private results publicly
 
-**Phase 4C is complete.** The remaining `bountyscout.app` responsibilities are intentional application seams rather than another decomposition target.
+Preserve the separation between discovery, verification, scoring, delivery, and state.
 
-## Phase 4D — effort estimator decomposition — complete
+## Integration and API work
 
-`estimate_effort_details()` is now an explicit ordered decision flow over a private
-immutable effort context and cohesive private rule helpers.
+The current GitHub REST transport is intentionally pinned and hardened. Future API work should be driven by observed need rather than churn.
 
-- effort buckets, emitted reasons, regex semantics, thresholds, and first-match precedence remain unchanged
-- trusted maintainer-comment evidence and documentation-specific behavior remain unchanged
-- no network or request behavior changed
+Potential follow-ups include:
 
-Any scoring behavior change discovered during decomposition belongs in a separate
-regression-backed change.
+- reconsider conditional requests if request volume grows enough to justify persistent validator/body ownership
+- revisit the pinned REST API version only as explicit compatibility work
+- consider a GitHub App only if the project becomes installable across other users or organizations
 
-**Phase 4D is complete.**
+Do not move scanner discovery onto the private-report credential.
 
-## Phase 4E — paid-scanner independence — complete
+## Deferred architecture work
 
-Move reusable paid-scanner behavior into canonical package ownership so production
-scanning no longer depends on a root compatibility module.
+Consider these only when they produce a concrete maintenance benefit:
 
-### Phase 4E.1 — package-owned USD-like reward parsing — complete
+- immutable result objects for selected mapping-heavy internal results
+- relocating `seen_bounties.json` if a future deployment model benefits from a different state path
+- lightweight dependency-direction checks if architectural drift becomes recurring
 
-- canonical USD-like amount parsing moved to `bountyscout.scoring`
-- `bountyscout.scoring` owns the parsing behavior directly
-- scoring behavior remained unchanged
+Do not perform broad type/model rewrites or custom architecture tooling merely for stylistic consistency.
 
-### Phase 4E.2 — package-owned paid eligibility policy — complete
+## Ongoing invariants
 
-- `bountyscout.paid` owns basic paid eligibility and issue-level payment-signal recognition
-- combined scanning consumes the package policy directly
-- request and paid-lane behavior remained unchanged
+Future work must preserve:
 
-### Phase 4E.3 — package-owned GitHub Search transport — complete
-
-- canonical GitHub Issues Search request construction and normalization live in `bountyscout.github`
-- combined paid and strategic discovery consume package Search directly
-- queries, ordering, pacing, and request budgets remained unchanged
-
-### Phase 4E.4 — package-owned paid rejection/competition verification — complete
-
-- paid rejection precedence and paid-lane competition checks moved to `bountyscout.paid_verification`
-- strategic competition consumes package verification directly
-- network/request behavior remained unchanged
-
-### Phase 4E.5 — package-owned delivery transports — complete
-
-- Telegram, Discord, and GitHub report delivery moved to `bountyscout.delivery`
-- the combined app consumes package delivery directly
-- HTTP payloads, timeouts, request identity, auto-close behavior, and state semantics remained unchanged
-
-### Phase 4E.6 — remove final package dependency on legacy root scanner — complete
-
-- the package-owned GitHub GET transport is the final replacement for the legacy root-scanner request path
-- the combined app consumes package transport directly
-- production package code has zero legacy root-scanner dependencies
-
-**Phase 4E is complete.** All reusable behavior needed by production scanning is
-package-owned.
-
-## OSS independence cleanup
-
-### Cleanup 1 — remove legacy root scanner — complete
-
-- removed the obsolete root compatibility scanner after Phase 4E package ownership completed
-- removed tests that existed only for the historical façade
-- kept `python opportunity_scout.py` as the supported root runtime entry point
-- preserved package behavior, coverage, and quality gates
-
-### Cleanup 2 — rewrite delivery transport — complete
-
-- independently re-authored Telegram, Discord, and generated GitHub report delivery
-- preserved payloads, timeouts, report lifecycle, and delivery/state semantics
-
-### Cleanup 3 — restructure paid eligibility — complete
-
-- restructured paid eligibility and payment-signal policy under package ownership
-- preserved paid discovery and rejection behavior
-
-### Cleanup 4 — unify GitHub transport identity — complete
-
-- unified normal GitHub JSON traffic under the `OSSOpportunityScout` request identity
-- retained deterministic injectable transport seams for tests
-
-### Cleanup 5 — re-author scheduled workflow — complete
-
-- replaced the inherited scheduled workflow with an independently authored OSS Opportunity Scout workflow
-- preserved the hourly schedule, manual dispatch, secrets, permissions, state persistence, and runtime command
-
-### Cleanup 6 — update standalone branding and provenance — complete
-
-- removed stale fork/compatibility terminology from current-project documentation
-- documented historical origin and the clean-snapshot standalone-release boundary in `PROVENANCE.md`
-- made local repository configuration examples portable
-- changed no Python, workflow behavior, licensing, repository identity, or Git history
-
-## Deferred result-object work
-
-After mapping-based domain contracts are stable, consider immutable result objects or
-dataclasses where they improve invariants for:
-
-- verification outcomes
-- scoring results
-- effort results
-- source fetch results
-- rejection results
-
-Do not convert mapping-heavy runtime paths merely for stylistic consistency.
-
-## Deferred state-file relocation
-
-Do not move `seen_bounties.json` into a data/state directory until the state schema,
-migration, retention, and compaction semantics are stable.
-
-Scheduled production persistence currently uses the `scout-state` branch; relocation
-must account for that workflow explicitly.
-
-## Deferred architecture enforcement
-
-If dependency-direction drift becomes recurring, consider lightweight CI checks for
-invariants such as:
-
-- strategic policy must not import `bountyscout.app`
-- package/domain modules must not import root `opportunity_scout.py`
-- transport must not depend on high-level scanner policy
-
-Prefer simple checks with clear maintenance value over custom architecture tooling.
+- ranked scout results are not published publicly by default
+- private GitHub delivery fails closed unless the destination is verified private
+- scanner and private-report credentials remain separate
+- incomplete coverage or unsuccessful aggregate delivery does not commit newly reported opportunities
+- GitHub mutations are not blindly retried
+- state maintenance remains bounded and conservative
+- production remains manual-only until scheduling is deliberately restored
