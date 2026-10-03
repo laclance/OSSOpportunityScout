@@ -42,6 +42,13 @@ class StrategicDiscoveryTests(unittest.TestCase):
         self.assertTrue(discovery.possible_miss_signal(strong))
         self.assertFalse(discovery.possible_miss_signal(stale))
         self.assertIsNone(discovery.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
+        for rejected in (
+            issue(assignees=[{"login": "dev"}]),
+            issue(html_url="https://github.com/laclance/BountyScout/issues/1"),
+            issue(title="Bounty Alert: test"),
+            issue(body="article writing proposal"),
+        ):
+            self.assertIsNone(discovery.basic_rejection_audit_reason(rejected))
         self.assertIn(
             "unrecognized basic eligibility",
             discovery.basic_rejection_audit_reason(strong) or "",
@@ -50,7 +57,16 @@ class StrategicDiscoveryTests(unittest.TestCase):
         audit: list[RejectionRecord] = []
         discovery.add_audit(audit, strong, "one", limit=1)
         discovery.add_audit(audit, strong, "two", limit=1)
-        self.assertEqual([item["reason"] for item in audit], ["one"])
+        self.assertEqual(
+            audit,
+            [
+                {
+                    "url": strong["html_url"],
+                    "title": strong["title"],
+                    "reason": "one",
+                }
+            ],
+        )
 
     def test_possible_miss_ignores_automated_ci_incident(self) -> None:
         cmux = issue(
@@ -120,6 +136,40 @@ class StrategicDiscoveryTests(unittest.TestCase):
             ),
         )
         self.assertFalse(discovery.possible_miss_signal(tracker))
+
+    def test_strategic_inspection_keeps_base_and_adds_strong_overflow(self) -> None:
+        old = datetime.now(timezone.utc) - timedelta(days=300)
+        rows = [
+            (
+                100 - i,
+                100 - i,
+                0,
+                issue(
+                    html_url=f"https://github.com/a/a/issues/{i + 1}",
+                    title="ordinary task",
+                    updated_at=old.isoformat(),
+                ),
+            )
+            for i in range(15)
+        ]
+        strong = issue(
+            html_url="https://github.com/a/a/issues/16",
+            title="Add query parameter middleware",
+            labels=[{"name": "contributor/wanted"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        rows.append((70, 70, 0, strong))
+
+        base = discovery.strategic_inspection_items(rows, adaptive_budget=0)
+        self.assertEqual(len(base["a/a"]), 15)
+
+        expanded = discovery.strategic_inspection_items(
+            rows,
+            base_per_repo=15,
+            adaptive_budget=1,
+        )
+        self.assertEqual(len(expanded["a/a"]), 16)
+        self.assertEqual(expanded["a/a"][-1]["html_url"], strong["html_url"])
 
     def test_global_search_results_preserve_query_order_and_page_budget(self) -> None:
         calls: list[tuple[str, str | None, int]] = []

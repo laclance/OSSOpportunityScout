@@ -1051,66 +1051,6 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_strategic_inspection_items_keeps_top_fifteen_per_repo(self) -> None:
-        rows = [
-            (
-                100 - i,
-                100 - i,
-                0,
-                issue(html_url=f"https://github.com/a/a/issues/{i + 1}"),
-            )
-            for i in range(18)
-        ]
-        rows.extend(
-            [
-                (90, 90, 0, issue(html_url="https://github.com/b/b/issues/1")),
-                (89, 89, 0, issue(html_url="https://github.com/b/b/issues/2")),
-                (120, 120, 0, issue(html_url="bad")),
-            ]
-        )
-        with patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 0):
-            selected = scout.strategic_inspection_items(rows)
-
-        self.assertEqual(len(selected["a/a"]), 15)
-        self.assertEqual(len(selected["b/b"]), 2)
-        self.assertEqual(
-            selected["a/a"][0]["html_url"],
-            "https://github.com/a/a/issues/1",
-        )
-        self.assertNotIn("bad", selected)
-
-    def test_strategic_inspection_adaptively_adds_contributor_wanted_overflow(self) -> None:
-        old = datetime.now(timezone.utc) - timedelta(days=300)
-        rows = [
-            (
-                100 - i,
-                100 - i,
-                0,
-                issue(
-                    html_url=f"https://github.com/a/a/issues/{i + 1}",
-                    title="ordinary task",
-                    updated_at=old.isoformat(),
-                ),
-            )
-            for i in range(15)
-        ]
-        strong = issue(
-            html_url="https://github.com/a/a/issues/16",
-            title="Add query parameter middleware",
-            labels=[{"name": "contributor/wanted"}],
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-        rows.append((70, 70, 0, strong))
-
-        with (
-            patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 15),
-            patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 1),
-        ):
-            selected = scout.strategic_inspection_items(rows)
-
-        self.assertEqual(len(selected["a/a"]), 16)
-        self.assertEqual(selected["a/a"][-1]["html_url"], strong["html_url"])
-
     def test_possible_miss_signal_delegates_to_strategic_discovery(self) -> None:
         item = issue()
         with patch(
@@ -1120,45 +1060,37 @@ class DiscoveryTests(unittest.TestCase):
             self.assertTrue(scout.possible_miss_signal(item))
         signal.assert_called_once_with(item)
 
-    def test_basic_rejection_audit_reason_filters_known_noise(self) -> None:
-        self.assertIsNone(scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
-        self.assertIsNone(scout.basic_rejection_audit_reason(issue(assignees=[{"login": "dev"}])))
-        self.assertIsNone(
-            scout.basic_rejection_audit_reason(
-                issue(html_url="https://github.com/laclance/BountyScout/issues/1")
-            )
-        )
-        self.assertIsNone(scout.basic_rejection_audit_reason(issue(title="Bounty Alert: test")))
-        self.assertIsNone(
-            scout.basic_rejection_audit_reason(issue(body="article writing proposal"))
-        )
-
-        crowded = scout.basic_rejection_audit_reason(issue(comments=paid_policy.MAX_COMMENTS + 1))
-        self.assertEqual(
-            crowded,
-            "strong-looking result rejected by an unrecognized basic eligibility filter rule",
-        )
-
-        unknown = scout.basic_rejection_audit_reason(issue())
-        self.assertEqual(
-            unknown,
-            "strong-looking result rejected by an unrecognized basic eligibility filter rule",
-        )
-
-    def test_audit_cap(self) -> None:
-        now = datetime.now(timezone.utc)
-        strong = issue(
-            title="Regression in proxy",
-            labels=[{"name": "help wanted"}, {"name": "bug"}],
-            updated_at=(now - timedelta(days=3)).isoformat(),
-        )
-
+    def test_strategic_discovery_audit_wrappers_delegate(self) -> None:
+        item = issue()
         audit: list[RejectionRecord] = []
-        with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
-            scout.add_audit(audit, strong, "one")
-            scout.add_audit(audit, strong, "two")
-            scout.add_audit(audit, strong, "three")
-        self.assertEqual(len(audit), 2)
+        provisional: list[sources.IssueRow] = []
+
+        with patch(
+            "bountyscout.strategic.discovery.basic_rejection_audit_reason",
+            return_value="reason",
+        ) as reason:
+            self.assertEqual(scout.basic_rejection_audit_reason(item), "reason")
+        reason.assert_called_once_with(item)
+
+        with patch("bountyscout.strategic.discovery.add_audit") as add:
+            scout.add_audit(audit, item, "reason")
+        add.assert_called_once_with(
+            audit,
+            item,
+            "reason",
+            limit=scout.STRATEGIC_AUDIT_LIMIT,
+        )
+
+        with patch(
+            "bountyscout.strategic.discovery.strategic_inspection_items",
+            return_value={"a/a": [item]},
+        ) as inspect:
+            self.assertEqual(scout.strategic_inspection_items(provisional), {"a/a": [item]})
+        inspect.assert_called_once_with(
+            provisional,
+            base_per_repo=scout.STRATEGIC_INSPECT_PER_REPO,
+            adaptive_budget=scout.STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
+        )
 
     def test_detection_tracker_rejection_does_not_reach_near_miss_audit(self) -> None:
         tracker = issue(
