@@ -177,9 +177,9 @@
 - **function** `strategic_claim_reason()` — line 56
 - **function** `linked_open_pr_reason()` — line 86
 - **function** `timeline_open_pr_reason()` — line 155
-- **function** `supplemental_claim_reason()` — line 184
-- **function** `extended_competition_reason()` — line 201
-- **function** `strategic_competition_reason()` — line 234
+- **function** `supplemental_claim_reason()` — line 164
+- **function** `extended_competition_reason()` — line 181
+- **function** `strategic_competition_reason()` — line 214
 
 ## `bountyscout/strategic/discovery.py`
 

@@ -414,87 +414,25 @@ class LinkedPullRequestTests(unittest.TestCase):
 
 
 class TimelinePullRequestTests(unittest.TestCase):
-    def test_timeline_requires_open_cross_referenced_pull_request_with_url(self) -> None:
-        timeline = [
-            {"event": "commented"},
-            {"event": "cross-referenced", "source": "bad"},
-            {"event": "cross-referenced", "source": {"issue": "bad"}},
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "x"},
-                        "state": "closed",
-                        "html_url": "https://github.com/example/project/pull/8",
-                    }
-                },
-            },
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "x"},
-                        "state": "open",
-                        "html_url": "https://github.com/example/project/pull/9",
-                    }
-                },
-            },
-        ]
-        with patch.object(github, "github_collection", return_value=timeline):
+    def test_timeline_delegates_valid_issue_to_canonical_checker(self) -> None:
+        reason = "existing open implementation PR: https://github.com/example/project/pull/9"
+        with patch.object(
+            paid_verification,
+            "has_existing_implementation_pr",
+            return_value=reason,
+        ) as checker:
+            self.assertEqual(competition.timeline_open_pr_reason(issue(), "t"), reason)
+
+        checker.assert_called_once_with("example/project", 42, "t")
+
+    def test_timeline_rejects_unidentifiable_issue_without_canonical_check(self) -> None:
+        with patch.object(paid_verification, "has_existing_implementation_pr") as checker:
             self.assertEqual(
-                competition.timeline_open_pr_reason(issue(), "t"),
-                "existing open implementation PR: https://github.com/example/project/pull/9",
+                competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
+                "could not identify repository/issue number",
             )
 
-        with patch.object(github, "github_collection", return_value={}):
-            self.assertEqual(
-                competition.timeline_open_pr_reason(issue(), "t"),
-                "could not verify open implementation PR timeline",
-            )
-        self.assertEqual(
-            competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
-            "could not identify repository/issue number",
-        )
-
-    def test_timeline_handles_invalid_failure_and_no_match_paths(self) -> None:
-        self.assertEqual(
-            competition.timeline_open_pr_reason({"html_url": "bad"}, "t"),
-            "could not identify repository/issue number",
-        )
-
-        with patch.object(github, "github_collection", return_value={}):
-            self.assertEqual(
-                competition.timeline_open_pr_reason(issue(), "t"),
-                "could not verify open implementation PR timeline",
-            )
-
-        no_match_timeline = [
-            {"event": "commented"},
-            {"event": "cross-referenced", "source": "invalid"},
-            {"event": "cross-referenced", "source": {"issue": "invalid"}},
-            {"event": "cross-referenced", "source": {"issue": {"state": "open"}}},
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "x"},
-                        "state": "closed",
-                        "html_url": "https://github.com/example/project/pull/11",
-                    }
-                },
-            },
-            {
-                "event": "cross-referenced",
-                "source": {
-                    "issue": {
-                        "pull_request": {"url": "y"},
-                        "state": "open",
-                    }
-                },
-            },
-        ]
-        with patch.object(github, "github_collection", return_value=no_match_timeline):
-            self.assertIsNone(competition.timeline_open_pr_reason(issue(), "t"))
+        checker.assert_not_called()
 
 
 class CompetitionOrchestrationTests(unittest.TestCase):
