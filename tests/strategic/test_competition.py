@@ -572,6 +572,31 @@ class CompetitionOrchestrationTests(unittest.TestCase):
                 )
             )
 
+    def test_extended_competition_short_circuits_existing_and_linked_prs(self) -> None:
+        self.assertEqual(
+            competition.extended_competition_reason(
+                issue(),
+                "t",
+                [],
+                existing_pr_checker=lambda *_: "search pr",
+                linked_pr_checker=lambda *_: self.fail("linked PR check should not be reached"),
+            ),
+            "search pr",
+        )
+        self.assertEqual(
+            competition.extended_competition_reason(
+                issue(),
+                "t",
+                [],
+                existing_pr_checker=lambda *_: None,
+                linked_pr_checker=lambda *_: "linked pr",
+                supplemental_claim_checker=lambda *_: self.fail(
+                    "supplemental claim check should not be reached"
+                ),
+            ),
+            "linked pr",
+        )
+
     def test_competition_rejects_unidentifiable_issue_without_network_calls(self) -> None:
         bad = issue(html_url="bad", comments=1)
         with patch.object(paid_verification, "has_existing_implementation_pr") as existing:
