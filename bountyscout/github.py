@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -35,11 +36,23 @@ GITHUB_API_HEADERS: Final[Mapping[str, str]] = {
     "User-Agent": GITHUB_USER_AGENT,
     "X-GitHub-Api-Version": GITHUB_API_VERSION,
 }
+GITHUB_SAFE_READ_MAX_ATTEMPTS: Final = 3
+GITHUB_MAX_RETRY_DELAY_SECONDS: Final = 120.0
+GITHUB_SECONDARY_RETRY_BASE_SECONDS: Final = 60.0
+GITHUB_TRANSIENT_RETRY_BASE_SECONDS: Final = 1.0
+_TRANSIENT_HTTP_STATUSES: Final = frozenset({500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
 class IssueLifecycleResult:
     status: IssueLifecycleStatus
+
+
+@dataclass(frozen=True)
+class _GitHubReadResult:
+    payload: object | None
+    failure: str | None = None
+    status: int | None = None
 
 
 class KeyedLockPool:
@@ -87,18 +100,11 @@ def github_get(
     *,
     log_errors: bool = True,
 ) -> Any:
-    """Fetch JSON from GitHub with the scanner's standard API headers."""
-    request = urllib.request.Request(
-        url,
-        headers=_github_headers(token),
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except Exception as exc:
-        if log_errors:
-            print(f"GitHub API Error for {url}: {exc}")
-        return None
+    """Fetch JSON from GitHub with bounded retries for safe GET failures."""
+    result = _github_json_get(url, token, timeout)
+    if result.failure is not None and log_errors:
+        print(f"GitHub API Error ({result.failure}) for {url}.")
+    return result.payload
 
 
 def search_github(
@@ -151,17 +157,10 @@ def issue_lifecycle(
         return IssueLifecycleResult("failed")
 
     endpoint = f"https://api.github.com/repos/{repo}/issues/{number}"
-    request = urllib.request.Request(endpoint, headers=_github_headers(token))
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload: object = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return IssueLifecycleResult("not_found")
-        return IssueLifecycleResult("failed")
-    except Exception:
-        return IssueLifecycleResult("failed")
-
+    result = _github_json_get(endpoint, token, timeout)
+    if result.status == 404:
+        return IssueLifecycleResult("not_found")
+    payload = result.payload
     if not isinstance(payload, dict) or "pull_request" in payload:
         return IssueLifecycleResult("failed")
     state = payload.get("state")
@@ -234,3 +233,119 @@ def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
         token,
     )
     return cast(GitHubIssue, item) if isinstance(item, dict) else None
+
+
+def _header_seconds(headers: Any, name: str) -> float | None:
+    value = headers.get(name)
+    if value is None:
+        return None
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds >= 0 else None
+
+
+def _http_error_message(exc: urllib.error.HTTPError) -> str:
+    try:
+        raw = exc.read()
+    except Exception:
+        return ""
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    message = payload.get("message")
+    return str(message).lower() if isinstance(message, str) else ""
+
+
+def _rate_limit_retry_delay(
+    exc: urllib.error.HTTPError,
+    *,
+    retry_index: int,
+) -> tuple[bool, float | None]:
+    if exc.code not in {403, 429}:
+        return False, None
+
+    headers: Any = exc.headers or {}
+    retry_after = _header_seconds(headers, "Retry-After")
+    if retry_after is not None:
+        return True, retry_after
+
+    remaining = headers.get("X-RateLimit-Remaining")
+    if remaining == "0":
+        reset_at = _header_seconds(headers, "X-RateLimit-Reset")
+        if reset_at is None:
+            return True, None
+        return True, max(0.0, reset_at - time.time())
+
+    message = _http_error_message(exc)
+    secondary = exc.code == 429 or "secondary rate limit" in message or "abuse detection" in message
+    if secondary:
+        return True, GITHUB_SECONDARY_RETRY_BASE_SECONDS * (2.0**retry_index)
+    return False, None
+
+
+def _transient_retry_delay(retry_index: int) -> float:
+    return GITHUB_TRANSIENT_RETRY_BASE_SECONDS * (2.0**retry_index)
+
+
+def _retry_allowed(delay: float | None) -> bool:
+    return delay is not None and delay <= GITHUB_MAX_RETRY_DELAY_SECONDS
+
+
+def _url_error_is_transient(exc: urllib.error.URLError) -> bool:
+    return isinstance(exc.reason, (TimeoutError, ConnectionError))
+
+
+def _github_json_get(
+    url: str,
+    token: str | None,
+    timeout: int,
+) -> _GitHubReadResult:
+    attempt = 0
+    while True:
+        request = urllib.request.Request(url, headers=_github_headers(token), method="GET")
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+            try:
+                return _GitHubReadResult(json.loads(raw.decode("utf-8")))
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                return _GitHubReadResult(None, "malformed response", 200)
+        except urllib.error.HTTPError as exc:
+            is_rate_limited, delay = _rate_limit_retry_delay(exc, retry_index=attempt)
+            if is_rate_limited:
+                failure = "rate limited"
+            elif exc.code == 401:
+                return _GitHubReadResult(None, "authentication failure", exc.code)
+            elif exc.code == 403:
+                return _GitHubReadResult(None, "forbidden", exc.code)
+            elif exc.code == 404:
+                return _GitHubReadResult(None, "not found", exc.code)
+            elif exc.code in _TRANSIENT_HTTP_STATUSES:
+                failure = "temporary server failure"
+                retry_after = _header_seconds(exc.headers or {}, "Retry-After")
+                delay = retry_after if retry_after is not None else _transient_retry_delay(attempt)
+            else:
+                return _GitHubReadResult(None, "HTTP failure", exc.code)
+            status = exc.code
+        except (TimeoutError, ConnectionError):
+            failure = "temporary transport failure"
+            delay = _transient_retry_delay(attempt)
+            status = None
+        except urllib.error.URLError as exc:
+            if not _url_error_is_transient(exc):
+                return _GitHubReadResult(None, "transport failure")
+            failure = "temporary transport failure"
+            delay = _transient_retry_delay(attempt)
+            status = None
+        except Exception:
+            return _GitHubReadResult(None, "transport failure")
+
+        attempt += 1
+        if attempt >= GITHUB_SAFE_READ_MAX_ATTEMPTS or not _retry_allowed(delay):
+            return _GitHubReadResult(None, failure, status)
+        time.sleep(cast(float, delay))

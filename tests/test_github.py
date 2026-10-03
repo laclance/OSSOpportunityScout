@@ -195,7 +195,14 @@ class GitHubHttpTests(unittest.TestCase):
             )
 
     def test_issue_lifecycle_transport_and_malformed_payload_fail_closed(self) -> None:
-        with patch.object(urllib.request, "urlopen", side_effect=TimeoutError("timeout")):
+        with (
+            patch.object(
+                urllib.request,
+                "urlopen",
+                side_effect=TimeoutError("timeout"),
+            ) as opened,
+            patch("bountyscout.github.time.sleep") as slept,
+        ):
             self.assertEqual(
                 github.issue_lifecycle(
                     "https://github.com/example/project/issues/42",
@@ -203,6 +210,8 @@ class GitHubHttpTests(unittest.TestCase):
                 ).status,
                 "failed",
             )
+        self.assertEqual(opened.call_count, github.GITHUB_SAFE_READ_MAX_ATTEMPTS)
+        self.assertEqual(slept.call_count, github.GITHUB_SAFE_READ_MAX_ATTEMPTS - 1)
 
         malformed_payloads = [
             b"{",
