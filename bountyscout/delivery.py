@@ -10,14 +10,10 @@ import json
 import urllib.request
 from collections.abc import Mapping
 
+from bountyscout import github
+
 NOTIFICATION_TIMEOUT_SECONDS = 10
 GITHUB_TIMEOUT_SECONDS = 15
-GITHUB_USER_AGENT = "OSSOpportunityScout"
-GITHUB_API_HEADERS = {
-    "Accept": "application/vnd.github+json",
-    "User-Agent": GITHUB_USER_AGENT,
-    "X-GitHub-Api-Version": "2022-11-28",
-}
 
 
 def _request_json(
@@ -81,7 +77,7 @@ def send_discord_notification(webhook_url: str, message: str) -> bool:
 def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a native GitHub scan report and immediately close it as not planned."""
     headers = {
-        **GITHUB_API_HEADERS,
+        **github.GITHUB_API_HEADERS,
         "Authorization": f"Bearer {token}",
     }
     try:
@@ -121,7 +117,7 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
 def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a report only after GitHub confirms the destination is private."""
     headers = {
-        **GITHUB_API_HEADERS,
+        **github.GITHUB_API_HEADERS,
         "Authorization": f"Bearer {token}",
     }
     try:
