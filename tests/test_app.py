@@ -627,48 +627,6 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
-    def test_possible_miss_signal_ignores_automated_ci_incident(self) -> None:
-        cmux = issue(
-            title="cmux NIGHTLY build is failing on main",
-            body="This issue closes itself on the next successful publish.",
-            labels=[{"name": "bug"}, {"name": "nightly-failure"}, {"name": "help wanted"}],
-            user={"login": "github-actions[bot]"},
-            comments=178,
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-        self.assertFalse(scout.possible_miss_signal(cmux))
-
-    def test_possible_miss_signal_ignores_umbrella_tracker(self) -> None:
-        grpc_umbrella = issue(
-            title=(
-                "xds/clients: API refinements and cleanup before externalizing "
-                "generic xDS and LRS clients"
-            ),
-            body=(
-                "Track and resolve the following API refinements and bug fixes:\n\n"
-                "- [ ] #8314\n"
-                "- [ ] #9456\n"
-                "- [ ] #9457\n"
-                "- [ ] #9458\n"
-                "- [ ] #9459\n"
-            ),
-            comments=0,
-            updated_at=datetime.now(timezone.utc).isoformat(),
-        )
-        self.assertFalse(scout.possible_miss_signal(grpc_umbrella))
-
-    def test_possible_miss_signal_ignores_security_disclosure(self) -> None:
-        security = issue(
-            html_url="https://github.com/kubernetes-sigs/external-dns/issues/6780",
-            title="[Security Disclosure] Annotation-driven DNS record injection in external-dns",
-            body=(
-                "Severity: HIGH. CWE: CWE-285. CVSS 3.1: 8.1. "
-                "Disclosure timeline: vulnerability discovered today."
-            ),
-            comments=0,
-        )
-        self.assertFalse(scout.possible_miss_signal(security))
-
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])
         ready_comments: list[GitHubComment] = [
@@ -1152,7 +1110,15 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual(len(selected["a/a"]), 16)
         self.assertEqual(selected["a/a"][-1]["html_url"], strong["html_url"])
-        self.assertTrue(scout.possible_miss_signal(strong))
+
+    def test_possible_miss_signal_delegates_to_strategic_discovery(self) -> None:
+        item = issue()
+        with patch(
+            "bountyscout.strategic.discovery.possible_miss_signal",
+            return_value=True,
+        ) as signal:
+            self.assertTrue(scout.possible_miss_signal(item))
+        signal.assert_called_once_with(item)
 
     def test_basic_rejection_audit_reason_filters_known_noise(self) -> None:
         self.assertIsNone(scout.basic_rejection_audit_reason(issue(pull_request={"url": "x"})))
@@ -1179,47 +1145,13 @@ class DiscoveryTests(unittest.TestCase):
             "strong-looking result rejected by an unrecognized basic eligibility filter rule",
         )
 
-    def test_possible_miss_signal_and_audit_cap(self) -> None:
+    def test_audit_cap(self) -> None:
         now = datetime.now(timezone.utc)
         strong = issue(
             title="Regression in proxy",
             labels=[{"name": "help wanted"}, {"name": "bug"}],
             updated_at=(now - timedelta(days=3)).isoformat(),
         )
-        stale = issue(
-            title="Old bug",
-            labels=[{"name": "bug"}],
-            updated_at=(now - timedelta(days=200)).isoformat(),
-        )
-        self.assertTrue(scout.possible_miss_signal(strong))
-        self.assertFalse(scout.possible_miss_signal(stale))
-        self.assertFalse(
-            scout.possible_miss_signal(
-                issue(
-                    title="🏆 Hall of Fame — October 2026",
-                    labels=[{"name": "hall-of-fame"}],
-                    body="Top Contributors\nMonthly Stats\nTotal Bounty Distributed: $4770",
-                )
-            )
-        )
-
-        detection_tracker = issue(
-            html_url="https://github.com/kubestellar/docs/issues/7162",
-            title="[aw] Detection Runs",
-            user={"login": "github-actions[bot]"},
-            labels=[{"name": "help wanted"}, {"name": "agentic-workflows"}],
-            updated_at=now.isoformat(),
-            body=(
-                "This issue tracks all runs where threat detection flagged problems in "
-                "agentic workflows in this repository. Each workflow run that completes "
-                "with a detection warning or failure posts a comment here.\n\n"
-                "This issue helps monitor the health of the threat detection system.\n\n"
-                "This issue is automatically managed by GitHub Agentic Workflows. "
-                "Do not close this issue manually.\n\n"
-                "No action to take - Do not assign to an agent."
-            ),
-        )
-        self.assertFalse(scout.possible_miss_signal(detection_tracker))
 
         audit: list[RejectionRecord] = []
         with patch.object(scout, "STRATEGIC_AUDIT_LIMIT", 2):
