@@ -130,11 +130,6 @@ def github_get_optional(url: str, token: str | None) -> Any:
     return github.github_get(url, token, timeout=10, log_errors=False)
 
 
-def fetch_text(url: str, timeout: int = 12) -> str:
-    """Compatibility wrapper for public platform HTML fetching."""
-    return sources.fetch_text(url, timeout)
-
-
 def issue_comments(item: GitHubIssue, token: str | None) -> list[GitHubComment]:
     """Compatibility wrapper for issue-comment GitHub fetching."""
     return github.issue_comments(item, token)
@@ -312,37 +307,20 @@ def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     return github.issue_from_github_url(url, token)
 
 
-def issuehunt_platform_refs() -> dict[str, str]:
-    """Compatibility wrapper for IssueHunt discovery."""
-    return sources.issuehunt_platform_refs(fetch_text, pages=ISSUEHUNT_PAGES)
-
-
-def opire_platform_refs() -> dict[str, str]:
-    """Compatibility wrapper for Opire discovery."""
-    return sources.opire_platform_refs(
-        fetch_text,
-        fetch_limit=PLATFORM_FETCH_LIMIT,
-        network_workers=NETWORK_WORKERS,
-    )
-
-
-def bountyhub_platform_refs() -> dict[str, str]:
-    """Compatibility wrapper for BountyHub discovery."""
-    return sources.bountyhub_platform_refs(
-        EXTENDED_AMOUNT_RE,
-        fetch_text,
-        fetch_limit=PLATFORM_FETCH_LIMIT,
-        network_workers=NETWORK_WORKERS,
-    )
-
-
 def platform_paid_refs() -> dict[str, str]:
     """Merge official bounty-platform source discoveries."""
     return sources.platform_paid_refs(
         (
-            issuehunt_platform_refs,
-            opire_platform_refs,
-            bountyhub_platform_refs,
+            lambda: sources.issuehunt_platform_refs(pages=ISSUEHUNT_PAGES),
+            lambda: sources.opire_platform_refs(
+                fetch_limit=PLATFORM_FETCH_LIMIT,
+                network_workers=NETWORK_WORKERS,
+            ),
+            lambda: sources.bountyhub_platform_refs(
+                EXTENDED_AMOUNT_RE,
+                fetch_limit=PLATFORM_FETCH_LIMIT,
+                network_workers=NETWORK_WORKERS,
+            ),
         ),
         network_workers=NETWORK_WORKERS,
     )
