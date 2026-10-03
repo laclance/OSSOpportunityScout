@@ -1,6 +1,6 @@
 """Outbound notification and report delivery transports.
 
-Owns Telegram, Discord, and GitHub report HTTP delivery.
+Owns Telegram, Discord, host GitHub reports, and private GitHub report delivery.
 It does not render reports, rank candidates, or manage seen-state.
 """
 
@@ -22,7 +22,7 @@ GITHUB_API_HEADERS = {
 
 def _request_json(
     url: str,
-    payload: Mapping[str, object],
+    payload: Mapping[str, object] | None,
     *,
     method: str,
     headers: Mapping[str, str],
@@ -33,7 +33,7 @@ def _request_json(
     request_headers.update(headers)
     request = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode("utf-8"),
+        data=None if payload is None else json.dumps(payload).encode("utf-8"),
         headers=request_headers,
         method=method,
     )
@@ -115,4 +115,43 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         return False
 
     print("GitHub Issue notification created and auto-closed successfully.")
+    return True
+
+
+def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
+    """Create a report only after GitHub confirms the destination is private."""
+    headers = {
+        **GITHUB_API_HEADERS,
+        "Authorization": f"Bearer {token}",
+    }
+    try:
+        metadata_body = _request_json(
+            f"https://api.github.com/repos/{repo_fullname}",
+            None,
+            method="GET",
+            headers=headers,
+            timeout=GITHUB_TIMEOUT_SECONDS,
+        )
+        metadata: object = json.loads(metadata_body.decode("utf-8"))
+    except Exception:
+        print("Failed to verify private GitHub report destination.")
+        return False
+
+    if not isinstance(metadata, dict) or metadata.get("private") is not True:
+        print("Private GitHub report destination is not verified private.")
+        return False
+
+    try:
+        _request_json(
+            f"https://api.github.com/repos/{repo_fullname}/issues",
+            {"title": title, "body": body},
+            method="POST",
+            headers=headers,
+            timeout=GITHUB_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        print("Failed to create private GitHub report.")
+        return False
+
+    print("Private GitHub report created successfully.")
     return True

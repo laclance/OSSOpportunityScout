@@ -55,6 +55,7 @@
 - **function** `send_telegram_notification()` — line 62
 - **function** `send_discord_notification()` — line 76
 - **function** `create_github_issue()` — line 81
+- **function** `create_private_github_issue()` — line 121
 
 ## `bountyscout/github.py`
 
@@ -100,13 +101,13 @@
 ## `bountyscout/run.py`
 
 - **class** `RunConfig` — line 69
-- **class** `RunDependencies` — line 81
-- **class** `CoverageStatus` — line 95
-- **class** `DeliveryResult` — line 105
-- **class** `CombinedRunResult` — line 113
-- **function** `assemble_queue()` — line 122
-- **function** `coverage_status()` — line 147
-- **function** `run_combined_scan()` — line 258
+- **class** `RunDependencies` — line 83
+- **class** `CoverageStatus` — line 98
+- **class** `DeliveryResult` — line 108
+- **class** `CombinedRunResult` — line 116
+- **function** `assemble_queue()` — line 125
+- **function** `coverage_status()` — line 150
+- **function** `run_combined_scan()` — line 282
 
 ## `bountyscout/scoring.py`
 

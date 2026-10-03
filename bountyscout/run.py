@@ -75,6 +75,8 @@ class RunConfig:
     telegram_chat_id: str | None
     discord_webhook: str | None
     github_reports_enabled: bool = False
+    private_github_reports_repository: str | None = None
+    private_github_reports_token: str | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,7 @@ class RunDependencies:
     send_discord: DiscordSender
     send_github_report: GitHubReportSender
     issue_lifecycle: LifecycleChecker
+    send_private_github_report: GitHubReportSender | None = None
 
 
 @dataclass(frozen=True)
@@ -251,6 +254,27 @@ def _deliver(
             )
             or delivered
         )
+
+    if config.private_github_reports_repository and config.private_github_reports_token:
+        attempted = True
+        body = reporting.github_report_body(
+            queue,
+            now,
+            verification_examples=paid_examples + strategic_examples,
+            strategic_audit=strategic_audit,
+            reject_counts=rejects,
+            coverage_warning=coverage_warning,
+        )
+        if dependencies.send_private_github_report is not None:
+            delivered = (
+                dependencies.send_private_github_report(
+                    config.private_github_reports_repository,
+                    config.private_github_reports_token,
+                    reporting.github_report_title(len(queue)),
+                    body,
+                )
+                or delivered
+            )
 
     return DeliveryResult(attempted=attempted, delivered=delivered)
 

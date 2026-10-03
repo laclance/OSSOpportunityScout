@@ -19,7 +19,7 @@ This file is the canonical working agreement for coding agents and human contrib
 - Never weaken paid-bounty verification while changing strategic discovery.
 - Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
 - Advance seen-state only after successful complete delivery; incomplete combined verification, failed private delivery, and failed explicitly enabled GitHub report auto-close must leave state unchanged.
-- Keep GitHub API authentication separate from public report delivery. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` must never imply permission to publish ranked scout results; GitHub report issues require explicit opt-in and must default off.
+- Keep GitHub API authentication separate from report delivery. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` must never imply permission to publish ranked scout results; host-repository GitHub reports require explicit opt-in and must default off. Private GitHub reports require their own repository and credential, and delivery must fail closed unless GitHub metadata retrieved with that credential explicitly reports `private: true`.
 - Keep `bountyscout.state` branch-agnostic. Git/worktree/`scout-state` transport belongs to the workflow, not Python state code.
 - Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
