@@ -119,6 +119,86 @@ Historical generated queue reports from before the current host-report auto-clos
 
 Phase 4C established package-owned strategic discovery, verification, and combined-run orchestration. Phase 4E completed package ownership of paid parsing, policy, verification, delivery, GitHub Search, and GitHub GET transport. OSS Cleanup 4 unified all GitHub JSON traffic under the canonical `OSSOpportunityScout` request identity while retaining injectable transport seams for deterministic tests. Production runtime now follows `opportunity_scout.py → bountyscout.app / bountyscout.run → package modules`.
 
+
+## GitHub integration contract
+
+### REST identity and version
+
+`bountyscout.github` is the canonical owner of GitHub REST request identity. GitHub JSON
+requests use:
+
+```http
+Accept: application/vnd.github+json
+User-Agent: OSSOpportunityScout
+X-GitHub-Api-Version: 2022-11-28
+```
+
+The REST API version is intentionally pinned to `2022-11-28`. Version upgrades are explicit
+compatibility work; the scanner does not automatically track GitHub's newest REST version.
+
+### Authentication and workflow permissions
+
+The production GitHub Action receives `GITHUB_TOKEN` for repository-scoped scanner GitHub REST
+access. The checkout credential also persists `seen_bounties.json` by pushing the production
+state snapshot to `scout-state`, so the bundled workflow requires `contents: write`. It does
+not grant `issues: write` because host-repository reports are not enabled in that deployment.
+
+Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
+`GITHUB_REPOSITORY` alone never enable them; a custom deployment must set
+`GITHUB_REPORTS_ENABLED=true` and supply a GitHub credential with Issues write permission.
+
+Private reports use a separate credential boundary:
+
+```text
+scanner GITHUB_TOKEN
+-> scanner GitHub REST access + scout-state repository persistence context
+
+PRIVATE_GITHUB_REPORTS_TOKEN
+-> private report repository metadata verification + issue creation only
+```
+
+Before a private report is created, the destination metadata is fetched with the private
+credential and must report `private == true`; otherwise delivery fails closed. The private
+report token is not exposed to discovery or verification code and should be scoped only to the
+intended reports repository.
+
+### Safe reads, rate limits, and mutations
+
+Safe GitHub GETs use bounded retry with at most three attempts (two retries). Retry decisions
+honor `Retry-After`, primary-rate-limit reset evidence, secondary rate limiting, temporary
+`5xx` responses, and eligible timeout/connection failures. Ordinary `401`, non-rate-limit
+`403`, and `404` responses are not blindly retried.
+
+GitHub writes remain single-attempt. Report issue creation and host report issue updates are not
+automatically retried because repeating a mutation can duplicate or otherwise compound side
+effects.
+
+GitHub diagnostics do not intentionally log scanner/private tokens, `Authorization` headers, or
+full request objects. Safe-read failures are reported using a concise classification and the
+non-token request URL.
+
+### Pagination semantics
+
+Pagination is evidence-sensitive. GitHub Search, curated repository discovery, and the paid
+active-claim comment inspection remain intentionally bounded. Shared issue comments, paid
+implementation-PR timelines, and strategic implementation-PR timelines require complete
+evidence and therefore follow validated GitHub `Link` traversal. If complete collection
+traversal cannot be verified, the caller fails closed rather than accepting partial evidence.
+
+### Conditional requests and cache ownership
+
+Conditional requests using `ETag` or `Last-Modified` were evaluated but are not currently
+implemented. Per-run caches already eliminate important duplicate reads, while useful cross-run
+conditional reuse would require persistent ownership of both validators and the prior response
+bodies. That complexity is not currently justified by measured request volume.
+
+`scout-state` is persistence for scanner seen-state, not an HTTP cache. GitHub validators and
+response bodies must not be stored there. Conditional requests can be reconsidered if polling or
+request volume materially increases.
+
+OSS Opportunity Scout is a GitHub API integration developed by a participant in the GitHub
+Developer Program. Program participation is not GitHub approval, certification, or endorsement.
+
 ## Invariants
 
 - Shared comments and paid/strategic timelines require complete pagination. Collection traversal validates HTTPS GitHub API destinations, collection identity, unchanged query parameters, and successive page numbers; numeric repository aliases require matching repository metadata. Redirects are refused before credentials can be forwarded. A 1000-page safety ceiling fails closed for complete-evidence callers.
