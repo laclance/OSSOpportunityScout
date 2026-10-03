@@ -103,8 +103,8 @@
 - **class** `DeliveryResult` — line 108
 - **class** `CombinedRunResult` — line 116
 - **function** `assemble_queue()` — line 125
-- **function** `coverage_status()` — line 150
-- **function** `run_combined_scan()` — line 282
+- **function** `coverage_status()` — line 145
+- **function** `run_combined_scan()` — line 277
 
 ## `bountyscout/scoring.py`
 

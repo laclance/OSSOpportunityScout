@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
+from bountyscout import sources
 from bountyscout.strategic import discovery, verification
 from bountyscout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
 from tests.helpers import candidate, issue
@@ -231,6 +232,38 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(
             [item["url"] for item in result.candidates],
             [accepted[1]["html_url"], accepted[0]["html_url"], accepted[2]["html_url"]],
+        )
+
+    def test_final_sort_uses_canonical_candidate_rank_key(self) -> None:
+        items = [
+            issue(html_url="https://github.com/g/g/issues/21"),
+            issue(html_url="https://github.com/g/g/issues/22"),
+        ]
+        low = verified_candidate(items[0], score=70)
+        high = verified_candidate(items[1], score=80)
+
+        def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
+            return (low if item_ is items[0] else high), None
+
+        original_rank_key = sources.candidate_rank_key
+        with patch.object(
+            sources,
+            "candidate_rank_key",
+            wraps=original_rank_key,
+        ) as rank_key:
+            result = verification.verify_strategic_selection(
+                selection({"g/g": [row(items[0]), row(items[1])]}),
+                deep_verify,
+                lambda _: None,
+            )
+
+        self.assertEqual(
+            [item["url"] for item in result.candidates],
+            [items[1]["html_url"], items[0]["html_url"]],
+        )
+        self.assertEqual(
+            [call.args[0] for call in rank_key.call_args_list],
+            [low, high],
         )
 
     def test_below_threshold_candidate_without_miss_signal_skips_audit(self) -> None:
