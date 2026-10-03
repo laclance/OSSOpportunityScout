@@ -24,7 +24,6 @@ This file is the canonical working agreement for coding agents and human contrib
 - Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
-- Generated host-repository reports must never be closed from `bounty-alert` alone; require explicit report title/body identity signals, the expected automation author, open issue state, configured repository identity, and non-PR evidence.
 
 ## Design rules
 
