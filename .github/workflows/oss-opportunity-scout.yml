@@ -2,7 +2,7 @@ name: OSS Opportunity Scout Hourly
 
 on:
   schedule:
-    - cron: "0 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 jobs:
