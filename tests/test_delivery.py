@@ -134,3 +134,86 @@ class DeliveryTests(unittest.TestCase):
         ) as opened:
             self.assertFalse(delivery.create_github_issue("me/repo", "tok", "title", "body"))
         self.assertEqual(opened.call_count, 2)
+
+    def test_private_github_report_verifies_privacy_and_leaves_issue_open(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            side_effect=[FakeResponse(b'{"private": true}'), FakeResponse(b"{}")],
+        ) as opened:
+            self.assertTrue(
+                delivery.create_private_github_issue(
+                    "owner/private-reports",
+                    "report-token",
+                    "title",
+                    "body",
+                )
+            )
+
+        self.assertEqual(opened.call_count, 2)
+        metadata_req = cast(urllib.request.Request, opened.call_args_list[0].args[0])
+        create_req = cast(urllib.request.Request, opened.call_args_list[1].args[0])
+        self.assertEqual(
+            metadata_req.full_url,
+            "https://api.github.com/repos/owner/private-reports",
+        )
+        self.assertEqual(metadata_req.method, "GET")
+        self.assertIsNone(metadata_req.data)
+        self.assertEqual(metadata_req.get_header("Authorization"), "Bearer report-token")
+        self.assertEqual(
+            create_req.full_url,
+            "https://api.github.com/repos/owner/private-reports/issues",
+        )
+        self.assertEqual(create_req.method, "POST")
+        self.assertEqual(request_json(create_req), {"title": "title", "body": "body"})
+        self.assertEqual(create_req.get_header("Authorization"), "Bearer report-token")
+
+    def test_private_github_report_fails_closed_for_unverified_privacy(self) -> None:
+        for body in (b'{"private": false}', b"{}", b"[]", b"not json"):
+            with self.subTest(body=body):
+                with patch.object(
+                    urllib.request,
+                    "urlopen",
+                    return_value=FakeResponse(body),
+                ) as opened:
+                    self.assertFalse(
+                        delivery.create_private_github_issue(
+                            "owner/reports",
+                            "report-token",
+                            "title",
+                            "body",
+                        )
+                    )
+                opened.assert_called_once()
+
+    def test_private_github_report_metadata_transport_or_auth_failure_fails_closed(
+        self,
+    ) -> None:
+        for error in (OSError("metadata failed"), PermissionError("authentication failed")):
+            with self.subTest(error=error):
+                with patch.object(urllib.request, "urlopen", side_effect=error) as opened:
+                    self.assertFalse(
+                        delivery.create_private_github_issue(
+                            "owner/reports",
+                            "report-token",
+                            "title",
+                            "body",
+                        )
+                    )
+                opened.assert_called_once()
+
+    def test_private_github_report_issue_create_failure_returns_false(self) -> None:
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            side_effect=[FakeResponse(b'{"private": true}'), OSError("create failed")],
+        ) as opened:
+            self.assertFalse(
+                delivery.create_private_github_issue(
+                    "owner/reports",
+                    "report-token",
+                    "title",
+                    "body",
+                )
+            )
+        self.assertEqual(opened.call_count, 2)
