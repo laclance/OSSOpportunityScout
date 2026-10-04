@@ -160,7 +160,7 @@ def notification_message(
 
     message = header + "".join(parts)
     if omitted:
-        suffix = f"… {omitted} more ranked candidate(s) in the GitHub report."
+        suffix = f"… {omitted} more ranked candidate(s) omitted from this notification."
         room = max_chars - len(suffix) - 1
         message = message[: max(0, room)].rstrip() + "\n" + suffix
     return message.rstrip()
