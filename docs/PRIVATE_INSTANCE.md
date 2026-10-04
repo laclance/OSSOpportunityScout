@@ -19,8 +19,8 @@ private instance state remotely.
 
 The template pins checkout, Python setup, artifact upload, and scanner execution
 to full commit SHAs. Its scanner SHA selects the initial Slice 5 action implementation
-commit. Before adopting or upgrading it, review that commit and its checks; after
-this PR merges, an operator may deliberately replace it with the reviewed merge
+commit. Before adopting or upgrading it, review that commit and its checks. Since
+PR #40 is merged, an operator may deliberately replace it with the reviewed merge
 commit's full SHA. A release can identify a SHA, but branches and moving tags must
 not silently upgrade the scanner. Changing the pin is an instance-owned change.
 
@@ -41,6 +41,45 @@ An existing instance must preserve its trustworthy history; never substitute thi
 empty example for migration state. The template rejects missing files and symlinks;
 the scanner validates config and existing state before discovery or delivery.
 No setup or personal migration is performed by Slice 5.
+
+## Slice 6 private acceptance record
+
+PR #40 merged the Slice 5 distribution assets. Slice 6 must establish the personal
+instance independently; recovery or offline checks alone do not complete it.
+Resolve the instance repository, personal preferences, delivery destinations, and
+secure provisioning of the separate report credential before dependent actions.
+Continue independent historical recovery checks while these details are pending.
+Keep the following evidence in private storage or the confirmed private instance:
+
+| Gate | Private evidence required |
+| --- | --- |
+| Historical recovery | Newer sources checked, selected source/commit/path, original snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust |
+| Instance ownership | GitHub metadata explicitly confirming repository privacy and independence; default branch owns personal config, seeded state, manual-only workflow, full scanner SHA, and persistence/history |
+| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the recovered snapshot |
+| Credentials and delivery | Explicit intended channels/destinations; scanner/persistence credential separate from report credential; report-repository metadata verified private with the report credential; host reporting disabled |
+| First manual scan | Run/attempt, scanner pin, transaction base, coverage result, intended delivery evidence, and resulting state; delivery and persistence outcomes recorded separately |
+| Remote persistence | Private remote state retrieved after the run, canonically parsed, and compared with the exact resulting snapshot and delivered entries; normal state-only commit or justified unchanged-state result |
+| Subsequent deduplication | A later manually dispatched scan reads the persisted state and does not repeat previously reported URLs; distinguish a quiet run from a run that actually rechecks those candidates |
+| Controlled transaction checks | Observed serialization and current-state reads after admission; deliberately stale write rejected without remote overwrite; exact recovery artifact uploaded privately with three-day retention, downloaded, parsed, and restored or reconciled before another scan |
+
+Use controlled checks without report delivery for serialization, stale writes, and
+artifact handling. Record which checks exercised GitHub Actions and which were
+offline. A controlled artifact check proves preservation and restoration mechanics;
+the separate delivery/persistence/deduplication gates still require real scan
+evidence. Do not add fabricated opportunity entries to the production state for a
+check or treat incomplete coverage as permission to advance it.
+
+If a manual scan delivers but persistence fails, stop dispatches and cancel queued
+writers immediately, then follow [recovery before rerunning](#recover-before-rerunning).
+Do not dispatch the deduplication scan until remote restoration is verified.
+Missing recovery evidence, incomplete coverage, ambiguous delivery, and candidates
+not rechecked remain explicit gaps rather than successful acceptance claims.
+
+Public tracker/PR updates contain only non-sensitive status and public source/check
+identifiers. Keep personal repository identities, preferences, secrets, state
+contents/counts, opportunity URLs, run IDs, recovery hashes, and operational logs
+private. Slice 7 remains blocked until all applicable private acceptance gates are
+proven; the Slice 6 documentation PR remains unmerged.
 
 ## Action inputs and credentials
 

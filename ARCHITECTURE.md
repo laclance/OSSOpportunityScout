@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–4 are merged through PR #39, providing Python support, coverage completeness, explicit immutable configuration and final preferences, and [configuration guidance](docs/CONFIGURATION.md). Slice 5 provides reusable execution and a private template; actual instance migration remains planned. The legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–4 are merged through PR #39, providing Python support, coverage completeness, explicit immutable configuration and final preferences, and [configuration guidance](docs/CONFIGURATION.md). Slice 5 merged in PR #40 with reusable execution and a private template. Slice 6 private instance migration and operational acceptance are verified, with evidence retained privately. The legacy workflow still expects `scout-state`; upstream retirement and mandatory-config cutover remain separate, unstarted Slice 7 work.
 
 ### Public action and private transaction template
 
