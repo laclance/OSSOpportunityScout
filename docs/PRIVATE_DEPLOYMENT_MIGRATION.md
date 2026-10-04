@@ -310,17 +310,17 @@ Slice 1 establishes the Python support contract:
 
 | Slice | Deliverable | Acceptance gate | Status |
 | --- | --- | --- | --- |
-| 1 | Raise the minimum runtime to Python 3.12 and add stable-version compatibility CI across workflows and documentation | Full strict quality gate on 3.12; recursive compile + tests on every stable CPython release >=3.12 available when the slice lands; no configuration changes; no newer-than-3.12 syntax; later Python releases are not supported until their CI checks pass  Complete |
-| 1B | Fix coverage completeness independently of warning thresholds | Any recognized verification/discovery failure prevents state advancement, including quiet-run maintenance  Complete |
-| 2 | Add immutable preferences, strict TOML parser, and generic example | Parser regressions; existing invocation behavior preserved  Complete |
-| 3A | Wire explicit config/state paths, repositories, exclusions, lanes, and global discovery | Disabled sources make no requests; legacy and configured invocation both work  Complete |
-| 3B | Wire language preferences | Cached metadata reused; no increased Search fan-out  Complete |
-| 3C | Wire effort preferences | Final estimates control acceptance; rejected candidates do not consume selection slots  Complete |
-| 3D | Wire thresholds and result limits | Final classification governs thresholds; deterministic ranking preserved  Complete |
-| 4 | Publish configuration guidance and validated examples | Every documented command and field works  Complete |
-| 5 | Add a public pinned composite action and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; post-delivery persistence failure preserves the resulting state as a private short-retention recovery artifact before the workflow fails; no persistent upstream deployment created  Complete |
-| 6 | Recover and migrate the personal instance privately | Trustworthy state seeded; private delivery, persistence, and subsequent deduplication verified  Complete |
-| 7 | Remove canonical public upstream production-instance responsibilities and complete config cutover | Slice 6 proven; upstream retains only development/release CI and reusable execution machinery  Complete |
+| 1 | Raise the minimum runtime to Python 3.12 and add stable-version compatibility CI across workflows and documentation | Full strict quality gate on 3.12; recursive compile + tests on every stable CPython release >=3.12 available when the slice lands; no configuration changes; no newer-than-3.12 syntax; later Python releases are not supported until their CI checks pass | Complete |
+| 1B | Fix coverage completeness independently of warning thresholds | Any recognized verification/discovery failure prevents state advancement, including quiet-run maintenance | Complete |
+| 2 | Add immutable preferences, strict TOML parser, and generic example | Parser regressions; existing invocation behavior preserved | Complete |
+| 3A | Wire explicit config/state paths, repositories, exclusions, lanes, and global discovery | Disabled sources make no requests; legacy and configured invocation both work | Complete |
+| 3B | Wire language preferences | Cached metadata reused; no increased Search fan-out | Complete |
+| 3C | Wire effort preferences | Final estimates control acceptance; rejected candidates do not consume selection slots | Complete |
+| 3D | Wire thresholds and result limits | Final classification governs thresholds; deterministic ranking preserved | Complete |
+| 4 | Publish configuration guidance and validated examples | Every documented command and field works | Complete |
+| 5 | Add a public pinned composite action and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; post-delivery persistence failure preserves the resulting state as a private short-retention recovery artifact before the workflow fails; no persistent upstream deployment created | Complete |
+| 6 | Recover and migrate the personal instance privately | Trustworthy state seeded; private delivery, persistence, and subsequent deduplication verified | Complete |
+| 7 | Remove canonical public upstream production-instance responsibilities and complete config cutover | Slice 6 proven; upstream retains only development/release CI and reusable execution machinery | Complete |
 
 Slice 1 inspected all runtime declarations, updated existing sources of truth
 together, deliberately dropped 3.11 compatibility, kept syntax/types/tooling pinned
