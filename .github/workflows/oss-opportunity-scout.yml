@@ -21,10 +21,10 @@ jobs:
           git fetch --no-tags origin scout-state
           git show origin/scout-state:seen_bounties.json > seen_bounties.json
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Run scanner
         env:

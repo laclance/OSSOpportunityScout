@@ -2,8 +2,8 @@
 
 This is the authoritative implementation tracker for separating the public scanner
 distribution from private scout instances. The architecture and contracts below are
-agreed targets, not features already available in the executable. This documentation
-change does not implement a migration slice.
+agreed targets, except for the Python support contract implemented by Slice 1.
+Configuration and deployment features remain planned.
 
 ## Repository and workflow ownership
 
@@ -67,8 +67,14 @@ user/private-scout-instance
 
 Snapshot verified on 2026-10-04; recheck it at the start of every slice:
 
-- Local and remote `main`: `38fb33de2497cee883db32864d9b64465bad59b3` (PR #30).
-- Current runtime contract: Python 3.11+; CI, Ruff, and mypy still target 3.11.
+- Slice 1 starting local and remote `main`:
+  `4a18842bd2d1f5cc7f370606271defdf26bdc8d8` (PR #31). PRs #29, #30, and the
+  migration-plan PR #31 were confirmed merged before branching.
+- Slice 1 raises the runtime minimum and Ruff/mypy targets from 3.11 to 3.12.
+  The complete strict gate runs on 3.12; compatibility CI runs recursive compilation
+  and the full test suite on 3.13 and 3.14. These are all stable CPython releases
+  >=3.12 listed by [Python.org](https://www.python.org/downloads/) on 2026-10-04;
+  3.15 is listed as pre-release and is not supported.
 - PR #29 fixed paid claim-comment verification failing open; PR #30 made state-save
   failure fail the scanner process. Both are merged in this baseline.
 - The legacy upstream workflow is manual-only and requires `scout-state`; that
@@ -80,6 +86,10 @@ Snapshot verified on 2026-10-04; recheck it at the start of every slice:
   and lint, recursive compilation, strict mypy, all 386 tests, and 100% statement
   and branch coverage. This records local validation, not a GitHub Actions result;
   each implementation PR must run the current gate afresh.
+- Slice 1 independently passed `make quality` on Python 3.12.3 both before branching
+  from the verified baseline and after the runtime/tooling/workflow edits: all 386
+  tests, 100% statement and branch coverage, and every strict quality check passed.
+  The focused PR additionally requires passing 3.13 and 3.14 compatibility CI.
 
 **Coverage prerequisite:** `coverage_status()` in `opportunity_scout/run.py` leaves
 the warning unset for one to four recognized strategic verification failures.
@@ -166,8 +176,9 @@ lists or state. Multi-profile support remains deferred.
 
 ## Implementation sequence and acceptance
 
-All production slices below are **planned**. Complete them in order through small,
-independently verified PRs; 3A–3D remain separate slices.
+Slice 1 is implemented in the focused runtime PR and awaits merge. All later slices
+remain **planned**. Complete them in order through small, independently verified
+PRs; 3A–3D remain separate slices.
 
 Slice 1 establishes the Python support contract:
 
@@ -292,8 +303,8 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Immediate next task: Slice 1 only.** Inspect every Python 3.11 declaration and
-existing runtime/tooling source of truth, raise the minimum consistently to Python
-3.12, add compatibility CI for every stable CPython release >=3.12 available when
-the slice lands, run the full quality gate, and open the focused runtime PR.
-Configuration and deployment implementation are outside that slice.
+**Current stopping boundary: Slice 1 open PR.** The runtime/tooling minimum is
+Python 3.12; compatibility CI explicitly covers 3.13 and 3.14. Do not merge this PR
+or start a later slice implicitly. After Slice 1 merges, the next task is Slice 1B,
+the separate coverage-completeness fix. Configuration and deployment implementation
+remain outside Slice 1.

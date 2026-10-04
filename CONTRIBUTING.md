@@ -4,7 +4,7 @@ This is the human contributor guide for OSS Opportunity Scout. Small, behavior-p
 
 ## Setup
 
-Currently requires Python 3.11+. The migration's first implementation slice raises the minimum to Python 3.12, keeps 3.12 as the syntax/type/tooling baseline, and adds CI compile/test compatibility checks for every stable CPython release >=3.12 available when that slice lands; later releases are not supported until added to CI successfully. This documentation change does not drop 3.11 support.
+Requires Python 3.12 or a newer CI-tested CPython release (currently 3.13 and 3.14). Use Python 3.12 for the complete quality gate; it is the syntax, typing, and tooling baseline. CI runs recursive compilation and the full test suite on 3.13 and 3.14. Later releases are not supported until added to CI and their checks pass; Python 3.11 is no longer supported.
 
 ```bash
 python -m pip install -r requirements-dev.txt
@@ -31,6 +31,11 @@ make typecheck   # strict mypy
 make test        # unittest + 100% statement/branch coverage
 make quality     # local quality gate
 ```
+
+Run these commands with Python 3.12 active, or select its interpreter explicitly,
+for example `make quality PYTHON=/path/to/python3.12`. For compatibility checks on
+3.13 or 3.14, run `make compile PYTHON=/path/to/python` followed by
+`/path/to/python -m unittest -v`; these checks need only the standard library.
 
 ## Where changes belong
 

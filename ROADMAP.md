@@ -19,6 +19,7 @@ OSS Opportunity Scout is a package-owned scanner with:
 - public host-repository reports disabled by default
 - hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
 - strict Ruff, mypy, and 100% statement/branch coverage gates
+- Python 3.12 as the minimum runtime and authoritative quality baseline, with compile/test compatibility CI on CPython 3.13 and 3.14
 
 The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. The coverage-completeness discrepancy documented in the tracker also remains an implementation prerequisite.
 
@@ -32,7 +33,7 @@ Native GitHub `schedule` events are paused while GitHub investigates a reproduci
 
 Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through its focused PR slices:
 
-- raise the minimum runtime/tooling baseline to Python 3.12 and add CI compatibility checks for every stable CPython release >=3.12 available when the slice lands
+- Slice 1 establishes Python 3.12 as the minimum runtime/tooling baseline, with compatibility CI on CPython 3.13 and 3.14
 - fix coverage completeness in its separate prerequisite PR
 - add immutable, versioned preferences and wire configuration incrementally
 - provide pinned public execution machinery and a generic private-instance template
@@ -40,7 +41,7 @@ Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through 
 
 Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
 
-**Immediate next task: Slice 1 only.** Preserve the current Python 3.11+ contract until that coordinated runtime PR; configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
+Slice 1 implements the Python support contract only. After its PR merges, the next slice is **1B**, the separate coverage-completeness fix. Configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
 
 ### Establish a release baseline
 

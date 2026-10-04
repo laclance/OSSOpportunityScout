@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-This migration is planned, not implemented. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
+The Python support upgrade in Slice 1 is implemented; configuration and deployment migration remain planned. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
 
 ## How it works
 
@@ -115,7 +115,7 @@ Optional Telegram and Discord transports remain supported through:
 
 ## Development quality
 
-Python 3.11+ is currently required. [Slice 1](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#implementation-sequence-and-acceptance) raises the minimum to Python 3.12. The planned contract keeps 3.12 as the syntax/type/tooling baseline and strict quality-gate interpreter, while CI also runs compile/test compatibility checks on every stable CPython release >=3.12 available when Slice 1 lands. Later Python releases are not supported until they are added to CI successfully. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** remain authoritative on Python 3.12.
+Python 3.12 is the minimum supported runtime. CI covers CPython 3.12, 3.13, and 3.14. Python 3.12 remains the syntax, typing, and tooling baseline: Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** are authoritative on 3.12. Python 3.13 and 3.14 run recursive compilation and the full test suite as compatibility checks. Later Python releases are not supported until they are added to CI and their checks pass.
 
 Useful commands:
 
