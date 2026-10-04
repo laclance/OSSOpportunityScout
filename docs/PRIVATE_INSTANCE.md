@@ -109,14 +109,17 @@ seeded state. Local invocations require `scout.toml` by default or explicit
 `--config PATH`. There is no legacy fallback.
 See the [configuration reference](CONFIGURATION.md).
 
-The template sets workflow-level `permissions: {}` and grants the scan transaction
-job only `contents: write` plus `actions: write`. Contents write covers public
-scanner REST access, normal same-instance state pushes, and the failure-only durable
-recovery-marker commit. Actions write is used only as defense in depth on the
-persistence-failure path to inspect the exact shared concurrency group and cancel
-its other queued workflow runs before this run releases the lock. It grants no
-Issues write or cross-repository persistence credential. Checkout retains only this
-instance credential for normal Git transport.
+The template sets workflow-level `permissions: {}`. The normal `scout` job has
+only `contents: write`, which covers public scanner REST access, same-instance
+state persistence, and the failure-only durable recovery-marker commit. The pinned
+scanner therefore receives no Actions write capability through `github.token`.
+
+A tiny dependent `cancel_queued` job has only `actions: write` and runs only when
+the scan job publishes a persistence-failure recovery handoff. It performs
+defense-in-depth queue cancellation and then emits the terminal recovery failure.
+It has no Contents or Issues write permission. Because concurrency is workflow-level,
+the whole run remains in `scout-seen-state` until this follow-up job completes.
+Checkout retains only the scan job's Contents credential for normal Git transport.
 
 Private reports receive `PRIVATE_GITHUB_REPORTS_REPOSITORY` and
 `PRIVATE_GITHUB_REPORTS_TOKEN` from separately configured instance secrets. Give
@@ -204,17 +207,20 @@ rebases, or resets newer branch history. If the branch advanced during marker
 creation, the ordinary push fails visibly rather than overwriting that history.
 An already-existing marker already satisfies the barrier.
 
-Only after the marker attempt does the workflow query the
-`scout-seen-state` concurrency group and request cancellation for every other
-queued member. This cancellation is defense in depth and operator convenience, not
-the correctness barrier. If its API lookup or a cancellation request fails while
-the marker was established, later runs are still blocked by the marker. If marker
-establishment itself fails, the workflow reports that recovery protection was not
-established and requires all scout runs to remain stopped until the operator
-establishes recovery protection and completes recovery.
+After the marker attempt, the `scout` job publishes only the recovery outcomes
+needed by its dependent follow-up. The separate `cancel_queued` job receives a
+token with only `actions: write`, queries the `scout-seen-state` concurrency group,
+and requests cancellation for every other queued member. This cancellation is
+defense in depth and operator convenience, not the correctness barrier. If its API
+lookup or a cancellation request fails while the marker was established, later runs
+are still blocked by the marker. If marker establishment itself fails, the final
+diagnostic requires all scout runs to remain stopped until the operator establishes
+recovery protection and completes recovery.
 
-The workflow explicitly fails after these attempts. It makes no exactly-once
-delivery claim.
+The follow-up job explicitly fails after the cancellation attempt, so the workflow
+still ends red for every persistence-failure recovery path. Workflow-level
+concurrency keeps the shared lock held until that follow-up finishes. This makes no
+exactly-once delivery claim.
 
 Deliberate recovery is:
 
