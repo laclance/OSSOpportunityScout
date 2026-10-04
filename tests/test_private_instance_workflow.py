@@ -131,19 +131,19 @@ class PrivateInstanceContractTests(unittest.TestCase):
             capture = folder / "gh-calls.txt"
             fake_gh = fake_bin / "gh"
             fake_gh.write_text(
-                "#!/bin/bash\n"
-                "set -euo pipefail\n"
-                "printf '%s\\n' \"$*\" >> \"$GH_CAPTURE\"\n"
-                "if [[ \"$*\" == *\"actions/concurrency_groups/"
-                "scout-seen-state\"* ]]; then\n"
-                "  printf '101\\n102\\n'\n"
-                "elif [[ \"$*\" == *\"/actions/runs/101/cancel\"* ]]; then\n"
-                "  exit 0\n"
-                "elif [[ \"$*\" == *\"/actions/runs/102/cancel\"* ]]; then\n"
-                "  exit 0\n"
-                "else\n"
-                "  exit 23\n"
-                "fi\n"
+                r"""#!/bin/bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$GH_CAPTURE"
+if [[ "$*" == *"actions/concurrency_groups/scout-seen-state"* ]]; then
+  printf '101\n102\n'
+elif [[ "$*" == *"/actions/runs/101/cancel"* ]]; then
+  exit 0
+elif [[ "$*" == *"/actions/runs/102/cancel"* ]]; then
+  exit 0
+else
+  exit 23
+fi
+"""
             )
             fake_gh.chmod(0o755)
             result = shell_step(
