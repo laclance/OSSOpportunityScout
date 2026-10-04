@@ -240,6 +240,7 @@ def select_strategic_candidates(
     inspect_per_repo: int = STRATEGIC_INSPECT_PER_REPO,
     adaptive_budget: int = STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
     audit_limit: int = STRATEGIC_AUDIT_LIMIT,
+    repository_excluded: Callable[[str], bool] = lambda _repo: False,
 ) -> StrategicDiscoverySelection:
     """Build deterministic pre-verification rows from bounded strategic sources."""
     provisional: list[sources.IssueRow] = []
@@ -301,6 +302,8 @@ def select_strategic_candidates(
                 continue
             repo, _ = github.issue_repo_and_number(item)
             if not repo:
+                continue
+            if repository_excluded(repo):
                 continue
             repo_key = repo
             meta = github.cached_value(

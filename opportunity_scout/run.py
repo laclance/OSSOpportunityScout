@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from time import monotonic
 from typing import Final
 
-from opportunity_scout import reporting, sources, state
+from opportunity_scout import reporting, selection, sources, state
+from opportunity_scout.preferences import ScoutPreferences
 from opportunity_scout.types import (
     Candidate,
     GitHubIssue,
@@ -78,6 +80,8 @@ class RunConfig:
     github_reports_enabled: bool = False
     private_github_reports_repository: str | None = None
     private_github_reports_token: str | None = None
+    preferences: ScoutPreferences = ScoutPreferences()
+    state_path: str | Path = state.DEFAULT_STATE_FILE
 
 
 @dataclass(frozen=True)
@@ -193,8 +197,8 @@ def coverage_status(
     )
 
 
-def _save_state(next_state: state.SeenState) -> bool:
-    state.save_seen_state(next_state)
+def _save_state(next_state: state.SeenState, path: str | Path) -> bool:
+    state.save_seen_state(next_state, path)
     return True
 
 
@@ -297,7 +301,7 @@ def run_combined_scan(
     coverage_warning_threshold: int = STRATEGIC_COVERAGE_WARNING_THRESHOLD,
 ) -> CombinedRunResult:
     """Run discovery, delivery, and the transactional seen-state commit."""
-    seen_state = state.load_seen_state()
+    seen_state = state.load_seen_state(config.state_path)
     seen = seen_state.urls()
     repo_cache: dict[str, RepositoryMetadata] = {}
     guide_cache: dict[str, str | None] = {}
@@ -305,19 +309,26 @@ def run_combined_scan(
     started = monotonic()
     prefetched_paid_searches: list[SearchBatch] | None = None
     prefetched_global_searches: list[SearchBatch] | None = None
-    if config.token and config.repo_fullname:
+    if (
+        config.token
+        and config.repo_fullname
+        and (
+            config.preferences.paid
+            or (config.preferences.strategic and config.preferences.global_search)
+        )
+    ):
         (
             prefetched_paid_searches,
             prefetched_global_searches,
         ) = dependencies.prefetch_discovery_searches(config.token)
 
     paid_started = monotonic()
-    paid, paid_rejects, paid_examples = dependencies.discover_paid(
-        config.token,
-        seen,
-        repo_cache,
-        guide_cache,
-        prefetched_paid_searches,
+    paid, paid_rejects, paid_examples = (
+        dependencies.discover_paid(
+            config.token, seen, repo_cache, guide_cache, prefetched_paid_searches
+        )
+        if config.preferences.paid
+        else ([], {}, [])
     )
     paid_seconds = monotonic() - paid_started
 
@@ -327,13 +338,17 @@ def run_combined_scan(
         strategic_rejects,
         strategic_examples,
         strategic_audit,
-    ) = dependencies.discover_strategic(
-        config.token,
-        seen,
-        {candidate["url"] for candidate in paid},
-        repo_cache,
-        guide_cache,
-        prefetched_global_searches,
+    ) = (
+        dependencies.discover_strategic(
+            config.token,
+            seen,
+            {candidate["url"] for candidate in paid},
+            repo_cache,
+            guide_cache,
+            prefetched_global_searches,
+        )
+        if config.preferences.strategic
+        else ([], {}, [], [])
     )
 
     if prefetched_paid_searches is not None:
@@ -355,7 +370,15 @@ def run_combined_scan(
         f"total={monotonic() - started:.1f}s"
     )
 
-    queue = assemble_queue(paid, strategic, limit=report_limit)
+    queue = assemble_queue(
+        [item for item in paid if selection.candidate_rejection(item, config.preferences) is None],
+        [
+            item
+            for item in strategic
+            if selection.candidate_rejection(item, config.preferences) is None
+        ],
+        limit=report_limit,
+    )
     if strategic_audit:
         print("=== POTENTIAL SCANNER MISSES ===")
         for item in strategic_audit:
@@ -381,7 +404,7 @@ def run_combined_scan(
                 dependencies.issue_lifecycle,
             )
             if maintenance.checked_urls:
-                state_saved = _save_state(maintenance.state)
+                state_saved = _save_state(maintenance.state, config.state_path)
         else:
             print("Verification coverage incomplete; state was not updated.")
         return CombinedRunResult(
@@ -422,7 +445,7 @@ def run_combined_scan(
             (candidate["url"] for candidate in queue),
             reported_at=scan_time.isoformat().replace("+00:00", "Z"),
         )
-        state_saved = _save_state(next_state)
+        state_saved = _save_state(next_state, config.state_path)
     elif delivery.attempted and delivery.delivered:
         print("Verification coverage incomplete; state was not updated.")
     else:

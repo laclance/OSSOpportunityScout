@@ -1,7 +1,7 @@
 """Immutable, non-secret scout preferences and strict version-1 TOML loading.
 
-This module validates configuration only. Application assembly will opt into it
-in a later migration slice; importing it does not configure a scanner run.
+This module validates configuration only. Application assembly loads an explicit
+path; importing it does not configure a scanner run.
 """
 
 from __future__ import annotations
@@ -24,8 +24,8 @@ class ScoutPreferences:
     """Preference values, separate from credential-bearing RunConfig.
 
     Repository targets add strategic sources; exclusions take precedence across
-    both lanes. Language and effort acceptance, lane/source controls, and final
-    classification thresholds are applied by later runtime-wiring slices.
+    both lanes. Slice 3A applies repository and lane/source controls; language,
+    effort, thresholds, and result limits await their runtime-wiring slices.
     """
 
     version: Literal[1] = 1
