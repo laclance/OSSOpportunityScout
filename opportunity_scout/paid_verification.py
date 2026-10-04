@@ -132,7 +132,7 @@ def active_claim_reason(
         github.github_get(url, token) if fetch_json is None else fetch_json(url, token)
     )
     if not isinstance(comments, list):
-        return None
+        return "could not verify active claim comments"
 
     for raw_comment in comments:
         if not isinstance(raw_comment, dict):

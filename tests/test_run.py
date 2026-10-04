@@ -205,6 +205,16 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(status.failure_count, 3)
         self.assertIn("3 discovery/source/comment/competition checks failed", status.warning or "")
 
+    def test_paid_claim_verification_failure_always_warns(self) -> None:
+        status = run.coverage_status(
+            {},
+            [],
+            paid_rejects={"could not verify active claim comments": 1},
+        )
+        self.assertEqual(status.verification_failures, 1)
+        self.assertEqual(status.failure_count, 1)
+        self.assertIsNotNone(status.warning)
+
 
 class DeliveryRenderingTests(unittest.TestCase):
     def test_github_report_body_render_count_by_destination(self) -> None:
@@ -644,6 +654,60 @@ class RunLifecycleTests(unittest.TestCase):
             )
 
         self.assertTrue(result.delivery.delivered)
+        self.assertIsNotNone(result.coverage.warning)
+        maintain.assert_not_called()
+        save.assert_not_called()
+        self.assertIn("Opportunity discovery/verification coverage is incomplete", reports[0])
+        self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
+
+    def test_paid_claim_verification_failure_can_deliver_but_never_advances_state(self) -> None:
+        reports: list[str] = []
+
+        def paid(
+            _token: str | None,
+            _seen: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.PaidDiscoveryResult:
+            return [], {"could not verify active claim comments": 1}, []
+
+        def github_report(_repo: str, _token: str, _title: str, body: str) -> bool:
+            reports.append(body)
+            return True
+
+        deps = run.RunDependencies(
+            discover_paid=paid,
+            discover_strategic=empty_strategic,
+            prefetch_discovery_searches=empty_prefetch,
+            append_audit=append_audit,
+            send_telegram=false_telegram,
+            send_discord=false_discord,
+            send_github_report=github_report,
+            issue_lifecycle=open_lifecycle,
+        )
+        buf = io.StringIO()
+        with (
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "maintain_seen_state") as maintain,
+            patch.object(state, "save_seen_state") as save,
+            redirect_stdout(buf),
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    None,
+                    None,
+                    None,
+                    github_reports_enabled=True,
+                ),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertTrue(result.delivery.delivered)
+        self.assertEqual(result.coverage.verification_failures, 1)
         self.assertIsNotNone(result.coverage.warning)
         maintain.assert_not_called()
         save.assert_not_called()
