@@ -45,7 +45,7 @@ class EffortPolicyTests(unittest.TestCase):
                     for is_paid in (False, True):
                         self.assertEqual(
                             selection.candidate_rejection(
-                                candidate(paid=is_paid, effort=final_effort), config
+                                candidate(paid=is_paid, cash_score=80, effort=final_effort), config
                             ),
                             None if expected else EFFORT_REJECTION,
                         )
@@ -195,6 +195,7 @@ class FinalEstimateTests(unittest.TestCase):
                         career_score=score,
                         effort="1d+" if index < 3 else "1–3h",
                         paid=index % 2 == 0,
+                        cash_score=80,
                     ),
                     None,
                 )

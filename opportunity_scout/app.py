@@ -801,14 +801,7 @@ def discover_paid(
         preference_reason = selection.candidate_rejection(candidate, scout_preferences)
         if preference_reason:
             add_reject(rejected, examples, item, preference_reason)
-            continue
-        if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
-            reason = (
-                f"cash score {candidate['cash_score']}/100 below paid threshold "
-                f"{PAID_MIN_CASH_SCORE}/100"
-            )
-            add_reject(rejected, examples, item, reason)
-            print(f"Skipping {kind} candidate {url}: {reason}")
+            print(f"Skipping {kind} candidate {url}: {preference_reason}")
             continue
 
         found.append(candidate)
@@ -956,7 +949,8 @@ def discover_strategic(
         keep_per_repo=STRATEGIC_KEEP_PER_REPO,
         score_uplift_bound=STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
         refresh_failure_limit=STRATEGIC_REFRESH_FAILURE_LIMIT,
-        min_career_score=STRATEGIC_MIN_CAREER_SCORE,
+        min_career_score=scout_preferences.min_career_score,
+        min_cash_score=scout_preferences.min_cash_score,
         verify_workers=STRATEGIC_VERIFY_WORKERS,
         audit_limit=STRATEGIC_AUDIT_LIMIT,
     )

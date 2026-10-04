@@ -1,7 +1,7 @@
 """Bounded strategic deep-verification orchestration.
 
 Discovery supplies deterministic per-repository preview rows. This module owns the
-bounded deep checks, source-failure breaker, repo-slot settlement, final thresholding,
+bounded deep checks, source-failure breaker, final thresholding, repo-slot settlement,
 and accepted strategic output. App-level adapters provide the mixed paid/strategic
 verifier and preflight policy.
 """
@@ -12,6 +12,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
+from opportunity_scout import selection as selection_policy
 from opportunity_scout import sources
 from opportunity_scout.strategic import discovery as strategic_discovery
 from opportunity_scout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
@@ -89,10 +90,11 @@ def verify_strategic_selection(
     score_uplift_bound: int = STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND,
     refresh_failure_limit: int = STRATEGIC_REFRESH_FAILURE_LIMIT,
     min_career_score: int = STRATEGIC_MIN_CAREER_SCORE,
+    min_cash_score: int = 55,
     verify_workers: int = STRATEGIC_VERIFY_WORKERS,
     audit_limit: int = strategic_discovery.STRATEGIC_AUDIT_LIMIT,
 ) -> StrategicVerificationResult:
-    """Deeply verify ranked strategic rows without increasing request fan-out."""
+    """Verify ranked rows within the existing inspection, worker and settlement bounds."""
     ranked_by_repo = selection.ranked_by_repo
     audit = list(selection.audit)
     rejected: dict[str, int] = {}
@@ -107,10 +109,6 @@ def verify_strategic_selection(
         for index, row in enumerate(ranked):
             item = row[3]
             preflight_reason = preflight_rejection(item)
-            career_upper_bound = sources.strategic_verification_upper_bound(
-                row,
-                score_uplift_bound=score_uplift_bound,
-            )[1]
             candidate: Candidate | None
             reason: str | None
             network_checked: bool
@@ -118,15 +116,17 @@ def verify_strategic_selection(
                 candidate = None
                 reason = preflight_reason
                 network_checked = False
-            elif career_upper_bound < min_career_score:
-                candidate = None
-                reason = (
-                    f"career score {row[1]}/100 below strategic threshold {min_career_score}/100"
-                )
-                network_checked = False
             else:
                 candidate, reason = deep_verify(item)
                 network_checked = True
+                # Preview classification/scores cannot prove threshold rejection:
+                # refreshed payment and issue evidence may change either lane.
+                if candidate is not None and reason is None:
+                    reason = selection_policy.score_rejection(
+                        candidate,
+                        min_cash_score=min_cash_score,
+                        min_career_score=min_career_score,
+                    )
 
             outcome = StrategicVerificationOutcome(
                 row=row,
@@ -141,11 +141,7 @@ def verify_strategic_selection(
             else:
                 consecutive_source_failures = 0
 
-            if (
-                candidate is not None
-                and reason is None
-                and candidate["career_score"] >= min_career_score
-            ):
+            if candidate is not None and reason is None:
                 accepted.append(candidate)
 
             if consecutive_source_failures >= refresh_failure_limit:
@@ -194,22 +190,6 @@ def verify_strategic_selection(
                 continue
 
             assert candidate is not None
-            if candidate["career_score"] < min_career_score:
-                reason = (
-                    f"career score {candidate['career_score']}/100 below strategic threshold "
-                    f"{min_career_score}/100"
-                )
-                _add_reject(rejected, examples, verified_item, reason)
-                if strategic_discovery.possible_miss_signal(verified_item):
-                    strategic_discovery.add_audit(
-                        audit,
-                        verified_item,
-                        f"strong-looking near miss: {reason}",
-                        limit=audit_limit,
-                    )
-                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
-                continue
-
             verified_by_repo[repo].append(candidate)
 
         if repo_result.coverage_incomplete:

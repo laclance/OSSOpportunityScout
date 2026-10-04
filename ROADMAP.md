@@ -24,6 +24,7 @@ OSS Opportunity Scout is a package-owned scanner with:
 - explicit config/state paths and repository/lane/strategic global-search controls (Slice 3A)
 - primary repository-language preferences across both lanes with cached metadata (Slice 3B)
 - exact final-effort preferences across both lanes, applied before selection limits (Slice 3C)
+- inclusive final-classification score thresholds and a 1–8 result limit (Slice 3D)
 
 The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. Slice 1B enforces coverage completeness independently of warning thresholds, including quiet-run maintenance.
 
@@ -45,7 +46,7 @@ Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through 
 
 Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
 
-Slice 1's Python support contract is merged in PR #32, and Slice 1B's coverage-completeness fix is merged in PR #33. Slice **2** merged in PR #34 with immutable preferences, the strict TOML parser, and a generic example. Slice **3A** merged in PR #35 with explicit configuration/state paths and source controls. Slice **3B** merged in PR #36 with language preferences. Slice **3C** wires effort preferences and stops at its open PR. Thresholds and result limits remain deferred to Slice 3D. Current invocation behavior remains available. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
+Slice 1's Python support contract is merged in PR #32, and Slice 1B's coverage-completeness fix is merged in PR #33. Slice **2** merged in PR #34 with immutable preferences, the strict TOML parser, and a generic example. Slice **3A** merged in PR #35 with explicit configuration/state paths and source controls. Slice **3B** merged in PR #36 with language preferences. Slice **3C** merged in PR #37 with effort preferences. Slice **3D** wires final score thresholds and result limits and stops at its open PR. Configuration guidance (Slice 4) and deployment work remain deferred. Legacy invocation and defaults remain available. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
 
 ### Establish a release baseline
 

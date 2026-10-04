@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C wires final effort preferences. Thresholds, result limits, and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D wires score thresholds and result limits. Configuration guidance and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -58,7 +58,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/app.py` | Package-only executable/application assembly, CLI/environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
 | `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run; loaded explicitly by application assembly |
-| `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions and language matching, exact final-effort matching, and lane acceptance | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
+| `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions and language matching, exact final-effort matching, lane acceptance, and classification-based score thresholds | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
 | `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
 | `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `opportunity_scout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
@@ -120,6 +120,7 @@ opportunity_scout.strategic.discovery --> opportunity_scout.sources
 opportunity_scout.strategic.discovery --> opportunity_scout.strategic.readiness
 opportunity_scout.strategic.verification --> opportunity_scout.sources
 opportunity_scout.strategic.verification --> opportunity_scout.strategic.discovery
+opportunity_scout.strategic.verification --> opportunity_scout.selection
 opportunity_scout.strategic.verification -X-> opportunity_scout.app
 opportunity_scout.strategic.readiness --> opportunity_scout.strategic.claims
 
@@ -186,10 +187,23 @@ fetched strategic discussion may change the estimate. Existing preflight, rankin
 bounds, source-failure breaker, adaptive inspection and verification budgets remain
 in effect; effort preferences add no network work or scoring policy.
 
-Threshold and result-limit fields remain validated but inactive until Slice 3D.
-Name remains display metadata without current runtime use.
-Existing scoring, thresholds, deterministic ranking, and verification budgets remain
-in effect; this slice does not change deployment ownership or workflows.
+Slice 3D adds pure `score_rejection()` to the final-candidate guard: paid candidates
+use the inclusive cash threshold, unpaid candidates the inclusive career threshold,
+regardless of discovery source. Both adapters and queue assembly apply eligibility
+before repository-slot settlement, URL deduplication, and truncation. Strategic
+verification also enforces final score eligibility for its injected verifier before
+adding to its accepted set. A preview career upper bound cannot prove rejection
+when refresh changes classification or scores; threshold pruning therefore follows
+deep verification. Existing ranking upper bounds still govern repository settlement.
+Inspection pools, adaptive budgets, worker caps, source-failure breakers, scoring,
+and deterministic ordering remain unchanged. Low-scoring previews may now need
+deep checks within that same bounded pool.
+
+Combined-run queue assembly caps output at `preferences.max_results` (1–8), also
+respecting any narrower injected `report_limit`; it does not shrink discovery or
+verification budgets. Defaults remain 55 for each score threshold and eight results.
+Name remains display metadata without current runtime use. Configuration guidance
+and deployment ownership/workflows remain in their later slices.
 
 ## GitHub integration contract
 

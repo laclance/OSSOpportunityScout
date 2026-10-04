@@ -377,7 +377,7 @@ def run_combined_scan(
             for item in strategic
             if selection.candidate_rejection(item, config.preferences) is None
         ],
-        limit=report_limit,
+        limit=min(report_limit, config.preferences.max_results),
     )
     if strategic_audit:
         print("=== POTENTIAL SCANNER MISSES ===")
