@@ -24,7 +24,7 @@ class ScoutPreferences:
     """Preference values, separate from credential-bearing RunConfig.
 
     Repository targets add strategic sources; exclusions take precedence across
-    both lanes. Slice 3A applies repository and lane/source controls; language,
+    both lanes. Repository, lane/source, and primary-language controls are wired;
     effort, thresholds, and result limits await their runtime-wiring slices.
     """
 

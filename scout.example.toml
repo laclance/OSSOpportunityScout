@@ -1,6 +1,7 @@
 # Generic version-1 preferences. Opt in with --config PATH; no automatic loading.
 # Slice 3A applies lanes, repositories/exclusions, and strategic global_search.
-# Language, effort, thresholds, and result limits await Slices 3B–3D.
+# Slice 3B applies primary repository languages across both lanes.
+# Effort, thresholds, and result limits await Slices 3C–3D.
 # Keep credentials and delivery configuration outside this file.
 version = 1
 # Optional non-secret display name:
@@ -11,6 +12,7 @@ paid = true
 strategic = true
 
 [discovery]
+# Match cached primary repository language case-insensitively; no extra searches.
 # Empty accepts every language; explicit entries exclude unknown languages.
 languages = []
 # Add curated strategic sources; this is not an allowlist.

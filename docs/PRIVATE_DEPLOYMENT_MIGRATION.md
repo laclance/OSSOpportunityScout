@@ -4,8 +4,9 @@ This is the authoritative implementation tracker for separating the public scann
 distribution from private scout instances. The architecture and contracts below are
 agreed targets, except for the Python support contract implemented by Slice 1,
 the coverage-completeness fix implemented by Slice 1B, the preference
-model/parser/example implemented by Slice 2 (merged in PR #34), and the explicit
-config/state and source-control wiring implemented by Slice 3A. Language, effort,
+model/parser/example implemented by Slice 2 (merged in PR #34), the explicit
+config/state and source-control wiring implemented by Slice 3A (merged in PR #35),
+and primary repository-language wiring implemented by Slice 3B. Effort,
 threshold/result-limit wiring and deployment features remain planned.
 
 ## Repository and workflow ownership
@@ -125,6 +126,13 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   on Python 3.12.3: all 409 tests, every strict check, and 100% statement and branch
   coverage. The explicit interpreter selects the available development environment.
 
+- Slice 3B starting local and freshly verified remote `main`:
+  `67be1bb3bdea24d82311af69b3c3ca64eed6c893`. PR #35 was confirmed merged on
+  2026-10-04, local `main` matched remote `main`, and the starting worktree was clean.
+  Before branching, `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed
+  on Python 3.12.3: all 426 tests, every strict check, and 100% statement and branch
+  coverage. The explicit interpreter selects the available development environment.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
@@ -142,7 +150,8 @@ The generic v1 [scout.example.toml](../scout.example.toml) fixes the field names
 defaults below. Slice 3A loads an explicit `--config PATH` and applies repositories,
 exclusions, lanes, and strategic global-search control. `--state PATH` selects every
 state read/write, independently of config. Legacy no-config invocation remains
-available and ignores `scout.toml`. Slices 3B–3D own the remaining runtime fields.
+available and ignores `scout.toml`. Slice 3B applies languages across both lanes;
+Slices 3C–3D own the remaining runtime fields.
 
 ```toml
 version = 1
@@ -217,9 +226,10 @@ lists or state. Multi-profile support remains deferred.
 
 Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 is merged in
 PR #34 with the preference model, parser, example, and regressions. Slice 3A
-implements explicit paths and source controls and stops at its open PR.
-Slices 3B onward remain **planned**. Complete them in order through small,
-independently verified PRs; 3A–3D remain separate slices.
+merged in PR #35 with explicit paths and source controls. Slice 3B implements
+language preferences and stops at its open PR. Slices 3C onward remain **planned**.
+Complete them in order through small, independently verified PRs; 3A–3D remain
+separate slices.
 
 Slice 1 establishes the Python support contract:
 
@@ -344,7 +354,8 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 3A open PR.** Slice 2 merged in PR #34.
+**Current stopping boundary: Slice 3B open PR.** Slice 2 merged in PR #34;
+Slice 3A merged in PR #35.
 Explicit `--config PATH` loads and validates preferences before state/network/delivery
 activity; missing or invalid explicit config never selects defaults. No-config
 invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
@@ -362,7 +373,29 @@ resolution, final classifications and selection slots, configured/legacy executa
 invocation, explicit invalid configuration, and custom state deduplication,
 delivery/maintenance persistence, corruption, save failure, incomplete coverage,
 and failed delivery. Existing verification, privacy, coverage, and aggregate-delivery
-contracts remain in force. Language, effort, thresholds, and result-limit fields are
-validated but inactive; name has no current runtime effect. Slices 3B–3D and all
-deployment work remain deferred. Do not merge this PR or start a later slice
-implicitly. After Slice 3A merges, the next designated slice is 3B (language wiring).
+contracts remain in force.
+
+Slice 3B matches languages case-insensitively using the primary language from the
+resolved upstream repository's cached metadata. Empty lists accept all languages,
+including unknown; explicit lists exclude absent/null/empty language and the
+canonical `Unknown` value. Issue text, labels, and source/wrapper language do not
+control acceptance. Verification filters after refresh/aggregator resolution and
+metadata availability/archive checks, before contribution-guide lookup. Both lane
+adapters and final queue assembly enforce acceptance before strategic repository
+slots settle and the queue is truncated. No per-language Search queries, additional
+metadata reads, new caches, or discovery/verification budget changes are introduced.
+
+Targeted policy and orchestration regressions cover both lanes, unknown metadata,
+case-insensitive matching, resolved repositories, selection limits, coverage and
+delivery/state boundaries, and cross-lane metadata reuse. With and without
+authenticated prefetch, request counts stay fixed as the language list grows.
+Local Slice 3B validation passed `make format` once, then
+`make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
+all 432 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
+statement and branch coverage. This records local validation, not a CI result.
+
+Legacy invocation and the eight-result queue remain available. Effort, thresholds,
+and result-limit fields remain validated but inactive; name has no current runtime
+effect. Slices 3C–3D and all deployment work remain deferred. Do not merge this PR
+or start a later slice implicitly. After Slice 3B merges, the next designated slice
+is 3C (effort wiring).

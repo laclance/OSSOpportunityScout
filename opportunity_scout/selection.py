@@ -1,4 +1,4 @@
-"""Pure source and final-candidate controls implemented by migration Slice 3A."""
+"""Pure source and final-candidate preference controls."""
 
 from collections.abc import Sequence
 
@@ -24,10 +24,20 @@ def strategic_repositories(defaults: Sequence[str], preferences: ScoutPreference
     return result
 
 
+def language_accepted(language: str | None, preferences: ScoutPreferences) -> bool:
+    """Match primary repository language; explicit lists exclude unknown metadata."""
+    if not preferences.languages:
+        return True
+    key = (language or "").casefold()
+    return key not in {"", "unknown"} and key in {name.casefold() for name in preferences.languages}
+
+
 def candidate_rejection(candidate: Candidate, preferences: ScoutPreferences) -> str | None:
     """Use resolved repository and final paid classification before selection limits."""
     if repository_excluded(candidate["repo"], preferences):
         return "repository excluded by configuration"
     if not (preferences.paid if candidate["paid"] else preferences.strategic):
         return "final candidate lane disabled by configuration"
+    if not language_accepted(candidate["language"], preferences):
+        return "repository language excluded by configuration"
     return None
