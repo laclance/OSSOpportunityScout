@@ -1853,10 +1853,9 @@ class FormattingAndMainTests(unittest.TestCase):
 
         save.assert_not_called()
 
-    def test_main_state_save_failure_is_reported(self) -> None:
+    def test_main_state_save_failure_propagates(self) -> None:
         paid = candidate()
         env = {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"}
-        buf = io.StringIO()
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
@@ -1868,11 +1867,9 @@ class FormattingAndMainTests(unittest.TestCase):
                 "save_seen_state",
                 side_effect=state.SeenStateSaveError("save failed"),
             ),
-            redirect_stdout(buf),
         ):
-            scout.main()
-
-        self.assertIn("Error saving state file: save failed", buf.getvalue())
+            with self.assertRaisesRegex(state.SeenStateSaveError, "save failed"):
+                scout.main()
 
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
@@ -1913,9 +1910,8 @@ class FormattingAndMainTests(unittest.TestCase):
         assert record is not None
         self.assertIsNotNone(record.last_checked_at)
 
-    def test_main_quiet_maintenance_save_failure_is_reported(self) -> None:
+    def test_main_quiet_maintenance_save_failure_propagates(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
-        buf = io.StringIO()
         with (
             patch.dict(os.environ, {}, clear=True),
             patch.object(
@@ -1935,11 +1931,12 @@ class FormattingAndMainTests(unittest.TestCase):
                 "save_seen_state",
                 side_effect=state.SeenStateSaveError("maintenance save failed"),
             ),
-            redirect_stdout(buf),
         ):
-            scout.main()
-
-        self.assertIn("Error saving state file: maintenance save failed", buf.getvalue())
+            with self.assertRaisesRegex(
+                state.SeenStateSaveError,
+                "maintenance save failed",
+            ):
+                scout.main()
 
     def test_main_successful_delivery_saves_maintenance_and_new_urls_atomically(self) -> None:
         old_url = "https://github.com/example/project/issues/99"

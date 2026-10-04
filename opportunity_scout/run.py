@@ -189,11 +189,7 @@ def coverage_status(
 
 
 def _save_state(next_state: state.SeenState) -> bool:
-    try:
-        state.save_seen_state(next_state)
-    except state.SeenStateSaveError as exc:
-        print(f"Error saving state file: {exc}")
-        return False
+    state.save_seen_state(next_state)
     return True
 
 
