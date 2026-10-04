@@ -9,6 +9,18 @@ OSS Opportunity Scout has two lanes with different risk profiles:
 
 The architecture should make those lanes easy to reason about without forcing contributors or AI tools to load the full scanner into context.
 
+## Target deployment ownership (planned)
+
+> `laclance/OSSOpportunityScout` is a distribution and development repository, not a persistent scout instance.
+
+The canonical public upstream remains the source of truth for scanner code and may run development/release CI and publish reusable execution machinery or generic templates. It must not operate persistent scout instances or own user schedules, private configuration, scout secrets, report destinations, scout state, or opportunity history.
+
+The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and the scanner version pin. The repository holding private configuration/state also owns when the scout runs; its workflow invokes pinned public execution machinery. Upstream does not run a workflow that reaches into private state repositories.
+
+Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
+
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. These changes are not implemented yet: Python 3.11+ remains the current contract, preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+
 ## Data flow
 
 ```text
@@ -30,7 +42,7 @@ GitHub + bounty-platform sources
  ranked queue + audit diagnostics
             |
             v
- configured delivery channels (private GitHub in bundled production)
+ configured delivery channels (private GitHub in legacy workflow)
             |
             v
       seen_bounties.json
@@ -60,7 +72,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `opportunity_scout.app` |
 | `opportunity_scout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
-| `.github/workflows/oss-opportunity-scout.yml` | Production scanner execution | Runtime workflow, currently manual-only while native GitHub scheduling is paused |
+| `.github/workflows/oss-opportunity-scout.yml` | Legacy upstream scanner execution | Manual-only; requires the remote `scout-state` branch, absent as verified on 2026-10-04; retired after private migration is proven |
 | `.github/workflows/python-quality.yml` | Formatting, lint, compile, typing, tests, coverage | Must stay fast enough for normal PR iteration |
 
 ## Dependency direction
@@ -129,10 +141,14 @@ compatibility work; the scanner does not automatically track GitHub's newest RES
 
 ### Authentication and workflow permissions
 
-The production GitHub Action receives `GITHUB_TOKEN` for repository-scoped scanner GitHub REST
+The legacy upstream GitHub Action receives `GITHUB_TOKEN` for repository-scoped scanner GitHub REST
 access. The checkout credential also persists `seen_bounties.json` by pushing the production
-state snapshot to `scout-state`, so the bundled workflow requires `contents: write`. It does
+state snapshot to `scout-state`, so that workflow currently requires `contents: write`. It does
 not grant `issues: write` because host-repository reports are not enabled in that deployment.
+
+This is the existing transport contract, not the target deployment architecture. The private
+instance will own its state/history and persistence permissions; upstream removes its
+deployment-only permissions after migration. Python state code remains branch-agnostic.
 
 Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
 `GITHUB_REPOSITORY` alone never enable them; a custom deployment must set
@@ -183,12 +199,23 @@ implemented. Per-run caches already eliminate important duplicate reads, while u
 conditional reuse would require persistent ownership of both validators and the prior response
 bodies. That complexity is not currently justified by measured request volume.
 
-`scout-state` is persistence for scanner seen-state, not an HTTP cache. GitHub validators and
-response bodies must not be stored there. Conditional requests can be reconsidered if polling or
-request volume materially increases.
+The legacy `scout-state` contract is persistence for scanner seen-state, not an HTTP cache.
+GitHub validators and response bodies must not be stored in seen-state. Conditional requests
+can be reconsidered if polling or request volume materially increases.
 
 OSS Opportunity Scout is a GitHub API integration developed by a participant in the GitHub
 Developer Program. Program participation is not GitHub approval, certification, or endorsement.
+
+## Known coverage discrepancy
+
+The complete-coverage invariant below is required, but the current implementation has a known
+gap. `coverage_status()` in `opportunity_scout/run.py` leaves its warning unset for one to four
+recognized strategic verification failures. `run_combined_scan()` gates delivery-related state
+advancement and quiet-run maintenance persistence on the absence of that warning, so those
+failures can still permit a state commit. `tests/test_run.py` currently characterizes this
+threshold behavior. The migration's separate Slice 1B must make completeness independent of
+warning thresholds and block state advancement after any recognized discovery/verification
+failure. This documentation change does not alter the implementation or relax the invariant.
 
 ## Invariants
 
@@ -206,7 +233,7 @@ Developer Program. Program participation is not GitHub approval, certification, 
 - Seen-state maintenance is bounded to 20 direct GitHub issue checks per successful run with a 30-day minimum recheck interval. Selection is deterministic: never-checked entries first, then oldest `last_checked_at`, then URL. `last_checked_at` records the maintenance attempt time, including not-found and failed checks, so one bad entry cannot monopolize later maintenance batches.
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
-- `opportunity_scout.state` knows only the local state file. Production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
+- `opportunity_scout.state` knows only the local state file, and Python state code contains no Git branch/worktree logic. Git transport belongs to the instance workflow; the current legacy workflow uses `scout-state`, while the target private repository owns its state/history without an upstream state-branch contract.
 - GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. The bundled deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
@@ -220,3 +247,4 @@ Developer Program. Program participation is not GitHub approval, certification, 
 - `AGENTS.md` owns AI coding-agent execution rules.
 - `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
 - `ROADMAP.md` owns forward-looking work and sequencing.
+- `docs/PRIVATE_DEPLOYMENT_MIGRATION.md` owns agreed migration contracts, PR slices, prerequisites, recovery, and progress; target behavior stays labelled planned until its slice is implemented.
