@@ -201,8 +201,12 @@ Slice 3A binds immutable preferences into narrow discovery callbacks. Combined-r
 orchestration skips disabled lanes; paced prefetch requests include only enabled
 paid Search and enabled strategic global Search. Disabling global Search preserves
 curated strategic and paid sources. Disabled sources produce no coverage failures.
-Configured repository targets add to the existing curated list with case-insensitive
-first-seen deduplication; exclusions win and remove curated requests. Search/platform
+Configured repository sources add to the existing curated discovery list with
+case-insensitive first-seen deduplication; exclusions win and remove curated requests.
+They do not extend the built-in target-repository scoring set. After refresh or
+aggregator resolution, the authoritative repository receives the existing +14
+target-repo career bonus only when that resolved identity is a built-in target.
+Search/platform
 results are excluded before metadata/deep checks where their repository is known.
 After source refresh and aggregator resolution, verification checks exclusions again
 against the resolved upstream repository. Final paid/unpaid classification controls

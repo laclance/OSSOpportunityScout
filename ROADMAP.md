@@ -23,6 +23,7 @@ OSS Opportunity Scout is a package-owned scanner with:
 - immutable non-secret preferences, a strict version-1 TOML parser, and a generic example
 - mandatory default `scout.toml` or explicit `--config PATH`, independent `--state PATH`, and repository/lane/strategic global-search controls
 - primary repository-language preferences across both lanes with cached metadata (Slice 3B)
+- configured strategic repositories expand discovery sources without extending the built-in target-repository scoring bonus
 - exact final-effort preferences across both lanes, applied before selection limits (Slice 3C)
 - inclusive final-classification score thresholds and a 1–8 result limit (Slice 3D)
 - a [configuration reference](docs/CONFIGURATION.md) with generic examples and offline validation (Slice 4)
@@ -64,7 +65,6 @@ Prioritize improvements that materially increase the quality of the opportunity 
 - use report/audit feedback to reduce false positives and false negatives
 - improve source adapters where they add unique paid or strategic opportunities
 - refine ranking only with regression-backed evidence
-- decide separately whether `discovery.repositories` should receive the built-in target-repository scoring bonus; the migration closeout makes no scoring-policy decision
 - improve report readability and decision support without exposing private results publicly
 
 Preserve the separation between discovery, verification, scoring, delivery, and state.
