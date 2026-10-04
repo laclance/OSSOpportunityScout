@@ -171,9 +171,26 @@ class QueueAssemblyTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
+    def test_completeness_is_independent_of_strategic_warning_threshold(self) -> None:
+        for reason in (
+            "could not refresh source issue",
+            "could not refresh issue comments",
+            "could not verify open implementation PR timeline",
+        ):
+            for count in (0, 1, 2, 3, 4, 5, 6):
+                for threshold in (1, 5, 99):
+                    with self.subTest(reason=reason, count=count, threshold=threshold):
+                        status = run.coverage_status(
+                            {reason: count}, [], warning_threshold=threshold
+                        )
+                        self.assertEqual(status.complete, count == 0)
+                        self.assertEqual(status.failure_count, count)
+                        self.assertEqual(status.warning is not None, count >= threshold)
+
     def test_coverage_threshold_and_failure_reasons_are_preserved(self) -> None:
         self.assertIsNone(run.coverage_status({}, []).warning)
         self.assertIsNone(run.coverage_status({"unrelated": 99}, []).warning)
+        self.assertTrue(run.coverage_status({"unrelated": 99}, []).complete)
         self.assertIsNone(run.coverage_status({"could not refresh source issue": 4}, []).warning)
 
         exact = run.coverage_status({"could not refresh source issue": 5}, [])
@@ -203,6 +220,7 @@ class CoverageTests(unittest.TestCase):
         )
         self.assertEqual(status.discovery_failures, 1)
         self.assertEqual(status.failure_count, 3)
+        self.assertFalse(status.complete)
         self.assertIn("3 discovery/source/comment/competition checks failed", status.warning or "")
 
     def test_paid_claim_verification_failure_always_warns(self) -> None:
@@ -213,6 +231,7 @@ class CoverageTests(unittest.TestCase):
         )
         self.assertEqual(status.verification_failures, 1)
         self.assertEqual(status.failure_count, 1)
+        self.assertFalse(status.complete)
         self.assertIsNotNone(status.warning)
 
 
@@ -339,6 +358,95 @@ class DeliveryRenderingTests(unittest.TestCase):
 
 
 class RunLifecycleTests(unittest.TestCase):
+    def test_any_recognized_failure_blocks_new_urls_and_quiet_maintenance(self) -> None:
+        failures: list[tuple[dict[str, int], dict[str, int], list[RejectionRecord]]] = [
+            ({}, {reason: count}, [])
+            for reason in (
+                "could not refresh source issue",
+                "could not refresh issue comments",
+                "could not verify open implementation PR timeline",
+            )
+            for count in range(1, 7)
+        ]
+        failures.append(({"could not verify active claim comments": 1}, {}, []))
+        for reason in (
+            "paid discovery search failed; scan coverage incomplete",
+            "target repo discovery failed; scan coverage incomplete",
+            "global strategic discovery search failed; scan coverage incomplete",
+        ):
+            failures.append(({}, {}, [{"reason": reason}]))
+
+        for paid_rejects, strategic_rejects, audit in failures:
+            for has_candidates in (False, True):
+                for threshold in (5, 99):
+                    with self.subTest(
+                        paid=paid_rejects,
+                        strategic=strategic_rejects,
+                        audit=audit,
+                        has_candidates=has_candidates,
+                        threshold=threshold,
+                    ):
+                        items = [candidate()] if has_candidates else []
+
+                        def paid(
+                            _token: str | None,
+                            _seen: set[str],
+                            _repo_cache: dict[str, RepositoryMetadata],
+                            _guide_cache: dict[str, str | None],
+                            _search_results: list[SearchBatch] | None,
+                        ) -> run.PaidDiscoveryResult:
+                            return items, paid_rejects, []
+
+                        def strategic(
+                            _token: str | None,
+                            _seen: set[str],
+                            _paid_urls: set[str],
+                            _repo_cache: dict[str, RepositoryMetadata],
+                            _guide_cache: dict[str, str | None],
+                            _search_results: list[SearchBatch] | None,
+                        ) -> run.StrategicDiscoveryResult:
+                            return [], strategic_rejects, [], audit
+
+                        def telegram(_token: str, _chat_id: str, _message: str) -> bool:
+                            return True
+
+                        deps = replace(
+                            dependencies(),
+                            discover_paid=paid,
+                            discover_strategic=strategic,
+                            send_telegram=telegram,
+                        )
+                        seen = state.SeenState.from_urls(
+                            ["https://github.com/example/project/issues/99"]
+                        )
+                        output = io.StringIO()
+                        with (
+                            patch.object(state, "load_seen_state", return_value=seen),
+                            patch.object(state, "maintain_seen_state") as maintain,
+                            patch.object(state, "save_seen_state") as save,
+                            redirect_stdout(output),
+                        ):
+                            result = run.run_combined_scan(
+                                run.RunConfig(None, None, "tb", "chat", None),
+                                deps,
+                                FIXED_TIME,
+                                coverage_warning_threshold=threshold,
+                            )
+
+                        self.assertFalse(result.coverage.complete)
+                        self.assertEqual(result.queue, tuple(items))
+                        self.assertEqual(
+                            result.delivery.delivered,
+                            has_candidates or result.coverage.warning is not None,
+                        )
+                        self.assertFalse(result.state_saved)
+                        maintain.assert_not_called()
+                        save.assert_not_called()
+                        self.assertIn(
+                            "Verification coverage incomplete; state was not updated.",
+                            output.getvalue(),
+                        )
+
     def test_quiet_complete_run_maintains_and_saves_only_when_checked(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
         seen = state.SeenState.from_urls([old_url])

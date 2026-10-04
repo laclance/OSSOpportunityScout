@@ -104,6 +104,11 @@ class CoverageStatus:
     failure_count: int
     warning: str | None
 
+    @property
+    def complete(self) -> bool:
+        """Only zero recognized failures permits state persistence, regardless of warnings."""
+        return self.failure_count == 0
+
 
 @dataclass(frozen=True)
 class DeliveryResult:
@@ -150,7 +155,7 @@ def coverage_status(
     paid_rejects: dict[str, int] | None = None,
     warning_threshold: int = STRATEGIC_COVERAGE_WARNING_THRESHOLD,
 ) -> CoverageStatus:
-    """Calculate the exact combined coverage warning semantics."""
+    """Count recognized failures and apply the independent warning thresholds."""
     strategic_verification_failures = sum(
         strategic_rejects.get(reason, 0) for reason in _VERIFICATION_FAILURE_REASONS
     )
@@ -367,15 +372,18 @@ def run_combined_scan(
         print(f"WARNING: {coverage.warning}")
 
     if not queue and coverage.warning is None:
-        print("No new verified OSS opportunities found.")
-        maintenance = _maintain_seen_state(
-            seen_state,
-            scan_time,
-            dependencies.issue_lifecycle,
-        )
         state_saved = False
-        if maintenance.checked_urls:
-            state_saved = _save_state(maintenance.state)
+        if coverage.complete:
+            print("No new verified OSS opportunities found.")
+            maintenance = _maintain_seen_state(
+                seen_state,
+                scan_time,
+                dependencies.issue_lifecycle,
+            )
+            if maintenance.checked_urls:
+                state_saved = _save_state(maintenance.state)
+        else:
+            print("Verification coverage incomplete; state was not updated.")
         return CombinedRunResult(
             queue=(),
             coverage=coverage,
@@ -403,7 +411,7 @@ def run_combined_scan(
         )
 
     state_saved = False
-    if delivery.attempted and delivery.delivered and coverage.warning is None:
+    if delivery.attempted and delivery.delivered and coverage.complete:
         maintenance = _maintain_seen_state(
             seen_state,
             scan_time,

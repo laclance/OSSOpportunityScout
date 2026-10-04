@@ -21,7 +21,7 @@ OSS Opportunity Scout is a package-owned scanner with:
 - strict Ruff, mypy, and 100% statement/branch coverage gates
 - Python 3.12 as the minimum runtime and authoritative quality baseline, with compile/test compatibility CI on CPython 3.13 and 3.14
 
-The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. The coverage-completeness discrepancy documented in the tracker also remains an implementation prerequisite.
+The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. Slice 1B enforces coverage completeness independently of warning thresholds, including quiet-run maintenance.
 
 Native GitHub `schedule` events are paused while GitHub investigates a reproducible scheduler-delivery failure. The preserved reproduction repository is `laclance/actions-scheduler-probe`.
 
@@ -34,14 +34,14 @@ Native GitHub `schedule` events are paused while GitHub investigates a reproduci
 Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through its focused PR slices:
 
 - Slice 1 establishes Python 3.12 as the minimum runtime/tooling baseline, with compatibility CI on CPython 3.13 and 3.14
-- fix coverage completeness in its separate prerequisite PR
+- Slice 1B fixes coverage completeness in its separate prerequisite PR
 - add immutable, versioned preferences and wire configuration incrementally
 - provide pinned public execution machinery and a generic private-instance template
 - recover historical state and prove the private instance before removing upstream production responsibilities
 
 Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
 
-Slice 1 implements the Python support contract only. After its PR merges, the next slice is **1B**, the separate coverage-completeness fix. Configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
+Slice 1's Python support contract is merged in PR #32. Slice **1B** implements the separate coverage-completeness fix and stops at its open PR. After that PR merges, Slice 2 adds immutable preferences and the strict TOML parser. Configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
 
 ### Establish a release baseline
 

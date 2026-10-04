@@ -2,7 +2,8 @@
 
 This is the authoritative implementation tracker for separating the public scanner
 distribution from private scout instances. The architecture and contracts below are
-agreed targets, except for the Python support contract implemented by Slice 1.
+agreed targets, except for the Python support contract implemented by Slice 1 and
+coverage-completeness fix implemented by Slice 1B.
 Configuration and deployment features remain planned.
 
 ## Repository and workflow ownership
@@ -91,14 +92,23 @@ Snapshot verified on 2026-10-04; recheck it at the start of every slice:
   tests, 100% statement and branch coverage, and every strict quality check passed.
   The focused PR additionally requires passing 3.13 and 3.14 compatibility CI.
 
-**Coverage prerequisite:** `coverage_status()` in `opportunity_scout/run.py` leaves
-the warning unset for one to four recognized strategic verification failures.
-`run_combined_scan()` uses the absence of that warning to admit state persistence,
-including quiet-run maintenance. The existing coverage test characterizes this
-behavior. It conflicts with the required complete-coverage invariant. Slice 1B
-must separate completeness from warning thresholds and prevent state advancement
-after any recognized discovery/verification failure, in its own regression-backed
-PR. This tracker documents the discrepancy without changing code.
+- Slice 1B starting local and freshly fetched remote `main`:
+  `2b12fc2509d3589ab0c8ff742c0d388967a7c19b`. PR #32 (Slice 1) was confirmed merged
+  on 2026-10-04 before branching. The worktree was clean, and the baseline passed
+  `make quality` on Python 3.12.3: all 386 tests, every strict check, and 100%
+  statement and branch coverage.
+
+**Coverage prerequisite implemented by Slice 1B:** `CoverageStatus.complete` in
+`opportunity_scout/run.py` requires zero recognized discovery/verification failures.
+Both newly reported URL advancement and quiet-run maintenance persistence use this
+result rather than warning absence. Existing warning thresholds remain diagnostic
+policy: one to four strategic verification failures can leave the warning unset but
+never permit state writes. Incomplete quiet runs below the warning threshold skip
+delivery and maintenance and print that state was not updated. Candidate delivery
+and immediate warnings for discovery/paid verification failures remain unchanged.
+Targeted regressions cover every recognized verification reason, discovery failures,
+one to four strategic failures, warning-boundary and raised-threshold cases, and
+application-level quiet/candidate runs. Slice 1B requires merge before Slice 2.
 
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
@@ -176,9 +186,9 @@ lists or state. Multi-profile support remains deferred.
 
 ## Implementation sequence and acceptance
 
-Slice 1 is implemented in the focused runtime PR and awaits merge. All later slices
-remain **planned**. Complete them in order through small, independently verified
-PRs; 3A–3D remain separate slices.
+Slice 1 is merged in PR #32. Slice 1B is implemented in its focused coverage PR
+and awaits merge. Slices 2 onward remain **planned**. Complete them in order through
+small, independently verified PRs; 3A–3D remain separate slices.
 
 Slice 1 establishes the Python support contract:
 
@@ -303,8 +313,9 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 1 open PR.** The runtime/tooling minimum is
-Python 3.12; compatibility CI explicitly covers 3.13 and 3.14. Do not merge this PR
-or start a later slice implicitly. After Slice 1 merges, the next task is Slice 1B,
-the separate coverage-completeness fix. Configuration and deployment implementation
-remain outside Slice 1.
+**Current stopping boundary: Slice 1B open PR.** Coverage completeness is independent
+of warning thresholds, including quiet-run maintenance. Do not merge this PR or
+start a later slice implicitly. After Slice 1B merges, the next task is Slice 2,
+immutable preferences, strict TOML parsing, and a generic example. Configuration and
+deployment implementation remain outside Slice 1B. The runtime/tooling minimum is
+Python 3.12; compatibility CI explicitly covers 3.13 and 3.14.

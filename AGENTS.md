@@ -28,7 +28,7 @@ For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](doc
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
 - The target canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
-- The current warning threshold permits state advancement after one to four recognized strategic verification failures. This is a known violation of the complete-coverage requirement, not an allowed exception; fix it in the tracker’s separate Slice 1B without weakening verification or quality gates.
+- Coverage completeness is independent of warning thresholds: any recognized discovery/verification failure prevents both newly reported seen-state advancement and quiet-run maintenance persistence. Warning thresholds control diagnostics only.
 
 ## Migration execution
 

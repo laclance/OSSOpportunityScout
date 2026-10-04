@@ -1718,6 +1718,49 @@ class FormattingAndMainTests(unittest.TestCase):
         self.assertIn(high["url"], saved)
         self.assertIn(strategic["url"], saved)
 
+    def test_main_below_warning_threshold_preserves_state_with_and_without_candidates(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        for count in range(1, 5):
+            for has_candidates in (False, True):
+                with self.subTest(count=count, has_candidates=has_candidates):
+                    seen = state.SeenState.from_urls([old_url])
+                    output = io.StringIO()
+                    with (
+                        patch.dict(
+                            os.environ,
+                            {"TELEGRAM_BOT_TOKEN": "tb", "TELEGRAM_CHAT_ID": "chat"},
+                            clear=True,
+                        ),
+                        patch.object(state, "load_seen_state", return_value=seen),
+                        patch.object(
+                            scout,
+                            "discover_paid",
+                            return_value=([candidate()] if has_candidates else [], {}, []),
+                        ),
+                        patch.object(
+                            scout,
+                            "discover_strategic",
+                            return_value=([], {"could not refresh source issue": count}, [], []),
+                        ),
+                        patch.object(
+                            delivery, "send_telegram_notification", return_value=True
+                        ) as telegram,
+                        patch.object(github, "issue_lifecycle") as lifecycle,
+                        patch.object(state, "save_seen_state") as save,
+                        redirect_stdout(output),
+                    ):
+                        scout.main()
+
+                    self.assertEqual(telegram.call_count, int(has_candidates))
+                    lifecycle.assert_not_called()
+                    save.assert_not_called()
+                    self.assertEqual(seen.urls(), {old_url})
+                    self.assertNotIn("WARNING:", output.getvalue())
+                    self.assertIn(
+                        "Verification coverage incomplete; state was not updated.",
+                        output.getvalue(),
+                    )
+
     def test_main_incomplete_coverage_reports_and_preserves_seen_state(self) -> None:
         env = {
             "GITHUB_TOKEN": "tok",
