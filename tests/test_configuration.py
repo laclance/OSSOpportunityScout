@@ -367,7 +367,8 @@ class InvocationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             items = [
-                candidate(url=f"https://github.com/example/project/issues/{n}") for n in range(9)
+                candidate(url=f"https://github.com/example/project/issues/{n}", language="Python")
+                for n in range(9)
             ]
             with (
                 patch.dict(

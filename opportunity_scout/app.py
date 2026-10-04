@@ -666,6 +666,8 @@ def verify(
         return None, "repository metadata unavailable"
     if repo_meta.get("archived"):
         return None, "repository is archived"
+    if not selection.language_accepted(repo_meta.get("language"), scout_preferences):
+        return None, "repository language excluded by configuration"
     guide = github.cached_value(
         guide_cache,
         repo,
