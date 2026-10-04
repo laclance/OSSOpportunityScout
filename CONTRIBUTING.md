@@ -18,7 +18,7 @@ make setup
 
 ## Before changing code
 
-Read `AGENTS.md`, then `ARCHITECTURE.md` and `CODEBASE_MAP.md`. Search the relevant tests before changing scanner policy; many rules exist because of a real false positive or false negative.
+Read `AGENTS.md` and `ARCHITECTURE.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
 
 ## Commands
 
@@ -27,7 +27,6 @@ make format      # Ruff formatter
 make lint        # Ruff lint
 make typecheck   # strict mypy
 make test        # unittest + 100% statement/branch coverage
-make map         # regenerate CODEBASE_MAP.md
 make quality     # local quality gate
 ```
 
@@ -40,8 +39,6 @@ make quality     # local quality gate
 ## Tests
 
 Every functional change needs a regression test. Use mocked/fake GitHub responses rather than live network calls.
-
-If production Python symbols move or change, run `make map` and commit the updated `CODEBASE_MAP.md`.
 
 ## Pull requests
 

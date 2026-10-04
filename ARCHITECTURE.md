@@ -61,7 +61,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
 | `.github/workflows/oss-opportunity-scout.yml` | Production scanner execution | Runtime workflow, currently manual-only while native GitHub scheduling is paused |
-| `.github/workflows/python-quality.yml` | Formatting, lint, map, typing, tests, coverage | Must stay fast enough for normal PR iteration |
+| `.github/workflows/python-quality.yml` | Formatting, lint, compile, typing, tests, coverage | Must stay fast enough for normal PR iteration |
 
 ## Dependency direction
 
@@ -221,5 +221,4 @@ Developer Program. Program participation is not GitHub approval, certification, 
 
 - `AGENTS.md` owns coding-agent and contributor implementation rules.
 - `ARCHITECTURE.md` owns boundaries, flow, and invariants.
-- `CODEBASE_MAP.md` is generated from the AST and owns symbol navigation.
 - `README.md` stays user-facing and should not become an internal design dump.
