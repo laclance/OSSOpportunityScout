@@ -363,7 +363,7 @@ class InvocationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory, "config.toml")
             path.write_text(
-                'version = 1\n[discovery]\nlanguages = ["Python"]\n[preferences]\neffort = []\nmin_cash_score = 100\nmin_career_score = 100\nmax_results = 1\n',
+                'version = 1\n[discovery]\nlanguages = ["Python"]\n[preferences]\neffort = ["1–3h"]\nmin_cash_score = 100\nmin_career_score = 100\nmax_results = 1\n',
                 encoding="utf-8",
             )
             items = [

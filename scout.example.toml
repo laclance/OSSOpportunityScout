@@ -1,7 +1,7 @@
 # Generic version-1 preferences. Opt in with --config PATH; no automatic loading.
 # Slice 3A applies lanes, repositories/exclusions, and strategic global_search.
 # Slice 3B applies primary repository languages across both lanes.
-# Effort, thresholds, and result limits await Slices 3C–3D.
+# Slice 3C applies final effort estimates; thresholds/result limits await Slice 3D.
 # Keep credentials and delivery configuration outside this file.
 version = 1
 # Optional non-secret display name:
@@ -23,7 +23,7 @@ exclude_repositories = []
 global_search = true
 
 [preferences]
-# Accept final estimates without changing the estimation policy.
+# Accept final estimates without changing estimation policy; empty accepts none.
 effort = ["<1h", "1–3h", "3–6h", "6–12h", "1d+"]
 # Final paid candidates use cash; final unpaid candidates use career.
 min_career_score = 55
