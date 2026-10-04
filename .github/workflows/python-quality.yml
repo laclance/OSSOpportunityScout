@@ -13,9 +13,10 @@ on:
       - "requirements-dev.txt"
       - "Makefile"
       - ".github/workflows/python-quality.yml"
-      - ".github/workflows/oss-opportunity-scout.yml"
       - "action.yml"
-      - "examples/private-instance/**"
+      - "examples/**"
+      - "scout.example.toml"
+      - ".gitignore"
 
 permissions:
   contents: read

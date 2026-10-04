@@ -55,8 +55,10 @@ For configuration documentation and examples, follow the
 strict parser and existing invocation/preference regressions. Check documented
 scan invocations through mocked application assembly; do not run live discovery
 or delivery merely to validate guidance. Keep examples generic, preferences
-separate from credentials/delivery, and current behavior distinct from the planned
-mandatory-config cutover.
+separate from credentials/delivery. Scans require `scout.toml` by default or an
+explicit `--config PATH`; missing/invalid config must fail before state/network/delivery.
+Keep instance files private; upstream ignores root config/state and ships only generic
+examples.
 
 ## Pull requests
 

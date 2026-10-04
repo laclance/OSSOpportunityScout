@@ -1,4 +1,4 @@
-# Generic version-1 preferences. Opt in with --config PATH; no automatic loading.
+# Generic version-1 preferences. Copy to scout.toml or select with --config PATH.
 # See docs/CONFIGURATION.md for every field, default, bound, and runtime semantic.
 # Keep credentials and delivery configuration outside this file.
 version = 1

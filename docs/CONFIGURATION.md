@@ -1,26 +1,26 @@
 # Scout configuration
 
-Configuration is opt-in during migration. From the scanner source directory, with
+Every scan requires configuration. From the scanner source directory, with
 Python 3.12 (or a supported CI-tested version) and dependencies installed:
 
 ```bash
+cp scout.example.toml scout.toml
+python opportunity_scout.py
+python opportunity_scout.py --state /path/to/private-instance/seen_bounties.json
 python opportunity_scout.py --config scout.example.toml --state seen_bounties.json
 python opportunity_scout.py --config /path/to/private-instance/scout.toml --state /path/to/private-instance/seen_bounties.json
 ```
 
-These commands run the scout using separately configured credentials and delivery
-channels. Relative paths resolve from the working directory, including the state
-path; they do not resolve from the config file's directory.
+These scan commands use separately configured credentials and delivery channels.
+Without `--config`, the scout loads exactly `scout.toml` in the working directory.
+`--config PATH` selects exactly that file instead, even if the default file is
+missing or invalid. Relative config/state paths resolve from the working directory,
+not from the config file's directory.
 
-`--config PATH` explicitly loads a UTF-8 version-1 TOML file before state loading,
-discovery, or delivery. Missing, unreadable, malformed, or invalid config fails the
-run without falling back to defaults. There is no automatic config-file discovery.
-Legacy invocation ignores `scout.toml`, even if it exists or is invalid:
-
-```bash
-python opportunity_scout.py
-python opportunity_scout.py --state /path/to/private-instance/seen_bounties.json
-```
+Missing, unreadable, malformed, or invalid UTF-8 version-1 TOML fails before state
+loading, network requests, lifecycle maintenance, or delivery. There is no legacy
+fallback, search for alternate files, or automatic use of `scout.example.toml`.
+`--help` needs no configuration.
 
 `--state PATH` works independently of `--config` and defaults to
 `seen_bounties.json`. Every state read, successful-delivery commit, and complete
@@ -106,8 +106,8 @@ max_results = 3
 ```
 
 `strategic` remains `true`, and curated sources remain enabled. `name` is only
-stored metadata. Copy a chosen example into your private instance's `scout.toml`
-and select it explicitly with `--config`.
+stored metadata. Copy a chosen example into your private instance's `scout.toml`.
+Run from that working directory or select it explicitly with `--config`.
 
 ## Credentials, delivery, and ownership
 
@@ -125,9 +125,12 @@ triggers/schedules, concurrency, secrets, delivery configuration, persistence an
 history, and scanner pin. A fork is optional for code customization; default
 instances consume pinned upstream code directly, while customized instances may
 consume a pinned fork. Public workflows must not reach into private repositories
-for state. The execution template, historical migration, and mandatory-config
-cutover belong to Slices 5, 6, and 7 respectively in the
-[migration tracker](PRIVATE_DEPLOYMENT_MIGRATION.md).
+for state. Upstream has retired its persistent workflow and state-branch/worktree
+transport. Private Slice 6 acceptance is verified; evidence remains private. See the
+[migration tracker](PRIVATE_DEPLOYMENT_MIGRATION.md) for the Slice 7 cutover.
+Root `scout.toml` and `seen_bounties.json` are ignored by Git; the
+[empty state example](../examples/seen_bounties.example.json) is only a seed for new
+instances without history, never a replacement for migrated state.
 
 ## Offline validation
 
@@ -142,12 +145,13 @@ To check your chosen file, replace `scout.example.toml` in that check with its
 path. Validation confirms the schema, not repository existence, available
 opportunities, credentials, or delivery readiness.
 
-The existing offline regressions verify configured and legacy invocation, custom
-state paths, and preference composition using fake network and delivery results:
+The existing offline regressions verify default and explicit configuration, failure
+before I/O, custom state paths, and preference composition using fake network and
+delivery results:
 
 ```bash
 python opportunity_scout.py --help
-python -m unittest tests.test_preferences tests.test_configuration tests.test_languages tests.test_effort_preferences tests.test_score_preferences
+python -m unittest tests.test_preferences tests.test_configuration tests.test_languages tests.test_effort_preferences tests.test_score_preferences tests.test_workflow_configuration
 ```
 
 The scan commands above are invocation examples, not offline validation commands.

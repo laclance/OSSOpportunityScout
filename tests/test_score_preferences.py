@@ -320,7 +320,7 @@ class ScoreOrchestrationTests(unittest.TestCase):
                         else set(),
                     )
 
-    def test_configured_thresholds_limits_and_legacy_invocation_preserve_request_budgets(
+    def test_configured_thresholds_limits_and_default_invocation_preserve_request_budgets(
         self,
     ) -> None:
         paid_sources = [
@@ -362,7 +362,7 @@ class ScoreOrchestrationTests(unittest.TestCase):
                 ):
                     path = Path("scout.toml")
                     path.write_text(
-                        "invalid ignored legacy config"
+                        "version = 1\n"
                         if configured is None
                         else (
                             "version = 1\n[preferences]\n"

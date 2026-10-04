@@ -958,22 +958,15 @@ def discover_strategic(
 
 
 def _run_dependencies(
-    token: str | None, scout_preferences: preferences.ScoutPreferences | None
+    token: str | None, scout_preferences: preferences.ScoutPreferences
 ) -> run.RunDependencies:
     """Bind explicit preferences without mutable globals or widening run callbacks."""
-    paid_discovery: run.PaidDiscovery = discover_paid
-    strategic_discovery_callback: run.StrategicDiscovery = discover_strategic
-    prefetch: run.DiscoveryPrefetch = prefetch_discovery_searches
-    if scout_preferences is not None:
-        paid_discovery = partial(discover_paid, scout_preferences=scout_preferences)
-        strategic_discovery_callback = partial(
-            discover_strategic, scout_preferences=scout_preferences
-        )
-        prefetch = partial(prefetch_discovery_searches, scout_preferences=scout_preferences)
     return run.RunDependencies(
-        discover_paid=paid_discovery,
-        discover_strategic=strategic_discovery_callback,
-        prefetch_discovery_searches=prefetch,
+        discover_paid=partial(discover_paid, scout_preferences=scout_preferences),
+        discover_strategic=partial(discover_strategic, scout_preferences=scout_preferences),
+        prefetch_discovery_searches=partial(
+            prefetch_discovery_searches, scout_preferences=scout_preferences
+        ),
         append_audit=add_audit,
         send_telegram=delivery.send_telegram_notification,
         send_discord=delivery.send_discord_notification,
@@ -985,16 +978,17 @@ def _run_dependencies(
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Find verified OSS opportunities.")
-    parser.add_argument("--config", type=Path, help="Explicit version-1 scout TOML preferences")
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("scout.toml"),
+        help="Version-1 scout TOML preferences (default: scout.toml)",
+    )
     parser.add_argument(
         "--state", type=Path, default=Path(state.DEFAULT_STATE_FILE), help="Seen-state path"
     )
     arguments = parser.parse_args(argv)
-    scout_preferences = (
-        preferences.load_scout_preferences(arguments.config)
-        if arguments.config is not None
-        else None
-    )
+    scout_preferences = preferences.load_scout_preferences(arguments.config)
     token = os.environ.get("GITHUB_TOKEN")
     config = run.RunConfig(
         token=token,
@@ -1007,7 +1001,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         ),
         private_github_reports_repository=os.environ.get("PRIVATE_GITHUB_REPORTS_REPOSITORY"),
         private_github_reports_token=os.environ.get("PRIVATE_GITHUB_REPORTS_TOKEN"),
-        preferences=scout_preferences or preferences.ScoutPreferences(),
+        preferences=scout_preferences,
         state_path=arguments.state,
     )
     run.run_combined_scan(

@@ -1,0 +1,12 @@
+# Instance-owned configuration and runtime state never belong in upstream.
+/scout.toml
+/seen_bounties.json
+
+# Local development artifacts.
+__pycache__/
+*.py[cod]
+.venv/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

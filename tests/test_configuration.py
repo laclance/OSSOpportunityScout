@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from contextlib import ExitStack, chdir, redirect_stdout
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from unittest.mock import patch
 
@@ -335,35 +336,106 @@ class ResolvedPreferenceTests(unittest.TestCase):
 
 
 class InvocationTests(unittest.TestCase):
-    def test_invalid_explicit_configuration_stops_before_state_network_and_delivery(self) -> None:
-        documents: list[str | None] = [
+    def test_invalid_default_and_explicit_config_stop_before_state_network_and_delivery(
+        self,
+    ) -> None:
+        documents: tuple[bytes | None, ...] = (
             None,
-            "invalid TOML",
-            "version = 2",
-            "version = 1\n[lanes]\npaid = 0",
-            "version = 1\nsecret = 'never print this'",
-        ]
-        with tempfile.TemporaryDirectory() as directory:
+            b"invalid TOML",
+            b"version = 2",
+            b"version = 1\n[lanes]\npaid = 0",
+            b"version = 1\nsecret = 'never print this'",
+            b"version = 1\n# \xff",
+        )
+        for explicit in (False, True):
             for document in documents:
-                path = Path(directory, "invalid.toml")
-                if document is not None:
-                    path.write_text(document, encoding="utf-8")
-                with self.subTest(document=document), ExitStack() as stack:
+                with (
+                    self.subTest(explicit=explicit, document=document),
+                    tempfile.TemporaryDirectory() as directory,
+                    chdir(directory),
+                    ExitStack() as stack,
+                ):
+                    path = Path("invalid.toml" if explicit else "scout.toml")
+                    # A valid alternate file must never become an implicit fallback.
+                    Path("scout.toml" if explicit else "scout.example.toml").write_text(
+                        "version = 1\n", encoding="utf-8"
+                    )
+                    if document is not None:
+                        path.write_bytes(document)
+                    selected_state = Path("custom.json")
+                    selected_state.write_bytes(b"corrupt state must not be read")
                     mocks = [
                         stack.enter_context(patch.object(owner, name))
                         for owner, name in (
+                            (run, "RunConfig"),
                             (run, "run_combined_scan"),
                             (state, "load_seen_state"),
+                            (state, "save_seen_state"),
                             (github, "github_get"),
+                            (github, "search_github"),
+                            (github, "issue_lifecycle"),
+                            (app, "platform_paid_refs"),
                             (delivery, "send_telegram_notification"),
+                            (delivery, "send_discord_notification"),
                             (delivery, "create_github_issue"),
                             (delivery, "create_private_github_issue"),
                         )
                     ]
+                    arguments = ["--state", str(selected_state)]
+                    if explicit:
+                        arguments.extend(["--config", str(path)])
                     with self.assertRaises(preferences.ScoutPreferencesError):
-                        app.main(["--config", str(path)])
+                        app.main(arguments)
                     for mock in mocks:
                         mock.assert_not_called()
+                    self.assertEqual(selected_state.read_bytes(), b"corrupt state must not be read")
+
+    def test_unreadable_default_and_explicit_config_fail_before_assembly(self) -> None:
+        for arguments in ([], ["--config", "unreadable.toml"]):
+            with (
+                self.subTest(arguments=arguments),
+                patch.object(Path, "open", side_effect=PermissionError("unreadable")),
+                patch.object(run, "RunConfig") as config,
+                patch.object(run, "run_combined_scan") as combined,
+            ):
+                with self.assertRaises(preferences.ScoutPreferencesError):
+                    app.main(arguments)
+                config.assert_not_called()
+                combined.assert_not_called()
+
+    def test_explicit_config_overrides_missing_or_invalid_default_and_keeps_state_path(
+        self,
+    ) -> None:
+        for default in (None, "invalid TOML", "version = 1\n[lanes]\npaid = false\n"):
+            with (
+                self.subTest(default=default),
+                tempfile.TemporaryDirectory() as directory,
+                chdir(directory),
+                patch.object(run, "run_combined_scan") as combined,
+                patch.dict(os.environ, {}, clear=True),
+            ):
+                if default is not None:
+                    Path("scout.toml").write_text(default, encoding="utf-8")
+                path = Path("profiles/chosen.toml")
+                path.parent.mkdir()
+                path.write_text("version = 1\n[preferences]\nmax_results = 3\n", encoding="utf-8")
+                app.main(["--config", str(path), "--state", "selected.json"])
+                config = combined.call_args.args[0]
+                self.assertEqual(config.preferences, preferences.load_scout_preferences(path))
+                self.assertEqual(config.state_path, Path("selected.json"))
+
+    def test_help_needs_no_configuration_or_scan(self) -> None:
+        with (
+            patch.object(preferences, "load_scout_preferences") as load,
+            patch.object(run, "run_combined_scan") as combined,
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            with self.assertRaises(SystemExit) as result:
+                app.main(["--help"])
+            self.assertEqual(result.exception.code, 0)
+            self.assertIn("default: scout.toml", output.getvalue())
+            load.assert_not_called()
+            combined.assert_not_called()
 
     def test_configured_command_line_assembly_thresholds_and_result_limit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -409,24 +481,37 @@ class InvocationTests(unittest.TestCase):
             self.assertEqual(strategic_scan.call_args.kwargs, {"scout_preferences": config})
             self.assertEqual(len(state.load_seen_state(Path(directory, "selected.json")).urls()), 1)
 
-    def test_legacy_executable_and_state_only_invocation(self) -> None:
+    def test_default_executable_and_state_only_invocation(self) -> None:
+        root = Path(__file__).resolve().parents[1]
         for arguments in ([], ["--state", "custom.json"]):
             with (
                 self.subTest(arguments=arguments),
+                tempfile.TemporaryDirectory() as directory,
+                chdir(directory),
                 patch.object(sys, "argv", ["opportunity_scout.py", *arguments]),
-                patch.object(preferences, "load_scout_preferences") as load,
                 patch.object(run, "run_combined_scan") as combined,
                 patch.dict(os.environ, {}, clear=True),
             ):
-                runpy.run_path("opportunity_scout.py", run_name="__main__")
-            load.assert_not_called()
+                Path("scout.toml").write_text(
+                    "version = 1\n[lanes]\npaid = false\n[preferences]\nmax_results = 2\n",
+                    encoding="utf-8",
+                )
+                runpy.run_path(str(root / "opportunity_scout.py"), run_name="__main__")
+                expected = preferences.load_scout_preferences(Path("scout.toml"))
             config, callbacks, _ = combined.call_args.args
-            self.assertEqual(config.preferences, preferences.ScoutPreferences())
+            self.assertEqual(config.preferences, expected)
             self.assertEqual(
                 config.state_path, Path("custom.json" if arguments else "seen_bounties.json")
             )
-            self.assertIs(callbacks.discover_paid, app.discover_paid)
-            self.assertIs(callbacks.discover_strategic, app.discover_strategic)
+            for callback, original in (
+                (callbacks.discover_paid, app.discover_paid),
+                (callbacks.discover_strategic, app.discover_strategic),
+                (callbacks.prefetch_discovery_searches, app.prefetch_discovery_searches),
+            ):
+                self.assertIsInstance(callback, partial)
+                assert isinstance(callback, partial)
+                self.assertIs(callback.func, original)
+                self.assertEqual(callback.keywords, {"scout_preferences": expected})
 
 
 class SelectedStateTests(unittest.TestCase):
@@ -553,7 +638,14 @@ class SelectedStateTests(unittest.TestCase):
                 patch.object(delivery, "send_telegram_notification") as send,
             ):
                 with self.assertRaises(state.SeenStateLoadError):
-                    app.main(["--state", str(selected_path)])
+                    app.main(
+                        [
+                            "--config",
+                            str(Path(__file__).resolve().parents[1] / "scout.example.toml"),
+                            "--state",
+                            str(selected_path),
+                        ]
+                    )
             paid_scan.assert_not_called()
             send.assert_not_called()
             selected_path.unlink()

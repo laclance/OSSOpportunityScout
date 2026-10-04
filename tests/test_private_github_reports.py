@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 import opportunity_scout.app as app
@@ -282,7 +283,7 @@ class PrivateGitHubRunTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(run, "run_combined_scan") as combined,
         ):
-            app.main([])
+            app.main(["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")])
 
         config = combined.call_args.args[0]
         deps = combined.call_args.args[1]
