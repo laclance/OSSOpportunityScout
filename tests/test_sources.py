@@ -48,7 +48,8 @@ class TargetRepoSourceTests(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(
-            [item.get("html_url") for item in items], [i1.get("html_url"), i2.get("html_url"), i3.get("html_url")]
+            [item.get("html_url") for item in items],
+            [i1.get("html_url"), i2.get("html_url"), i3.get("html_url")],
         )
         self.assertEqual(getter.call_count, 2)
         self.assertIn("page=2", getter.call_args.args[0])
@@ -63,7 +64,9 @@ class TargetRepoSourceTests(unittest.TestCase):
                 fetch_pages=3,
                 result_limit=5,
             )
-        self.assertEqual([item.get("html_url") for item in items], [i1.get("html_url"), i1.get("html_url")])
+        self.assertEqual(
+            [item.get("html_url") for item in items], [i1.get("html_url"), i1.get("html_url")]
+        )
         self.assertIn("scan coverage incomplete", str(error))
 
     def test_target_repo_pool_exhausts_pages_when_results_are_only_prs(self) -> None:
