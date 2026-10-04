@@ -5,7 +5,7 @@ A lightweight GitHub scanner for finding open-source work worth doing across two
 - **Cash now:** explicit paid bounties and sponsored issues.
 - **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
-The scout ranks new opportunities and delivers them only through configured channels, including a separately configured **private** GitHub reports repository. Public host-repository reports are disabled by default. Newly reported seen-state requires successful aggregate delivery and complete scan coverage; the known coverage discrepancy is described below.
+The scout ranks new opportunities and delivers them only through configured channels, including a separately configured **private** GitHub reports repository. Public host-repository reports are disabled by default. Newly reported seen-state requires successful aggregate delivery and complete scan coverage.
 
 ## Deployment direction
 
@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade in Slice 1 is implemented; configuration and deployment migration remain planned. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
+The Python support upgrade in Slice 1 and coverage-completeness fix in Slice 1B are implemented; configuration and deployment migration remain planned. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
 
 ## How it works
 
@@ -63,7 +63,7 @@ Reported candidates include:
 - scoring reasons
 - contribution-guide link when available
 
-Complete discovery and verification coverage is required before seen-state advancement. The current implementation does not enforce that requirement for one to four recognized strategic verification failures; [Slice 1B](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#verified-baseline-and-prerequisites) fixes this separately from the deployment migration.
+Complete discovery and verification coverage is required before seen-state advancement. Any recognized failure blocks newly reported URLs and quiet-run maintenance writes, even when strategic failures remain below the warning threshold. Warning thresholds control diagnostics only; successfully delivered candidates may still be reported during an incomplete run, but its state is not committed.
 
 ## Running
 

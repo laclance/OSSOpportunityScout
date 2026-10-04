@@ -206,16 +206,21 @@ can be reconsidered if polling or request volume materially increases.
 OSS Opportunity Scout is a GitHub API integration developed by a participant in the GitHub
 Developer Program. Program participation is not GitHub approval, certification, or endorsement.
 
-## Known coverage discrepancy
+## Coverage completeness and warnings
 
-The complete-coverage invariant below is required, but the current implementation has a known
-gap. `coverage_status()` in `opportunity_scout/run.py` leaves its warning unset for one to four
-recognized strategic verification failures. `run_combined_scan()` gates delivery-related state
-advancement and quiet-run maintenance persistence on the absence of that warning, so those
-failures can still permit a state commit. `tests/test_run.py` currently characterizes this
-threshold behavior. The migration's separate Slice 1B must make completeness independent of
-warning thresholds and block state advancement after any recognized discovery/verification
-failure. This documentation change does not alter the implementation or relax the invariant.
+`coverage_status()` in `opportunity_scout/run.py` counts recognized strategic source, comment,
+and implementation-PR timeline verification failures, paid active-claim comment verification
+failures, and discovery audit entries marked `scan coverage incomplete`. `CoverageStatus.complete`
+requires zero combined failures. Ordinary policy rejections do not make coverage incomplete.
+
+`run_combined_scan()` requires completeness for both delivery-related state advancement and
+quiet-run maintenance persistence. Warning thresholds control diagnostics independently:
+one to four strategic verification failures do not trigger the default prominent warning,
+but still prevent all state writes. Any recognized discovery or paid verification failure
+continues to warn immediately. An incomplete quiet run below the warning threshold skips
+delivery and maintenance and prints that state was not updated. Runs with candidates or a
+coverage warning retain configured delivery behavior; successful delivery alone cannot admit
+an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover these boundaries.
 
 ## Invariants
 
@@ -228,7 +233,7 @@ failure. This documentation change does not alter the implementation or relax th
 - Scanner misses are useful product feedback; audit paths should remain observable.
 - Repository/network failures should degrade coverage explicitly rather than silently turning into positive verification.
 - Strategic deep verification is rate-budgeted: inspect broadly, verify in rank order, and stop only when remaining candidates cannot displace the kept set under the known verification-score uplift bound. Final strategic effort may use the already-fetched trusted maintainer discussion to recognize implementation-history complexity; preview scoring stays source-only and this calibration must not add network fan-out.
-- Comment-fetch failure must remain distinguishable from a real empty discussion thread; strategic verification fetches each issue comment thread once through the checked path and reuses that evidence for payment detection, readiness, competition, and final scoring. Failed implementation-PR timeline checks are also verification failures rather than evidence of no competition. Strategic verification does not use per-issue GitHub Search queries, preserving Search quota for discovery. Incomplete verification runs warn prominently and do not advance seen-state.
+- Comment-fetch failure must remain distinguishable from a real empty discussion thread; strategic verification fetches each issue comment thread once through the checked path and reuses that evidence for payment detection, readiness, competition, and final scoring. Failed implementation-PR timeline checks are also verification failures rather than evidence of no competition. Strategic verification does not use per-issue GitHub Search queries, preserving Search quota for discovery. Any recognized discovery/verification failure prevents seen-state advancement, independently of prominent warning thresholds.
 - Seen-state loading fails closed for malformed JSON, malformed schema, unsupported versions, obsolete unversioned formats, or unreadable existing files; only a genuinely absent file means empty first-run state.
 - Seen-state maintenance is bounded to 20 direct GitHub issue checks per successful run with a 30-day minimum recheck interval. Selection is deterministic: never-checked entries first, then oldest `last_checked_at`, then URL. `last_checked_at` records the maintenance attempt time, including not-found and failed checks, so one bad entry cannot monopolize later maintenance batches.
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
