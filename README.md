@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B wires primary repository-language preferences across both lanes. Effort, threshold, and result-limit wiring remain deferred to Slices 3C–3D; deployment work also remains deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
+The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C wires final effort preferences. Threshold and result-limit wiring remain deferred to Slice 3D; deployment work also remains deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
 
 ## How it works
 
@@ -23,7 +23,7 @@ The main boundaries are:
 
 - `opportunity_scout/app.py` — environment wiring and application assembly.
 - `opportunity_scout/preferences.py` — immutable non-secret preferences and strict version-1 TOML validation, separate from runtime credentials.
-- `opportunity_scout/selection.py` — pure repository exclusions, additive strategic targets, language matching, and final lane acceptance.
+- `opportunity_scout/selection.py` — pure repository exclusions, additive strategic targets, language matching, final effort matching, and lane acceptance.
 - `opportunity_scout/run.py` — combined scan lifecycle, delivery aggregation, and transactional seen-state commit.
 - `opportunity_scout/github.py` — canonical GitHub REST transport, safe-read retries, pagination, and per-scan caching.
 - `opportunity_scout/paid.py` / `paid_verification.py` — paid-opportunity policy and verification.
@@ -115,7 +115,15 @@ explicit list excludes unknown languages. Issue text, labels, and wrapper-reposi
 language do not decide acceptance. Filtering precedes strategic repository-slot
 settlement and final queue truncation; it adds no Search queries or metadata reads.
 
-`name`, effort, score thresholds, and `max_results` are parsed and
+Slice 3C applies `[preferences].effort` across both lanes by exact membership in
+the existing final estimate buckets: `<1h`, `1–3h`, `3–6h`, `6–12h`, and `1d+`.
+`effort = []` accepts no candidates; omitted effort accepts all five buckets.
+Estimation policy is unchanged. Source refresh, resolved upstream evidence, and
+already-fetched strategic discussion determine the final estimate. Preview effort
+does not filter candidates. Rejections precede strategic repository-slot settlement,
+queue deduplication, and truncation.
+
+`name`, score thresholds, and `max_results` are parsed and
 validated but do not yet affect runtime behavior. The existing scoring, thresholds,
 verification budgets, and eight-result queue remain in effect until their designated
 slices. Delivery credentials and privacy controls remain environment configuration.

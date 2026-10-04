@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from opportunity_scout.preferences import ScoutPreferences
-from opportunity_scout.types import Candidate
+from opportunity_scout.types import Candidate, EffortBucket
 
 
 def repository_excluded(repository: str | None, preferences: ScoutPreferences) -> bool:
@@ -32,12 +32,19 @@ def language_accepted(language: str | None, preferences: ScoutPreferences) -> bo
     return key not in {"", "unknown"} and key in {name.casefold() for name in preferences.languages}
 
 
+def effort_accepted(effort: EffortBucket, allowed: Sequence[EffortBucket]) -> bool:
+    """Match an existing final estimate exactly; an empty list accepts nothing."""
+    return effort in allowed
+
+
 def candidate_rejection(candidate: Candidate, preferences: ScoutPreferences) -> str | None:
-    """Use resolved repository and final paid classification before selection limits."""
+    """Use resolved metadata, final classification and effort before selection limits."""
     if repository_excluded(candidate["repo"], preferences):
         return "repository excluded by configuration"
     if not (preferences.paid if candidate["paid"] else preferences.strategic):
         return "final candidate lane disabled by configuration"
     if not language_accepted(candidate["language"], preferences):
         return "repository language excluded by configuration"
+    if not effort_accepted(candidate["effort"], preferences.effort):
+        return "final effort estimate excluded by configuration"
     return None

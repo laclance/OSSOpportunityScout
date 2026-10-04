@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B wires primary repository-language preferences. Effort, thresholds, result limits, and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C wires final effort preferences. Thresholds, result limits, and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -58,7 +58,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/app.py` | Package-only executable/application assembly, CLI/environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
 | `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run; loaded explicitly by application assembly |
-| `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions and language matching, and final lane acceptance | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
+| `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions and language matching, exact final-effort matching, and lane acceptance | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
 | `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
 | `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `opportunity_scout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
@@ -175,8 +175,19 @@ language and the canonical `Unknown` display value. Language policy adds neither
 metadata requests nor Search queries; discovery and deep-verification budgets and
 coverage accounting remain unchanged.
 
-Effort, threshold, and result-limit fields remain validated but inactive
-until Slices 3C–3D. Name remains display metadata without current runtime use.
+Slice 3C adds pure `effort_accepted(EffortBucket, Sequence[EffortBucket])` policy
+to the existing final-candidate acceptance guard. Exact membership uses the
+unchanged estimator output; an empty effort list accepts nothing. Both discovery
+lane adapters apply it after final candidate construction, before strategic
+repository-slot settlement. Combined-run assembly repeats the guard before URL
+deduplication and truncation. Preview effort and preview paid classification do not
+prune on effort preferences: source refresh, aggregator resolution, and already
+fetched strategic discussion may change the estimate. Existing preflight, ranking
+bounds, source-failure breaker, adaptive inspection and verification budgets remain
+in effect; effort preferences add no network work or scoring policy.
+
+Threshold and result-limit fields remain validated but inactive until Slice 3D.
+Name remains display metadata without current runtime use.
 Existing scoring, thresholds, deterministic ranking, and verification budgets remain
 in effect; this slice does not change deployment ownership or workflows.
 
