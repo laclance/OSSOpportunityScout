@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Configuration and deployment migration remain planned: preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 supplies immutable preferences and a standalone strict TOML parser. Runtime wiring and deployment migration remain planned: active scanner preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -57,6 +57,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout.py` | Stable executable entry point that calls `opportunity_scout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `opportunity_scout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
+| `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run, and is not yet used by application assembly |
 | `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
 | `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `opportunity_scout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
@@ -100,6 +101,8 @@ opportunity_scout.run --> opportunity_scout.state
 opportunity_scout.run -X-> opportunity_scout.app
 opportunity_scout.run -X-> opportunity_scout.py
 opportunity_scout.types -X-> package policy / orchestration modules
+opportunity_scout.preferences --> opportunity_scout.types
+opportunity_scout.preferences -X-> opportunity_scout.app / opportunity_scout.run
 opportunity_scout.paid_verification --> opportunity_scout.github
 opportunity_scout.paid_verification --> opportunity_scout.paid
 opportunity_scout.sources --> opportunity_scout.github
@@ -122,6 +125,23 @@ package/domain modules -X-> opportunity_scout.app
 ```
 
 New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `opportunity_scout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
+
+## Preference parsing boundary
+
+`ScoutPreferences` is a frozen dataclass with slots and tuple collections, independent
+of credential-bearing `RunConfig`. `parse_scout_preferences()` validates a decoded
+document without I/O; `load_scout_preferences(Path(...))` owns explicit local-file
+reading with standard-library `tomllib`. Both return the same immutable model and
+raise `ScoutPreferencesError` for invalid input. Missing files do not select defaults.
+Diagnostics identify invalid fields without echoing configuration values or contents.
+
+Version 1 is required. Omitted tables/fields receive deterministic generic defaults;
+unknown keys, malformed types, unsupported versions, and invalid values fail closed.
+The public [example](scout.example.toml) exercises every preference with those defaults.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns field semantics.
+Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
+Application assembly does not load preferences, even when `scout.toml` exists;
+configuration/state flags and runtime application belong to Slices 3A–3D.
 
 ## GitHub integration contract
 

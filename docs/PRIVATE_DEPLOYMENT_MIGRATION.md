@@ -3,8 +3,9 @@
 This is the authoritative implementation tracker for separating the public scanner
 distribution from private scout instances. The architecture and contracts below are
 agreed targets, except for the Python support contract implemented by Slice 1 and
-coverage-completeness fix implemented by Slice 1B.
-Configuration and deployment features remain planned.
+coverage-completeness fix implemented by Slice 1B, and the standalone preference
+model/parser/example implemented by Slice 2. Runtime configuration wiring and
+deployment features remain planned.
 
 ## Repository and workflow ownership
 
@@ -108,7 +109,13 @@ delivery and maintenance and print that state was not updated. Candidate deliver
 and immediate warnings for discovery/paid verification failures remain unchanged.
 Targeted regressions cover every recognized verification reason, discovery failures,
 one to four strategic failures, warning-boundary and raised-threshold cases, and
-application-level quiet/candidate runs. Slice 1B requires merge before Slice 2.
+application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2.
+
+- Slice 2 starting local and freshly fetched remote `main`:
+  `e4295138629fe8f0d27129eed63ac001df80b0d0`. PR #33 was confirmed merged on
+  2026-10-04, local `main` matched remote `main`, and the worktree was clean.
+  Before branching, `make quality` passed on Python 3.12.3: all 389 tests,
+  every strict check, and 100% statement and branch coverage.
 
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
@@ -116,16 +123,16 @@ state for private migration instead. Upstream scheduling restoration is also
 superseded; initial private deployment is manual-only, and any future schedule
 belongs to the private instance. Compatibility-wrapper cleanup remains separate.
 
-## Planned preference configuration
+## Preference schema and planned runtime semantics
 
-Introduce immutable `ScoutPreferences`, separate from credential-bearing
-`RunConfig`. Use standard-library `tomllib`, deterministic defaults, and the
-existing canonical `EffortBucket` vocabulary. Configuration contains preferences,
-never credentials or correctness controls.
+Slice 2 adds immutable `ScoutPreferences` in `opportunity_scout/preferences.py`,
+separate from credential-bearing `RunConfig`. It uses standard-library `tomllib`,
+deterministic defaults, and the existing canonical `EffortBucket` vocabulary.
+Configuration contains preferences, never credentials or correctness controls.
 
-The generic v1 example below fixes the field names and defaults. It is a planned
-schema, not a configuration the current executable can read. Slice 2 adds the
-actual `scout.example.toml` and parser.
+The generic v1 [scout.example.toml](../scout.example.toml) fixes the field names and
+defaults below. The standalone parser can load this schema, but the current
+executable does not read or apply it. Slices 3A–3D own runtime integration.
 
 ```toml
 version = 1
@@ -153,6 +160,18 @@ max_results = 8
   unknown keys, malformed types, invalid effort buckets, and invalid values before
   network or delivery activity. Scores are integers from 0–100; `max_results` is an
   integer from 1–8. Boolean values do not satisfy integer fields.
+- Parser details: only `version` is required; omitted tables and fields use the
+  defaults above. Explicit values must have their exact schema types. Name and
+  list entries must be non-empty strings after surrounding whitespace is trimmed.
+  Repository entries must be `owner/repository` identifiers, not URLs. Effort
+  entries must use the canonical labels above (including en dashes). Tuples retain
+  input order, spelling/case, and duplicates; matching policy remains runtime work.
+  Empty lists and both lanes disabled are valid: an empty effort list accepts no
+  final estimates once wired, while an empty language list accepts all languages.
+  `parse_scout_preferences(document)` is pure; `load_scout_preferences(Path(...))`
+  reads an explicit path. Both raise `ScoutPreferencesError` on invalid input;
+  missing/unreadable/invalid files never fall back to defaults. The parser does not
+  import application assembly or `RunConfig`, make network requests, or write state.
 - Repository targets add curated strategic sources; they are not an allowlist.
   Exclusions take precedence and apply across both lanes, including the final
   upstream repository after source refresh or aggregator resolution.
@@ -186,9 +205,10 @@ lists or state. Multi-profile support remains deferred.
 
 ## Implementation sequence and acceptance
 
-Slice 1 is merged in PR #32. Slice 1B is implemented in its focused coverage PR
-and awaits merge. Slices 2 onward remain **planned**. Complete them in order through
-small, independently verified PRs; 3A–3D remain separate slices.
+Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 implements the
+preference model, parser, example, and regressions and stops at its open PR.
+Slices 3A onward remain **planned**. Complete them in order through small,
+independently verified PRs; 3A–3D remain separate slices.
 
 Slice 1 establishes the Python support contract:
 
@@ -313,9 +333,13 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 1B open PR.** Coverage completeness is independent
-of warning thresholds, including quiet-run maintenance. Do not merge this PR or
-start a later slice implicitly. After Slice 1B merges, the next task is Slice 2,
-immutable preferences, strict TOML parsing, and a generic example. Configuration and
-deployment implementation remain outside Slice 1B. The runtime/tooling minimum is
-Python 3.12; compatibility CI explicitly covers 3.13 and 3.14.
+**Current stopping boundary: Slice 2 open PR.** Immutable preferences, strict TOML
+parsing, and the generic example are implemented; current invocation behavior is
+preserved, including ignoring an existing `scout.toml`. Parser regressions cover
+defaults, every field, strict types/bounds, unknown keys, invalid repository/effort
+values, immutability, malformed/duplicate TOML, invalid UTF-8, and missing/unreadable
+files. Do not merge this PR or start a later slice implicitly. After Slice 2 merges,
+the next task is Slice 3A: explicit config/state paths, repositories, exclusions,
+lanes, and global discovery. Runtime wiring and deployment implementation remain
+outside Slice 2. The runtime/tooling minimum is Python 3.12; compatibility CI
+explicitly covers 3.13 and 3.14.

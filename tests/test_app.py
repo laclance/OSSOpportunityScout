@@ -3,15 +3,17 @@ from __future__ import annotations
 import io
 import os
 import runpy
+import tempfile
 import unittest
 import urllib.request
-from contextlib import redirect_stdout
+from contextlib import chdir, redirect_stdout
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, cast
 from unittest.mock import patch
 
 import opportunity_scout.app as scout
-from opportunity_scout import delivery, github, run, sources
+from opportunity_scout import delivery, github, preferences, run, sources
 from opportunity_scout import paid as paid_policy
 from opportunity_scout import paid_verification
 from opportunity_scout import state
@@ -1538,6 +1540,23 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class FormattingAndMainTests(unittest.TestCase):
+    def test_legacy_main_ignores_scout_toml_and_does_not_load_preferences(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, "scout.toml").write_text("not valid TOML", encoding="utf-8")
+            with (
+                chdir(directory),
+                patch.dict(os.environ, {"GITHUB_TOKEN": "tok"}, clear=True),
+                patch.object(preferences, "load_scout_preferences") as loader,
+                patch.object(run, "run_combined_scan") as combined,
+            ):
+                scout.main()
+            loader.assert_not_called()
+            combined.assert_called_once()
+            config = combined.call_args.args[0]
+            self.assertIsInstance(config, run.RunConfig)
+            self.assertEqual(config.token, "tok")
+            self.assertEqual(combined.call_args.kwargs["report_limit"], scout.REPORT_LIMIT)
+
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
         paid_prefetch: list[SearchBatch] = [("paid-q", {"items": []})]
