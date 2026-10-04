@@ -230,13 +230,6 @@ def _validated_timestamp(value: object, field_name: str) -> str | None:
     return value
 
 
-def _parse_legacy_state(raw: list[object]) -> SeenState:
-    entries: dict[str, SeenEntry] = {}
-    for value in raw:
-        entries[_validated_url(value)] = SeenEntry()
-    return SeenState(entries)
-
-
 def _parse_current_state(raw: dict[object, object]) -> SeenState:
     if "version" not in raw:
         raise SeenStateLoadError("Versioned seen-state is missing the version field.")
@@ -269,12 +262,10 @@ def _parse_current_state(raw: dict[object, object]) -> SeenState:
 
 
 def parse_seen_state(raw: object) -> SeenState:
-    """Parse legacy or current state without weakening malformed-state safety."""
-    if isinstance(raw, list):
-        return _parse_legacy_state(raw)
+    """Parse the current versioned state schema."""
     if isinstance(raw, dict):
         return _parse_current_state(raw)
-    raise SeenStateLoadError("Seen-state top level must be a legacy list or versioned object.")
+    raise SeenStateLoadError("Seen-state top level must be a versioned object.")
 
 
 def load_seen_state(path: str | Path = DEFAULT_STATE_FILE) -> SeenState:

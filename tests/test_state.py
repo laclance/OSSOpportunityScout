@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -55,20 +54,9 @@ class SeenStateParsingTests(unittest.TestCase):
 
         self.assertEqual(loaded.urls(), set())
 
-    def test_empty_legacy_list_loads(self) -> None:
-        loaded = parse_seen_state([])
-        self.assertEqual(loaded.urls(), set())
-
-    def test_populated_legacy_list_preserves_all_urls_without_fake_timestamps(self) -> None:
-        loaded = parse_seen_state([URL_B, URL_A])
-
-        self.assertEqual(loaded.urls(), {URL_A, URL_B})
-        self.assertEqual(loaded.record(URL_A), state_module.SeenEntry())
-        self.assertEqual(loaded.record(URL_B), state_module.SeenEntry())
-
-    def test_legacy_duplicate_urls_collapse_to_one_logical_record(self) -> None:
-        loaded = parse_seen_state([URL_A, URL_A])
-        self.assertEqual(loaded.urls(), {URL_A})
+    def test_obsolete_legacy_list_fails_closed(self) -> None:
+        with self.assertRaisesRegex(SeenStateLoadError, "versioned object"):
+            parse_seen_state([URL_A])
 
     def test_current_versioned_format_loads(self) -> None:
         loaded = parse_seen_state(current_document())
@@ -114,9 +102,6 @@ class SeenStateParsingTests(unittest.TestCase):
             parse_seen_state(current_document(seen={URL_A: {"reported_at": None}}))
 
     def test_malformed_url_values_fail_closed(self) -> None:
-        with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
-            parse_seen_state([42])
-
         with self.assertRaisesRegex(SeenStateLoadError, "URL keys"):
             parse_seen_state(
                 current_document(seen={" ": {"reported_at": None, "last_checked_at": None}})
@@ -196,24 +181,6 @@ class SeenStateLogicTests(unittest.TestCase):
         self.assertEqual(seen.urls(), {URL_A, URL_B})
         self.assertEqual(seen.record(URL_B), state_module.SeenEntry(reported_at=FIXED_REPORTED_AT))
         self.assertIsNone(seen.record("https://github.com/example/project/issues/999"))
-
-    def test_saving_migrated_legacy_state_emits_only_versioned_schema(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            path = Path(temp_dir) / "state.json"
-            migrated = parse_seen_state([URL_B, URL_A])
-            save_seen_state(migrated, path)
-            saved: object = json.loads(path.read_text(encoding="utf-8"))
-
-        self.assertEqual(
-            saved,
-            {
-                "version": 2,
-                "seen": {
-                    URL_A: {"reported_at": None, "last_checked_at": None},
-                    URL_B: {"reported_at": None, "last_checked_at": None},
-                },
-            },
-        )
 
     def test_save_reload_round_trip_preserves_state(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
