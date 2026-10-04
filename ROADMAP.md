@@ -20,6 +20,7 @@ OSS Opportunity Scout is a package-owned scanner with:
 - hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
 - strict Ruff, mypy, and 100% statement/branch coverage gates
 - Python 3.12 as the minimum runtime and authoritative quality baseline, with compile/test compatibility CI on CPython 3.13 and 3.14
+- immutable non-secret preferences, a strict version-1 TOML parser, and a generic example, awaiting runtime wiring
 
 The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. Slice 1B enforces coverage completeness independently of warning thresholds, including quiet-run maintenance.
 
@@ -41,7 +42,7 @@ Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through 
 
 Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
 
-Slice 1's Python support contract is merged in PR #32. Slice **1B** implements the separate coverage-completeness fix and stops at its open PR. After that PR merges, Slice 2 adds immutable preferences and the strict TOML parser. Configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
+Slice 1's Python support contract is merged in PR #32, and Slice 1B's coverage-completeness fix is merged in PR #33. Slice **2** implements immutable preferences, the strict TOML parser, and a generic example, and stops at its open PR. After it merges, Slice 3A wires explicit configuration/state paths and source controls; language, effort, thresholds, and result limits remain separate Slices 3B–3D. Current invocation behavior remains available. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
 
 ### Establish a release baseline
 

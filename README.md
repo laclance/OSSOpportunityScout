@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade in Slice 1 and coverage-completeness fix in Slice 1B are implemented; configuration and deployment migration remain planned. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
+The Python support upgrade in Slice 1 and coverage-completeness fix in Slice 1B are merged. Slice 2 adds immutable preferences, a strict TOML parser, and [scout.example.toml](scout.example.toml). The parser is available for explicit loading through `opportunity_scout.preferences.load_scout_preferences(Path(...))`; the executable does not yet read `scout.toml` or apply preferences. Current invocation behavior is preserved. Configuration/state flags, runtime preference wiring, and the composite action belong to later slices. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
 
 ## How it works
 
@@ -22,6 +22,7 @@ Production code lives under `opportunity_scout/`; `opportunity_scout.py` is the 
 The main boundaries are:
 
 - `opportunity_scout/app.py` — environment wiring and application assembly.
+- `opportunity_scout/preferences.py` — immutable non-secret preferences and strict version-1 TOML validation, separate from runtime credentials.
 - `opportunity_scout/run.py` — combined scan lifecycle, delivery aggregation, and transactional seen-state commit.
 - `opportunity_scout/github.py` — canonical GitHub REST transport, safe-read retries, pagination, and per-scan caching.
 - `opportunity_scout/paid.py` / `paid_verification.py` — paid-opportunity policy and verification.
