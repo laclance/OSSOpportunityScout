@@ -232,7 +232,7 @@ fi
             self.assertNotIn("/actions/runs/999/cancel", calls)
 
     def test_persistence_failure_propagates_queue_lookup_failure(self) -> None:
-        step = document(TEMPLATE)["jobs"]["scout"]["steps"][8]
+        step = document(TEMPLATE)["jobs"]["cancel_queued"]["steps"][0]
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             fake_bin = folder / "bin"
