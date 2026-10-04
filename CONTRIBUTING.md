@@ -20,7 +20,11 @@ make setup
 
 Read `ARCHITECTURE.md` and, when the change affects planned direction, `ROADMAP.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
 
-For migration work, also read the [private deployment tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md). It owns the agreed contracts, ordered PR slices, recovery procedure, and acceptance gates. Verify current `main`, merged prerequisites, worktree state, and the quality baseline before branching for a slice. Keep current behavior and planned behavior distinct in documentation.
+For changes that touch deployment, configuration, state ownership, or recovery,
+consult the [completed private deployment migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
+for the rationale, historical acceptance gates, and final contracts. Slices 1–7 are
+complete; do not reuse their numbering for new work. Verify current `main`, repository
+state, and the quality baseline before branching for any focused follow-up.
 
 ## Commands
 
@@ -69,7 +73,10 @@ Keep pins immutable, state reads inside serialization, and recovery uploads priv
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
 
-Migration slices must follow tracker prerequisites and remain separate. Open one focused PR and stop at that boundary; do not bundle later phases, merge the PR, or retire upstream deployment before the private instance is proven. Include the starting SHA, validation result, and migration slice in the handoff.
+The migration is complete. New deployment/configuration follow-ups should be
+independent focused PRs rather than new migration slices. Include the starting SHA
+and precise validation result in the handoff, and do not mix unrelated follow-up
+decisions into the same PR.
 
 Describe:
 

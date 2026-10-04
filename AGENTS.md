@@ -10,11 +10,11 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 4. `CONTRIBUTING.md` — shared setup, quality, and pull-request expectations.
 5. Relevant tests under `tests/` — executable behavior and regression cases.
 
-For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](docs/PRIVATE_DEPLOYMENT_MIGRATION.md), the authoritative tracker for contracts, PR slices, prerequisites, historical recovery, and progress.
+For deployment/configuration/state-ownership work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](docs/PRIVATE_DEPLOYMENT_MIGRATION.md), the authoritative completed migration/acceptance record for contracts, PR provenance, historical recovery, and final ownership.
 
 ## Project constraints
 
-- Python 3.12 is the minimum supported runtime and the syntax/type/tooling baseline for the authoritative strict gate. CI also runs recursive compile/test compatibility checks on CPython 3.13 and 3.14. Later releases are not supported until added to CI and their checks pass. Do not use syntax newer than 3.12 or begin later migration slices implicitly.
+- Python 3.12 is the minimum supported runtime and the syntax/type/tooling baseline for the authoritative strict gate. CI also runs recursive compile/test compatibility checks on CPython 3.13 and 3.14. Later releases are not supported until added to CI and their checks pass. Do not use syntax newer than 3.12 or reopen/renumber the completed migration slices.
 - Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
@@ -27,14 +27,23 @@ For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](doc
 - Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
-- The target canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
+- The canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
 - Coverage completeness is independent of warning thresholds: any recognized discovery/verification failure prevents both newly reported seen-state advancement and quiet-run maintenance persistence. Warning thresholds control diagnostics only.
 
-## Migration execution
+## Migration history and follow-ups
 
-Follow the tracker in order. Verify actual latest `main`, merged prerequisite PRs, worktree state, and the quality baseline before branching for each slice. After the verified Slice 7 cutover, require default `scout.toml` or explicit `--config PATH` before state/network/delivery activity without legacy fallback. Do not recreate upstream `scout-state` ownership as the final remedy, reset historical state to the empty example, or restore upstream scheduling.
+Slices 1–7 are complete through merged PR #42. Private Slice 6 acceptance remains
+verified with operational evidence kept private. PR #43 and PR #44 are separate
+post-migration correctness follow-ups, not additional slices.
 
-Preserve historical state privately and prove the private instance before retiring upstream production responsibilities. Keep private opportunity contents and scout credentials out of public files and PRs. Complete one focused slice, run the full quality gate, commit, open its PR, and stop at the open-PR boundary; do not merge or start a later slice implicitly.
+Preserve the final contracts: default `scout.toml` or explicit `--config PATH`
+is mandatory before state/network/delivery activity; private instances own workflow,
+configuration/state, triggers/schedules, concurrency, secrets, delivery, persistence,
+recovery, and scanner pins; upstream owns code, development/release CI, documentation,
+and reusable execution machinery. Do not recreate upstream `scout-state` ownership,
+restore upstream persistent scheduling, expose private evidence, or claim exactly-once
+delivery. New work after the migration should use ordinary focused PRs and should not
+reuse the completed slice numbering.
 
 ## Design rules
 
