@@ -42,13 +42,26 @@ class PrivateInstanceContractTests(unittest.TestCase):
             workflow["concurrency"],
             {"group": "scout-seen-state", "cancel-in-progress": False, "queue": "max"},
         )
-        self.assertEqual(set(workflow["jobs"]), {"scout"})
-        job = workflow["jobs"]["scout"]
-        self.assertEqual(job["permissions"], {"actions": "write", "contents": "write"})
+        self.assertEqual(set(workflow["jobs"]), {"scout", "cancel_queued"})
+
+        scout = workflow["jobs"]["scout"]
+        self.assertEqual(scout["permissions"], {"contents": "write"})
+        self.assertNotIn("actions", scout["permissions"])
         self.assertEqual(
-            job["env"]["INSTANCE_BRANCH"], "${{ github.event.repository.default_branch }}"
+            scout["outputs"],
+            {
+                "recovery_required": "${{ steps.recovery_handoff.outputs.required }}",
+                "recovery_outcome": "${{ steps.recovery_handoff.outputs.recovery_outcome }}",
+                "recovery_barrier_outcome": (
+                    "${{ steps.recovery_handoff.outputs.recovery_barrier_outcome }}"
+                ),
+            },
         )
-        steps = job["steps"]
+        self.assertEqual(
+            scout["env"]["INSTANCE_BRANCH"], "${{ github.event.repository.default_branch }}"
+        )
+        self.assertNotIn("concurrency", scout)
+        steps = scout["steps"]
         self.assertEqual(
             [step.get("id") for step in steps],
             [
@@ -60,8 +73,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 "persist",
                 "recovery",
                 "recovery_barrier",
-                "cancel_queued",
-                None,
+                "recovery_handoff",
             ],
         )
         self.assertEqual(steps[1]["with"]["ref"], "${{ github.event.repository.default_branch }}")
@@ -103,10 +115,32 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn(".scout/recovery-required", recovery_barrier["run"])
         self.assertIn("push origin", recovery_barrier["run"])
         self.assertNotIn("push --force", recovery_barrier["run"])
-        cancel_queued = steps[8]
+        recovery_handoff = steps[8]
         self.assertEqual(
-            cancel_queued["if"], "${{ always() && steps.persist.outcome == 'failure' }}"
+            recovery_handoff["if"], "${{ always() && steps.persist.outcome == 'failure' }}"
         )
+        self.assertEqual(
+            recovery_handoff["env"]["RECOVERY_OUTCOME"], "${{ steps.recovery.outcome }}"
+        )
+        self.assertEqual(
+            recovery_handoff["env"]["RECOVERY_BARRIER_OUTCOME"],
+            "${{ steps.recovery_barrier.outcome }}",
+        )
+        self.assertIn("required=true", recovery_handoff["run"])
+        self.assertNotIn("--force", steps[5]["run"])
+
+        cancel_job = workflow["jobs"]["cancel_queued"]
+        self.assertEqual(cancel_job["needs"], "scout")
+        self.assertEqual(
+            cancel_job["if"],
+            "${{ always() && needs.scout.outputs.recovery_required == 'true' }}",
+        )
+        self.assertEqual(cancel_job["permissions"], {"actions": "write"})
+        self.assertNotIn("contents", cancel_job["permissions"])
+        self.assertNotIn("concurrency", cancel_job)
+        cancel_steps = cancel_job["steps"]
+        self.assertEqual([step.get("id") for step in cancel_steps], ["cancel_queued", None])
+        cancel_queued = cancel_steps[0]
         self.assertTrue(cancel_queued["continue-on-error"])
         self.assertEqual(cancel_queued["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertEqual(cancel_queued["env"]["GH_REPO"], "${{ github.repository }}")
@@ -114,16 +148,21 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn("/actions/concurrency_groups/scout-seen-state", cancel_queued["run"])
         self.assertIn("/actions/runs/$run_id/cancel", cancel_queued["run"])
         self.assertIn("select(.run_id != $CURRENT_RUN_ID)", cancel_queued["run"])
-        self.assertEqual(steps[9]["if"], "${{ always() && steps.persist.outcome == 'failure' }}")
+        final_failure = cancel_steps[1]
+        self.assertEqual(final_failure["if"], "${{ always() }}")
         self.assertEqual(
-            steps[9]["env"]["RECOVERY_BARRIER_OUTCOME"],
-            "${{ steps.recovery_barrier.outcome }}",
+            final_failure["env"]["RECOVERY_OUTCOME"],
+            "${{ needs.scout.outputs.recovery_outcome }}",
         )
         self.assertEqual(
-            steps[9]["env"]["QUEUE_CANCEL_OUTCOME"], "${{ steps.cancel_queued.outcome }}"
+            final_failure["env"]["RECOVERY_BARRIER_OUTCOME"],
+            "${{ needs.scout.outputs.recovery_barrier_outcome }}",
         )
-        self.assertNotIn("--force", steps[5]["run"])
-        for step in steps + document(ACTION)["runs"]["steps"]:
+        self.assertEqual(
+            final_failure["env"]["QUEUE_CANCEL_OUTCOME"], "${{ steps.cancel_queued.outcome }}"
+        )
+
+        for step in steps + cancel_steps + document(ACTION)["runs"]["steps"]:
             if "uses" in step:
                 self.assertRegex(step["uses"], r"^[\w/-]+@[0-9a-f]{40}$")
             else:
@@ -151,7 +190,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, expected)
 
     def test_persistence_failure_cancels_queued_group_members(self) -> None:
-        step = document(TEMPLATE)["jobs"]["scout"]["steps"][8]
+        step = document(TEMPLATE)["jobs"]["cancel_queued"]["steps"][0]
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary)
             fake_bin = folder / "bin"
@@ -214,7 +253,7 @@ fi
             self.assertEqual(result.returncode, 23)
 
     def test_persistence_failure_always_fails_after_recovery_attempt(self) -> None:
-        step = document(TEMPLATE)["jobs"]["scout"]["steps"][-1]
+        step = document(TEMPLATE)["jobs"]["cancel_queued"]["steps"][-1]
         for outcome in ("success", "failure", "skipped", "cancelled", ""):
             with self.subTest(outcome=outcome):
                 result = shell_step(
@@ -394,12 +433,13 @@ class StateTransactionTests(unittest.TestCase):
         self.git(self.folder, "clone", str(self.remote), str(self.other))
         self.git(self.other, "config", "user.name", "Other Writer")
         self.git(self.other, "config", "user.email", "other@example.invalid")
-        steps = document(TEMPLATE)["jobs"]["scout"]["steps"]
+        workflow = document(TEMPLATE)
+        steps = workflow["jobs"]["scout"]["steps"]
         self.restore = steps[2]
         self.recovery_gate = steps[3]
         self.persist = steps[5]
         self.recovery_barrier = steps[7]
-        self.cancel_queued = steps[8]
+        self.cancel_queued = workflow["jobs"]["cancel_queued"]["steps"][0]
         self.output = self.folder / "output"
         self.environment["GITHUB_OUTPUT"] = str(self.output)
 
