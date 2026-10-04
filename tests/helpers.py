@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, cast
 
-from bountyscout.types import Candidate, GitHubComment, GitHubIssue
+from opportunity_scout.types import Candidate, GitHubComment, GitHubIssue
 
 
 class FakeResponse:

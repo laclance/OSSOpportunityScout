@@ -7,8 +7,8 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from bountyscout import reporting, run, sources, state
-from bountyscout.types import (
+from opportunity_scout import reporting, run, sources, state
+from opportunity_scout.types import (
     GitHubIssue,
     IssueLifecycleStatus,
     RejectionRecord,

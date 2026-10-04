@@ -18,7 +18,7 @@ from datetime import datetime
 from threading import Lock
 from typing import Any, Final, TypeVar, cast
 
-from bountyscout.types import (
+from opportunity_scout.types import (
     GitHubComment,
     GitHubIssue,
     GitHubSearchResult,

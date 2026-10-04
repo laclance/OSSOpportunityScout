@@ -5,9 +5,9 @@ import urllib.request
 from typing import Any, cast
 from unittest.mock import patch
 
-from bountyscout import sources
-from bountyscout import github
-from bountyscout.types import GitHubIssue
+from opportunity_scout import sources
+from opportunity_scout import github
+from opportunity_scout.types import GitHubIssue
 from tests.helpers import FakeResponse, candidate
 
 

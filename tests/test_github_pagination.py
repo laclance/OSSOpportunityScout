@@ -9,8 +9,8 @@ import urllib.request
 from typing import Any
 from unittest.mock import patch
 
-from bountyscout import app, github, paid_verification, sources
-from bountyscout.strategic import competition
+from opportunity_scout import app, github, paid_verification, sources
+from opportunity_scout.strategic import competition
 from tests.helpers import FakeResponse, issue
 
 URL = "https://api.github.com/repos/example/project/issues/42/comments?per_page=100"

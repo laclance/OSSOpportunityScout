@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Final, Iterable, Literal, Mapping, TypedDict
 
-from bountyscout.types import IssueLifecycleStatus
+from opportunity_scout.types import IssueLifecycleStatus
 
 StateVersion = Literal[2]
 STATE_VERSION: Final[StateVersion] = 2

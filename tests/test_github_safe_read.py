@@ -9,7 +9,7 @@ from contextlib import redirect_stdout
 from email.message import Message
 from unittest.mock import patch
 
-from bountyscout import delivery, github
+from opportunity_scout import delivery, github
 from tests.helpers import FakeResponse
 
 
@@ -59,7 +59,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         self.assertEqual(opened.call_count, 2)
@@ -81,8 +81,8 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.time", return_value=1000.0),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.time", return_value=1000.0),
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         self.assertEqual(opened.call_count, 2)
@@ -105,7 +105,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(4.0)
@@ -123,7 +123,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         self.assertEqual(opened.call_count, 2)
@@ -136,7 +136,7 @@ class SafeReadTests(unittest.TestCase):
                 "urlopen",
                 side_effect=[http_error(429), FakeResponse(b'{"ok": true}')],
             ),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(60.0)
@@ -151,7 +151,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(60.0)
@@ -161,7 +161,7 @@ class SafeReadTests(unittest.TestCase):
             with self.subTest(code=code):
                 with (
                     patch.object(urllib.request, "urlopen", side_effect=http_error(code)) as opened,
-                    patch("bountyscout.github.time.sleep") as slept,
+                    patch("opportunity_scout.github.time.sleep") as slept,
                 ):
                     self.assertIsNone(
                         github.github_get("https://api.github.com/x", log_errors=False)
@@ -180,7 +180,7 @@ class SafeReadTests(unittest.TestCase):
                     http_error(429, headers={"Retry-After": "1"}),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertIsNone(github.github_get("https://api.github.com/x", log_errors=False))
         self.assertEqual(opened.call_count, 3)
@@ -193,7 +193,7 @@ class SafeReadTests(unittest.TestCase):
                 "urlopen",
                 side_effect=http_error(429, headers={"Retry-After": "121"}),
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertIsNone(github.github_get("https://api.github.com/x", log_errors=False))
         self.assertEqual(opened.call_count, 1)
@@ -206,7 +206,7 @@ class SafeReadTests(unittest.TestCase):
                 "urlopen",
                 side_effect=http_error(403, headers={"X-RateLimit-Remaining": "0"}),
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertIsNone(github.github_get("https://api.github.com/x", log_errors=False))
         self.assertEqual(opened.call_count, 1)
@@ -228,8 +228,8 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ),
-            patch("bountyscout.github.time.time", return_value=1000.0),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.time", return_value=1000.0),
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(0.0)
@@ -244,7 +244,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         self.assertEqual(opened.call_count, 2)
@@ -259,7 +259,7 @@ class SafeReadTests(unittest.TestCase):
             with self.subTest(reason=type(error.reason).__name__):
                 with (
                     patch.object(urllib.request, "urlopen", side_effect=error) as opened,
-                    patch("bountyscout.github.time.sleep") as slept,
+                    patch("opportunity_scout.github.time.sleep") as slept,
                 ):
                     self.assertIsNone(
                         github.github_get("https://api.github.com/x", log_errors=False)
@@ -276,7 +276,7 @@ class SafeReadTests(unittest.TestCase):
                         "urlopen",
                         side_effect=[error, FakeResponse(b'{"ok": true}')],
                     ),
-                    patch("bountyscout.github.time.sleep") as slept,
+                    patch("opportunity_scout.github.time.sleep") as slept,
                 ):
                     self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
                 slept.assert_called_once_with(1.0)
@@ -288,7 +288,7 @@ class SafeReadTests(unittest.TestCase):
                 "urlopen",
                 side_effect=[http_error(503), FakeResponse(b'{"ok": true}')],
             ),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(1.0)
@@ -302,7 +302,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b'{"ok": true}'),
                 ],
             ),
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(github.github_get("https://api.github.com/x"), {"ok": True})
         slept.assert_called_once_with(7.0)
@@ -314,7 +314,7 @@ class SafeReadTests(unittest.TestCase):
                     patch.object(
                         urllib.request, "urlopen", return_value=FakeResponse(body)
                     ) as opened,
-                    patch("bountyscout.github.time.sleep") as slept,
+                    patch("opportunity_scout.github.time.sleep") as slept,
                 ):
                     self.assertIsNone(
                         github.github_get("https://api.github.com/x", log_errors=False)
@@ -325,7 +325,7 @@ class SafeReadTests(unittest.TestCase):
     def test_non_retryable_exception_is_not_retried(self) -> None:
         with (
             patch.object(urllib.request, "urlopen", side_effect=PermissionError("no")) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertIsNone(github.github_get("https://api.github.com/x", log_errors=False))
         self.assertEqual(opened.call_count, 1)
@@ -345,7 +345,7 @@ class SafeReadTests(unittest.TestCase):
                     },
                 ),
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertIsNone(github.github_get("https://api.github.com/x", log_errors=False))
         self.assertEqual(opened.call_count, 1)
@@ -387,7 +387,7 @@ class SafeReadTests(unittest.TestCase):
                     http_error(429, headers={"Retry-After": "1"}),
                 ],
             ),
-            patch("bountyscout.github.time.sleep"),
+            patch("opportunity_scout.github.time.sleep"),
         ):
             self.assertEqual(
                 github.issue_lifecycle("https://github.com/example/project/issues/42", None).status,
@@ -405,7 +405,7 @@ class SafeReadTests(unittest.TestCase):
                     FakeResponse(b"{}"),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertTrue(
                 delivery.create_private_github_issue(
@@ -432,7 +432,7 @@ class SafeReadTests(unittest.TestCase):
                     http_error(429, headers={"Retry-After": "1"}),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep"),
+            patch("opportunity_scout.github.time.sleep"),
         ):
             self.assertFalse(
                 delivery.create_private_github_issue(
@@ -455,7 +455,7 @@ class SafeReadTests(unittest.TestCase):
                     urllib.error.URLError("post failed"),
                 ],
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertFalse(
                 delivery.create_private_github_issue(

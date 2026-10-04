@@ -13,8 +13,8 @@ from threading import Lock
 from typing import Any, cast
 from unittest.mock import patch
 
-from bountyscout import github
-from bountyscout.types import GitHubIssue
+from opportunity_scout import github
+from opportunity_scout.types import GitHubIssue
 from tests.helpers import FakeResponse
 
 
@@ -201,7 +201,7 @@ class GitHubHttpTests(unittest.TestCase):
                 "urlopen",
                 side_effect=TimeoutError("timeout"),
             ) as opened,
-            patch("bountyscout.github.time.sleep") as slept,
+            patch("opportunity_scout.github.time.sleep") as slept,
         ):
             self.assertEqual(
                 github.issue_lifecycle(

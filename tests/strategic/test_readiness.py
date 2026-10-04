@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import unittest
-from bountyscout.strategic import readiness
-from bountyscout.types import GitHubComment
+from opportunity_scout.strategic import readiness
+from opportunity_scout.types import GitHubComment
 from tests.helpers import comment, issue
 
 

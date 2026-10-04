@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from typing import Any, cast
 
-from bountyscout import paid
-from bountyscout.types import GitHubIssue
+from opportunity_scout import paid
+from opportunity_scout.types import GitHubIssue
 
 
 def issue(**overrides: Any) -> GitHubIssue:

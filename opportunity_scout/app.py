@@ -7,16 +7,16 @@ from datetime import datetime, timezone
 from time import sleep
 from typing import Any, cast
 
-from bountyscout import delivery, github, paid, paid_verification
-from bountyscout import reporting as reporting
-from bountyscout import run
-from bountyscout import scoring
-from bountyscout import sources
-from bountyscout.strategic import competition as competition_policy
-from bountyscout.strategic import discovery as strategic_discovery
-from bountyscout.strategic import verification as strategic_verification
-from bountyscout.strategic.claims import strategic_claim_text as strategic_claim_text
-from bountyscout.strategic.readiness import (
+from opportunity_scout import delivery, github, paid, paid_verification
+from opportunity_scout import reporting as reporting
+from opportunity_scout import run
+from opportunity_scout import scoring
+from opportunity_scout import sources
+from opportunity_scout.strategic import competition as competition_policy
+from opportunity_scout.strategic import discovery as strategic_discovery
+from opportunity_scout.strategic import verification as strategic_verification
+from opportunity_scout.strategic.claims import strategic_claim_text as strategic_claim_text
+from opportunity_scout.strategic.readiness import (
     TRUSTED_ASSOCIATIONS as TRUSTED_ASSOCIATIONS,
     abandoned_lifecycle_reason as abandoned_lifecycle_reason,
     automated_tracking_issue_reason as automated_tracking_issue_reason,
@@ -35,7 +35,7 @@ from bountyscout.strategic.readiness import (
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
 )
-from bountyscout.types import (
+from opportunity_scout.types import (
     Candidate,
     CandidateLane,
     GitHubComment,

@@ -12,8 +12,8 @@ import urllib.parse
 from collections.abc import Callable
 from typing import Any, TypedDict, cast
 
-from bountyscout import github, paid
-from bountyscout.types import GitHubComment, GitHubIssue
+from opportunity_scout import github, paid
+from opportunity_scout.types import GitHubComment, GitHubIssue
 
 FetchJson = Callable[[str, str | None], Any]
 ExistingPrChecker = Callable[[str, int, str | None], str | None]
