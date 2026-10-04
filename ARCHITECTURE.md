@@ -219,6 +219,9 @@ Developer Program. Program participation is not GitHub approval, certification, 
 
 ## Documentation maintenance
 
-- `AGENTS.md` owns coding-agent and contributor implementation rules.
-- `ARCHITECTURE.md` owns boundaries, flow, and invariants.
-- `README.md` stays user-facing and should not become an internal design dump.
+- `README.md` is the human-facing project overview and run/deployment entry point.
+- `CONTRIBUTING.md` owns the human contributor workflow.
+- `AGENTS.md` owns AI coding-agent execution rules.
+- `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
+- `ROADMAP.md` owns forward-looking work and sequencing.
+- `PROVENANCE.md` owns project history and the standalone boundary.

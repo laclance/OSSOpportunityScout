@@ -1,13 +1,14 @@
-# AI and Contributor Instructions
+# AI Agent Instructions
 
-This file is the canonical working agreement for coding agents and human contributors.
+This file contains execution rules for AI coding agents working on OSS Opportunity Scout. Human contributors should start with `CONTRIBUTING.md`; shared technical truth lives in `ARCHITECTURE.md`.
 
 ## Read this context first
 
 1. `README.md` — what the scout does and how to run it.
-2. `ARCHITECTURE.md` — data flow, module boundaries, and invariants.
+2. `ARCHITECTURE.md` — current data flow, module boundaries, and invariants.
 3. `ROADMAP.md` — deliberate future improvements and sequencing.
-4. Relevant tests under `tests/` — executable behavior and regression cases.
+4. `CONTRIBUTING.md` — shared setup, quality, and pull-request expectations.
+5. Relevant tests under `tests/` — executable behavior and regression cases.
 
 ## Project constraints
 
