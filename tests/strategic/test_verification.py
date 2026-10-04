@@ -69,10 +69,10 @@ class StrategicVerificationTests(unittest.TestCase):
                 ),
             )
 
-        self.assertEqual(calls, [viable["html_url"]])
+        self.assertEqual(calls, [viable.get("html_url")])
         self.assertEqual(result.network_checked_rows, 1)
         self.assertEqual(result.selected_rows, 3)
-        self.assertEqual([item["url"] for item in result.candidates], [viable["html_url"]])
+        self.assertEqual([item["url"] for item in result.candidates], [viable.get("html_url")])
         self.assertEqual(result.rejected["issue is marked claimed by the project"], 1)
         bound_reason = "career score 40/100 below strategic threshold 55/100"
         self.assertEqual(result.rejected[bound_reason], 1)
@@ -124,7 +124,7 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(result.rejected["could not verify open implementation PR timeline"], 1)
         self.assertTrue(
             any(
-                item["url"] == items[4]["html_url"]
+                item.get("url") == items[4].get("html_url")
                 and "verification coverage incomplete for g/g" in item["reason"]
                 for item in result.audit
             )
@@ -158,7 +158,7 @@ class StrategicVerificationTests(unittest.TestCase):
         calls: list[str] = []
 
         def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
-            calls.append(str(item_["html_url"]))
+            calls.append(str(item_.get("html_url")))
             index = items.index(item_)
             return verified_candidate(item_, score=scores[index]), None
 
@@ -176,8 +176,8 @@ class StrategicVerificationTests(unittest.TestCase):
             keep_per_repo=1,
         )
 
-        self.assertEqual(calls, [items[0]["html_url"], items[1]["html_url"]])
-        self.assertEqual([item["url"] for item in result.candidates], [items[0]["html_url"]])
+        self.assertEqual(calls, [items[0].get("html_url"), items[1].get("html_url")])
+        self.assertEqual([item["url"] for item in result.candidates], [items[0].get("html_url")])
         self.assertEqual(verification.STRATEGIC_KEEP_PER_REPO, 3)
         self.assertEqual(verification.STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND, 11)
 
@@ -192,23 +192,23 @@ class StrategicVerificationTests(unittest.TestCase):
             issue(html_url=f"https://github.com/g/g/issues/{index}") for index in range(2, 6)
         ]
         returned: dict[str, Candidate] = {
-            str(weak["html_url"]): verified_candidate(weak, score=40),
-            str(accepted[0]["html_url"]): verified_candidate(
+            str(weak.get("html_url")): verified_candidate(weak, score=40),
+            str(accepted[0].get("html_url")): verified_candidate(
                 accepted[0], score=70, cash_score=20, comments=5
             ),
-            str(accepted[1]["html_url"]): verified_candidate(
+            str(accepted[1].get("html_url")): verified_candidate(
                 accepted[1], score=70, cash_score=20, comments=1
             ),
-            str(accepted[2]["html_url"]): verified_candidate(
+            str(accepted[2].get("html_url")): verified_candidate(
                 accepted[2], score=70, cash_score=10, comments=0
             ),
-            str(accepted[3]["html_url"]): verified_candidate(
+            str(accepted[3].get("html_url")): verified_candidate(
                 accepted[3], score=60, cash_score=99, comments=0
             ),
         }
 
         def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
-            return returned[str(item_["html_url"])], None
+            return returned[str(item_.get("html_url"))], None
 
         result = verification.verify_strategic_selection(
             selection(
@@ -231,7 +231,7 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(result.audit[0]["reason"], "existing discovery audit")
         self.assertEqual(
             [item["url"] for item in result.candidates],
-            [accepted[1]["html_url"], accepted[0]["html_url"], accepted[2]["html_url"]],
+            [accepted[1].get("html_url"), accepted[0].get("html_url"), accepted[2].get("html_url")],
         )
 
     def test_final_sort_uses_canonical_candidate_rank_key(self) -> None:
@@ -259,7 +259,7 @@ class StrategicVerificationTests(unittest.TestCase):
 
         self.assertEqual(
             [item["url"] for item in result.candidates],
-            [items[1]["html_url"], items[0]["html_url"]],
+            [items[1].get("html_url"), items[0].get("html_url")],
         )
         self.assertEqual(
             [call.args[0] for call in rank_key.call_args_list],
@@ -327,7 +327,7 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(observed_workers, [8])
         self.assertEqual(
             [item["url"] for item in result.candidates],
-            [rows[0][3]["html_url"] for rows in ranked.values()],
+            [rows[0][3].get("html_url") for rows in ranked.values()],
         )
 
     def test_candidates_are_verified_sequentially_within_each_repo(self) -> None:
@@ -335,7 +335,7 @@ class StrategicVerificationTests(unittest.TestCase):
         calls: list[str] = []
 
         def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
-            calls.append(str(item_["html_url"]))
+            calls.append(str(item_.get("html_url")))
             return verified_candidate(item_, score=80), None
 
         verification.verify_strategic_selection(
@@ -344,7 +344,7 @@ class StrategicVerificationTests(unittest.TestCase):
             lambda _: None,
         )
 
-        self.assertEqual(calls, [str(item_["html_url"]) for item_ in items])
+        self.assertEqual(calls, [str(item_.get("html_url")) for item_ in items])
 
 
 if __name__ == "__main__":
