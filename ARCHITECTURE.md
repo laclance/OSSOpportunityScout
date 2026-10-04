@@ -52,13 +52,15 @@ If persistence fails, the workflow preserves the exact resulting state in a
 three-day private recovery artifact, then establishes
 `.scout/recovery-required` from a freshly fetched current remote head in a separate
 temporary worktree. The marker commit touches no seen-state and uses an ordinary
-push, so newer branch history is never overwritten. It then uses narrowly scoped
-`actions: write` permission to cancel other runs waiting in the same
-`scout-seen-state` group as defense in depth before the failed run releases the
-lock. The durable marker is the correctness barrier; queued-run cancellation is
-secondary protection. Recovery is operator-driven and removes the marker only in a
-deliberate recovery commit. Delivery and persistence remain separate operations
-without exactly-once guarantees.
+push, so newer branch history is never overwritten. The normal scan job has only `contents: write`; the pinned scanner never receives
+Actions write capability. On persistence failure it publishes a small recovery
+handoff to a dependent follow-up job whose token has only `actions: write`. That
+job cancels other runs waiting in the same `scout-seen-state` group as defense in
+depth and emits the terminal failure. Because concurrency is workflow-level, the
+shared lock remains held until the follow-up job completes. The durable marker is
+the correctness barrier; queued-run cancellation is secondary protection. Recovery
+is operator-driven and removes the marker only in a deliberate recovery commit.
+Delivery and persistence remain separate operations without exactly-once guarantees.
 See the [private instance guide](docs/PRIVATE_INSTANCE.md) for adoption and recovery.
 
 ## Data flow
@@ -270,12 +272,12 @@ compatibility work; the scanner does not automatically track GitHub's newest RES
 
 Upstream development CI grants only `contents: read` and has no scanner deployment
 job or delivery secrets. The inactive private template uses workflow
-`permissions: {}` and job `contents: write` plus `actions: write`. Contents write
-covers discovery, same-repository state persistence, and the failure-only durable
-recovery-marker commit. Actions write is used only for defense-in-depth cancellation
-of queued members in the shared state concurrency group. The job has no Issues
-write. Instances own their permissions and credentials; private-report credentials
-remain separate. Python state code is branch-agnostic.
+`permissions: {}`; its normal `scout` job has only `contents: write`, while the
+dependent recovery-cancellation job has only `actions: write`. The scanner token
+therefore cannot mutate Actions state, and the cancellation token cannot write
+repository contents. Neither job has Issues write. Instances own their permissions
+and credentials; private-report credentials remain separate. Python state code is
+branch-agnostic.
 
 Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
 `GITHUB_REPOSITORY` alone never enable them; a custom deployment must set
