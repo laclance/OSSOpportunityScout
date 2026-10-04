@@ -74,6 +74,7 @@ BuildCandidate = Callable[
     Candidate,
 ]
 FetchRepoMetadata = Callable[[str, str | None], RepositoryMetadata]
+LanguageEligible = Callable[[GitHubIssue, RepositoryMetadata], bool]
 PaymentSignal = Callable[[GitHubIssue], str | None]
 SearchGitHub = Callable[[str, str | None, int], GitHubSearchResult]
 TargetRepoIssuePool = Callable[[str, str | None], tuple[list[GitHubIssue], str | None]]
@@ -241,6 +242,7 @@ def select_strategic_candidates(
     adaptive_budget: int = STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
     audit_limit: int = STRATEGIC_AUDIT_LIMIT,
     repository_excluded: Callable[[str], bool] = lambda _repo: False,
+    language_eligible: LanguageEligible = lambda _item, _meta: True,
 ) -> StrategicDiscoverySelection:
     """Build deterministic pre-verification rows from bounded strategic sources."""
     provisional: list[sources.IssueRow] = []
@@ -322,6 +324,8 @@ def select_strategic_candidates(
                         "unavailable or archived",
                         limit=audit_limit,
                     )
+                continue
+            if not language_eligible(item, meta):
                 continue
             signal = payment_signal(item)
             lane: CandidateLane = "paid" if signal else "strategic"
