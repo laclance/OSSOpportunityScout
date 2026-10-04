@@ -122,9 +122,11 @@ or delivery. There is no legacy fallback or search for alternate files.
 
 See the [configuration reference](docs/CONFIGURATION.md) for every supported field,
 default, bound, preference semantic, and generic example. Preferences cover lanes,
-additive strategic repositories and cross-lane exclusions, primary repository
+additive strategic discovery repositories and cross-lane exclusions, primary repository
 languages, final effort estimates, score thresholds, and a 1–8 result limit.
-`name` currently has no runtime effect. Credentials and delivery remain separate
+Configured repositories expand strategic discovery only; they do not inherit the
+built-in target-repository career-scoring bonus. `name` currently has no runtime
+effect. Credentials and delivery remain separate
 from TOML preferences. The reference also provides parser-only validation and
 offline regression commands; the invocation above performs an actual scan.
 
