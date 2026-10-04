@@ -115,7 +115,7 @@ Optional Telegram and Discord transports remain supported through:
 
 ## Development quality
 
-Python 3.11+ is currently required. [Slice 1](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#implementation-sequence-and-acceptance) raises the runtime and tooling contract together to Python 3.12+. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** are enforced by the project quality gate.
+Python 3.11+ is currently required. [Slice 1](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#implementation-sequence-and-acceptance) raises the minimum to Python 3.12. The planned contract keeps 3.12 as the syntax/type/tooling baseline and strict quality-gate interpreter, while CI also runs compile/test compatibility checks on every stable CPython release >=3.12 available when Slice 1 lands. Later Python releases are not supported until they are added to CI successfully. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** remain authoritative on Python 3.12.
 
 Useful commands:
 

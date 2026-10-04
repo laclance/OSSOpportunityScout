@@ -14,7 +14,7 @@ For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](doc
 
 ## Project constraints
 
-- Python 3.11+ currently; migration Slice 1 raises the runtime/tooling contract together to Python 3.12+. Do not change that contract or begin later slices in a documentation-only change.
+- Python 3.11+ currently; migration Slice 1 raises the minimum to Python 3.12, keeps 3.12 as the syntax/type/tooling baseline and authoritative strict gate, and adds CI compile/test compatibility checks for every stable CPython release >=3.12 available when that slice lands. Later releases are not supported until added to CI successfully. Do not change that contract or begin later slices in a documentation-only change.
 - Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.

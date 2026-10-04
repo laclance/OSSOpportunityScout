@@ -4,7 +4,7 @@ This is the human contributor guide for OSS Opportunity Scout. Small, behavior-p
 
 ## Setup
 
-Currently requires Python 3.11+. The migration's first implementation slice raises the runtime and tooling contract together to Python 3.12+; this documentation change does not drop 3.11 support.
+Currently requires Python 3.11+. The migration's first implementation slice raises the minimum to Python 3.12, keeps 3.12 as the syntax/type/tooling baseline, and adds CI compile/test compatibility checks for every stable CPython release >=3.12 available when that slice lands; later releases are not supported until added to CI successfully. This documentation change does not drop 3.11 support.
 
 ```bash
 python -m pip install -r requirements-dev.txt

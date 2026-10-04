@@ -14,7 +14,7 @@ change does not implement a migration slice.
 truth for scanner code. It owns implementation, verification/scoring policy, tests,
 documentation, the configuration parser/schema, generic examples, and reusable
 execution machinery. It may run tests, lint, typing, coverage, release checks, and
-other project CI, and publish a composite/reusable action or deployment template.
+other project CI, and publish a composite action or deployment template.
 It must not operate any persistent scout instance or own user schedules, scout
 state, private configuration, scout secrets, report destinations, or persistent
 opportunity history.
@@ -76,9 +76,10 @@ Snapshot verified on 2026-10-04; recheck it at the start of every slice:
 - Historical candidate `f96022aa161974701e7ff906b48946cbfbb2f663` is available locally
   and parses as version 2 with eight entries. This does not establish that it is
   the latest trustworthy production snapshot.
-- Documentation closeout passed `make quality` on Python 3.12.3: Ruff formatting
+- Local documentation closeout passed `make quality` on Python 3.12.3: Ruff formatting
   and lint, recursive compilation, strict mypy, all 386 tests, and 100% statement
-  and branch coverage. Each implementation PR must run the current gate afresh.
+  and branch coverage. This records local validation, not a GitHub Actions result;
+  each implementation PR must run the current gate afresh.
 
 **Coverage prerequisite:** `coverage_status()` in `opportunity_scout/run.py` leaves
 the warning unset for one to four recognized strategic verification failures.
@@ -168,9 +169,22 @@ lists or state. Multi-profile support remains deferred.
 All production slices below are **planned**. Complete them in order through small,
 independently verified PRs; 3A–3D remain separate slices.
 
+Slice 1 establishes the Python support contract:
+
+- Minimum supported Python: 3.12.
+- Python 3.12 is the syntax, typing, and tooling baseline and remains the interpreter
+  for the complete authoritative quality gate.
+- At Slice 1 merge, CI must include every stable CPython release >=3.12 available
+  at that time. Interpreters newer than 3.12 run compatibility checks including
+  recursive compilation and the test suite; Ruff, strict mypy, and coverage remain
+  authoritative on 3.12 unless deliberately expanded later.
+- A newly released Python version is not supported until CI explicitly includes it
+  and its compatibility checks pass. `>=3.12` therefore never means arbitrary
+  untested future interpreters.
+
 | Slice | Deliverable | Acceptance gate |
 | --- | --- | --- |
-| 1 | Raise the runtime to Python 3.12+ across workflows, Ruff, mypy, and documentation | Full quality gate; no configuration changes; no newer-than-3.12 syntax |
+| 1 | Raise the minimum runtime to Python 3.12 and add stable-version compatibility CI across workflows and documentation | Full strict quality gate on 3.12; recursive compile + tests on every stable CPython release >=3.12 available when the slice lands; no configuration changes; no newer-than-3.12 syntax; later Python releases are not supported until their CI checks pass |
 | 1B | Fix coverage completeness independently of warning thresholds | Any recognized verification/discovery failure prevents state advancement, including quiet-run maintenance |
 | 2 | Add immutable preferences, strict TOML parser, and generic example | Parser regressions; existing invocation behavior preserved |
 | 3A | Wire explicit config/state paths, repositories, exclusions, lanes, and global discovery | Disabled sources make no requests; legacy and configured invocation both work |
@@ -178,20 +192,27 @@ independently verified PRs; 3A–3D remain separate slices.
 | 3C | Wire effort preferences | Final estimates control acceptance; rejected candidates do not consume selection slots |
 | 3D | Wire thresholds and result limits | Final classification governs thresholds; deterministic ranking preserved |
 | 4 | Publish configuration guidance and validated examples | Every documented command and field works |
-| 5 | Add public pinned composite/reusable execution machinery and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; no persistent upstream deployment created |
+| 5 | Add a public pinned composite action and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; post-delivery persistence failure preserves the resulting state as a private short-retention recovery artifact before the workflow fails; no persistent upstream deployment created |
 | 6 | Recover and migrate the personal instance privately | Trustworthy state seeded; private delivery, persistence, and subsequent deduplication verified |
 | 7 | Remove canonical public upstream production-instance responsibilities and complete config cutover | Slice 6 proven; upstream retains only development/release CI and reusable execution machinery |
 
 Slice 1 inspects all runtime declarations, updates existing sources of truth
-together, and deliberately drops 3.11 compatibility. Do not add packaging metadata
-solely to declare the minimum version. Do not begin configuration or deployment
-implementation in that PR.
+together, deliberately drops 3.11 compatibility, keeps syntax/types/tooling pinned
+to the 3.12 baseline, and adds compatibility CI for every stable CPython release
+>=3.12 available when the slice lands. Do not add packaging metadata solely to
+declare the minimum version. Do not begin configuration or deployment implementation
+in that PR.
 
 For Slice 5, the chosen mechanism is a public composite action executing scanner
 source from its pinned action directory. The private workflow owns surrounding
-checkout/state persistence steps and passes runtime credentials explicitly. Use
-full commit SHA pins for execution; a release may identify the chosen SHA, but a
-moving branch/tag must not silently upgrade production. See GitHub's
+checkout/state persistence steps and passes runtime credentials explicitly. Its
+normal GitHub Actions `GITHUB_TOKEN` may provide scanner GitHub REST access and
+same-repository state persistence when least-privilege caller permissions allow.
+Keep the private-report credential as a separate trust boundary and never reuse it
+for scanner discovery. Introduce a separate persistence credential only if a later
+repository boundary or deployment design actually requires one. Use full commit
+SHA pins for execution; a release may identify the chosen SHA, but a moving
+branch/tag must not silently upgrade production. See GitHub's
 [workflow/action comparison](https://docs.github.com/en/actions/concepts/workflows-and-actions/reusing-workflow-configurations)
 and [action-path context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context).
 
@@ -232,15 +253,25 @@ channel may be satisfied by another successful channel. Host issue creation plus
 auto-close must both succeed. Complete quiet runs may persist maintenance alone.
 Actual local-save or remote-persistence failure must fail the run.
 
-Keep discovery credentials, state-persistence credentials, and private-report
-credentials distinct; private reporting still requires metadata fetched with its
-own credential to report `private: true`. Config files and public docs contain no
+Keep the private-report credential distinct from the scanner/private-instance
+GitHub credential. Use least-privilege caller permissions for discovery and state
+persistence. The private instance's normal GitHub Actions `GITHUB_TOKEN` may handle
+scanner GitHub REST access and persistence to that same private repository when its
+permissions allow; introduce a separate persistence credential only if the actual
+repository boundary or deployment model requires one. Private reporting still uses
+its own credential, that credential is never reused for scanner discovery, and its
+metadata check must report `private: true`. Config files and public docs contain no
 secrets or private opportunity contents.
 
-If delivery succeeds but persistence fails, recover the resulting snapshot in the
-private instance before rerunning. Do not automatically replay delivery, reset
-state, force-push a stale snapshot, or claim exactly-once delivery. The deployment
-slice must document private recovery of that failure window.
+If delivery succeeds but remote state persistence fails, the deployment must first
+preserve the exact resulting `seen_bounties.json` outside the ephemeral runner, for
+example as a private, short-retention GitHub Actions recovery artifact, and then
+fail the workflow. That artifact is recovery-only, not the primary state backend.
+Before rerunning, the operator must restore that preserved snapshot into the private
+instance so already delivered opportunities remain seen. If the recovery snapshot
+cannot be preserved, do not treat an immediate rerun as safe; reconstruct the
+post-delivery state first. Never automatically replay delivery, reset to older
+state, force-push a stale snapshot, or claim exactly-once delivery.
 
 ## Quality and slice protocol
 
@@ -262,6 +293,7 @@ Report the starting SHA, branch, changes, quality result, final commit, and PR U
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
 **Immediate next task: Slice 1 only.** Inspect every Python 3.11 declaration and
-existing runtime/tooling source of truth, raise them consistently to Python 3.12+,
-run the full quality gate, and open the focused runtime PR. Configuration and
-deployment implementation are outside that slice.
+existing runtime/tooling source of truth, raise the minimum consistently to Python
+3.12, add compatibility CI for every stable CPython release >=3.12 available when
+the slice lands, run the full quality gate, and open the focused runtime PR.
+Configuration and deployment implementation are outside that slice.

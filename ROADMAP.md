@@ -32,7 +32,7 @@ Native GitHub `schedule` events are paused while GitHub investigates a reproduci
 
 Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through its focused PR slices:
 
-- raise the runtime/tooling contract to Python 3.12+ first
+- raise the minimum runtime/tooling baseline to Python 3.12 and add CI compatibility checks for every stable CPython release >=3.12 available when the slice lands
 - fix coverage completeness in its separate prerequisite PR
 - add immutable, versioned preferences and wire configuration incrementally
 - provide pinned public execution machinery and a generic private-instance template
