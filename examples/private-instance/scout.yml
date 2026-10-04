@@ -142,8 +142,8 @@ jobs:
           if test "$QUEUE_CANCEL_OUTCOME" != success; then
             echo '::error::State persistence failed and queued state transactions could not be cancelled. Stop all scout runs before rerunning, then recover or reconstruct state.'
           elif test "$RECOVERY_OUTCOME" = success; then
-            echo '::error::State persistence failed. Queued state transactions were cancelled; restore the private recovery artifact before rerunning.'
+            echo '::error::State persistence failed. Queued state transactions were cancelled. Restore the private recovery artifact before rerunning.'
           else
-            echo '::error::State persistence and recovery preservation failed. Queued state transactions were cancelled; reconstruct post-delivery state before rerunning.'
+            echo '::error::State persistence and recovery preservation failed. Queued state transactions were cancelled. Reconstruct post-delivery state before rerunning.'
           fi
           exit 1
