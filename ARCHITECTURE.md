@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. These changes are not implemented yet: Python 3.11+ remains the current contract, preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Configuration and deployment migration remain planned: preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -73,7 +73,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
 | `.github/workflows/oss-opportunity-scout.yml` | Legacy upstream scanner execution | Manual-only; requires the remote `scout-state` branch, absent as verified on 2026-10-04; retired after private migration is proven |
-| `.github/workflows/python-quality.yml` | Formatting, lint, compile, typing, tests, coverage | Must stay fast enough for normal PR iteration |
+| `.github/workflows/python-quality.yml` | Authoritative formatting, lint, recursive compile, strict typing, tests, and coverage on Python 3.12; recursive compile and full-suite compatibility checks on 3.13 and 3.14 | Explicit CI versions define support; later releases require passing CI before support is claimed |
 
 ## Dependency direction
 

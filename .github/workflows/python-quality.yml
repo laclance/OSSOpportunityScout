@@ -34,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Install validation dependencies
         run: python -m pip install -r requirements-dev.txt
@@ -56,3 +56,27 @@ jobs:
 
       - name: Enforce coverage
         run: coverage report
+
+  compatibility:
+    name: Python ${{ matrix.python-version }} compatibility
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Compile Python
+        run: make compile
+
+      - name: Run compatibility tests
+        run: python -m unittest -v
