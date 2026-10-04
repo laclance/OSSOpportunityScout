@@ -47,7 +47,9 @@ class LanguagePolicyTests(unittest.TestCase):
                 with self.subTest(language=language, configured=configured):
                     self.assertEqual(selection.language_accepted(language, config), expected)
                     for is_paid in (False, True):
-                        final = candidate(paid=is_paid, language=language or "Unknown")
+                        final = candidate(
+                            paid=is_paid, cash_score=80, language=language or "Unknown"
+                        )
                         self.assertEqual(
                             selection.candidate_rejection(final, config),
                             None if expected else "repository language excluded by configuration",

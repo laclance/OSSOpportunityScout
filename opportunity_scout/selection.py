@@ -37,8 +37,26 @@ def effort_accepted(effort: EffortBucket, allowed: Sequence[EffortBucket]) -> bo
     return effort in allowed
 
 
+def score_rejection(
+    candidate: Candidate, *, min_cash_score: int, min_career_score: int
+) -> str | None:
+    """Apply an inclusive threshold using refreshed scores and final classification."""
+    if candidate["paid"]:
+        score, minimum, metric, lane = candidate["cash_score"], min_cash_score, "cash", "paid"
+    else:
+        score, minimum, metric, lane = (
+            candidate["career_score"],
+            min_career_score,
+            "career",
+            "strategic",
+        )
+    if score < minimum:
+        return f"{metric} score {score}/100 below {lane} threshold {minimum}/100"
+    return None
+
+
 def candidate_rejection(candidate: Candidate, preferences: ScoutPreferences) -> str | None:
-    """Use resolved metadata, final classification and effort before selection limits."""
+    """Use resolved metadata, final classification, effort and scores before limits."""
     if repository_excluded(candidate["repo"], preferences):
         return "repository excluded by configuration"
     if not (preferences.paid if candidate["paid"] else preferences.strategic):
@@ -47,4 +65,8 @@ def candidate_rejection(candidate: Candidate, preferences: ScoutPreferences) -> 
         return "repository language excluded by configuration"
     if not effort_accepted(candidate["effort"], preferences.effort):
         return "final effort estimate excluded by configuration"
-    return None
+    return score_rejection(
+        candidate,
+        min_cash_score=preferences.min_cash_score,
+        min_career_score=preferences.min_career_score,
+    )

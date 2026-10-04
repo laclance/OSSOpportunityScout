@@ -301,7 +301,7 @@ class ResolvedPreferenceTests(unittest.TestCase):
             },
         )
 
-    def test_paid_resolved_exclusion_and_deferred_cash_threshold(self) -> None:
+    def test_paid_resolved_exclusion_and_configured_cash_threshold(self) -> None:
         blocked, allowed = issue(), issue(html_url="https://github.com/example/project/issues/43")
         with (
             patch.object(app, "platform_paid_refs", return_value={}),
@@ -324,8 +324,14 @@ class ResolvedPreferenceTests(unittest.TestCase):
                     exclude_repositories=("blocked/repo",), min_cash_score=100
                 ),
             )
-        self.assertEqual([item["url"] for item in found], [allowed["html_url"]])
-        self.assertEqual(rejects, {"repository excluded by configuration": 1})
+        self.assertEqual(found, [])
+        self.assertEqual(
+            rejects,
+            {
+                "repository excluded by configuration": 1,
+                "cash score 70/100 below paid threshold 100/100": 1,
+            },
+        )
 
 
 class InvocationTests(unittest.TestCase):
@@ -359,7 +365,7 @@ class InvocationTests(unittest.TestCase):
                     for mock in mocks:
                         mock.assert_not_called()
 
-    def test_configured_command_line_assembly_and_deferred_fields(self) -> None:
+    def test_configured_command_line_assembly_thresholds_and_result_limit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory, "config.toml")
             path.write_text(
@@ -367,7 +373,11 @@ class InvocationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             items = [
-                candidate(url=f"https://github.com/example/project/issues/{n}", language="Python")
+                candidate(
+                    url=f"https://github.com/example/project/issues/{n}",
+                    language="Python",
+                    career_score=100,
+                )
                 for n in range(9)
             ]
             with (
@@ -397,7 +407,7 @@ class InvocationTests(unittest.TestCase):
             config = preferences.load_scout_preferences(path)
             self.assertEqual(paid_scan.call_args.kwargs, {"scout_preferences": config})
             self.assertEqual(strategic_scan.call_args.kwargs, {"scout_preferences": config})
-            self.assertEqual(len(state.load_seen_state(Path(directory, "selected.json")).urls()), 8)
+            self.assertEqual(len(state.load_seen_state(Path(directory, "selected.json")).urls()), 1)
 
     def test_legacy_executable_and_state_only_invocation(self) -> None:
         for arguments in ([], ["--state", "custom.json"]):
@@ -513,7 +523,7 @@ class SelectedStateTests(unittest.TestCase):
                 _search: object,
             ) -> run.PaidDiscoveryResult:
                 seen_inputs.append(seen)
-                return [candidate(paid=True, url=new_url)], {}, []
+                return [candidate(paid=True, cash_score=80, url=new_url)], {}, []
 
             callbacks = replace(
                 dependencies(),

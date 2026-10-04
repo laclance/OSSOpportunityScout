@@ -38,7 +38,7 @@ def verified_candidate(item: GitHubIssue, *, score: int = 80, **overrides: objec
 
 
 class StrategicVerificationTests(unittest.TestCase):
-    def test_preflight_and_upper_bound_skip_network_while_viable_row_verifies(self) -> None:
+    def test_preflight_skips_network_but_low_preview_requires_refreshed_scores(self) -> None:
         viable = issue(
             html_url="https://github.com/g/g/issues/1",
             labels=[{"name": "help wanted"}, {"name": "bug"}],
@@ -49,7 +49,7 @@ class StrategicVerificationTests(unittest.TestCase):
 
         def deep_verify(item_: GitHubIssue) -> tuple[Candidate | None, str | None]:
             calls.append(str(item_.get("html_url") or ""))
-            return verified_candidate(item_, score=90), None
+            return verified_candidate(item_, score=40 if item_ is impossible else 90), None
 
         buf = io.StringIO()
         with redirect_stdout(buf):
@@ -69,14 +69,14 @@ class StrategicVerificationTests(unittest.TestCase):
                 ),
             )
 
-        self.assertEqual(calls, [viable.get("html_url")])
-        self.assertEqual(result.network_checked_rows, 1)
+        self.assertEqual(calls, [viable.get("html_url"), impossible.get("html_url")])
+        self.assertEqual(result.network_checked_rows, 2)
         self.assertEqual(result.selected_rows, 3)
         self.assertEqual([item["url"] for item in result.candidates], [viable.get("html_url")])
         self.assertEqual(result.rejected["issue is marked claimed by the project"], 1)
         bound_reason = "career score 40/100 below strategic threshold 55/100"
         self.assertEqual(result.rejected[bound_reason], 1)
-        self.assertIn("Strategic deep verification: 1/3", buf.getvalue())
+        self.assertIn("Strategic deep verification: 2/3", buf.getvalue())
 
     def test_source_failure_breaker_uses_exact_reasons_and_resets_on_other_result(self) -> None:
         self.assertEqual(

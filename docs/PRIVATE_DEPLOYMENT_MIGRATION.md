@@ -7,7 +7,8 @@ the coverage-completeness fix implemented by Slice 1B, the preference
 model/parser/example implemented by Slice 2 (merged in PR #34), the explicit
 config/state and source-control wiring implemented by Slice 3A (merged in PR #35),
 primary repository-language wiring implemented by Slice 3B (merged in PR #36),
-and final effort wiring implemented by Slice 3C. Threshold/result-limit wiring
+final effort wiring implemented by Slice 3C (merged in PR #37), and final
+score-threshold/result-limit wiring implemented by Slice 3D. Configuration guidance
 and deployment features remain planned.
 
 ## Repository and workflow ownership
@@ -141,6 +142,14 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   on Python 3.12.3: all 432 tests, every strict check, and 100% statement and branch
   coverage. The explicit interpreter selects the available development environment.
 
+- Slice 3D starting local and freshly verified remote `main`:
+  `043f615f789106cf10886dc33b1d90474c041adf`. PR #37 was confirmed merged on
+  2026-10-04, local `main` matched remote `main`, and the starting worktree was clean.
+  The Python Quality workflow for that SHA passed, including 3.13/3.14 compatibility.
+  Before branching, `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed
+  on Python 3.12.3: all 439 tests, every strict check, and 100% statement and branch
+  coverage. The explicit interpreter selects the available development environment.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
@@ -235,8 +244,9 @@ lists or state. Multi-profile support remains deferred.
 Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 is merged in
 PR #34 with the preference model, parser, example, and regressions. Slice 3A
 merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR #36
-with language preferences. Slice 3C implements effort preferences and stops at its
-open PR. Slices 3D onward remain **planned**.
+with language preferences. Slice 3C merged in PR #37 with effort preferences.
+Slice 3D implements final score thresholds and result limits and stops at its
+open PR. Slices 4 onward remain **planned**.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -363,8 +373,8 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 3C open PR.** Slice 2 merged in PR #34;
-Slice 3A merged in PR #35; Slice 3B merged in PR #36.
+**Current stopping boundary: Slice 3D open PR.** Slice 2 merged in PR #34;
+Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37.
 Explicit `--config PATH` loads and validates preferences before state/network/delivery
 activity; missing or invalid explicit config never selects defaults. No-config
 invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
@@ -427,8 +437,37 @@ Local Slice 3C validation ran `make format` once, then passed
 all 439 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
 statement and branch coverage. This records local validation, not a CI result.
 
-Legacy invocation and the eight-result queue remain available. Thresholds and
-result-limit fields remain validated but inactive; name has no current runtime
-effect. Slice 3D and all deployment work remain deferred. Do not merge this PR or
-start a later slice implicitly. After Slice 3C merges, the next designated slice
-is 3D (threshold and result-limit wiring).
+Slice 3D applies inclusive `min_cash_score` and `min_career_score` thresholds using
+final paid/unpaid classification, regardless of discovery source. The shared pure
+score guard consumes refreshed final scores; it never accepts payment based on
+preview evidence. Strategic threshold rejection happens after deep verification,
+before accepted candidates settle repository slots. A low preview career upper
+bound cannot safely reject a candidate whose refreshed score/classification may
+change. Existing ranking upper bounds still determine repository settlement;
+inspection/adaptive budgets, worker caps, failure breakers, scoring, and ranking
+remain unchanged. Low-scoring previews may require checks within the same pool.
+
+The combined queue filters eligibility before URL deduplication and caps its final
+ranked results at `max_results` (1–8), respecting any narrower injected report limit.
+Lower output limits do not shrink discovery or verification budgets. Rejected
+higher-priority duplicates and threshold failures cannot hide eligible candidates.
+Verification, privacy, coverage, aggregate delivery, and state invariants remain
+in force. Legacy invocation ignores `scout.toml` and retains both score defaults
+at 55 and the eight-result queue; `name` still has no current runtime effect.
+
+Targeted regressions cover inclusive boundaries at 0, 55, and 100; both final
+classifications through both discovery adapters; low previews with refreshed scores
+and payment changes in both directions; resolved upstream payment scores; rejected
+repository slots and duplicate URLs; every result limit from 1–8; complete/incomplete
+coverage and delivery transactions; configured/legacy invocation; and unchanged
+request counts with/without authenticated prefetch for the exercised preferences.
+Existing effort and language tests now use score-eligible paid fixtures, and the
+previous preview-threshold regression verifies refreshed evidence instead.
+
+Local Slice 3D validation ran `make format` once, then passed
+`make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
+all 447 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
+statement and branch coverage. This records local validation, not a CI result.
+
+Configuration guidance (Slice 4) and all deployment work remain deferred. Do not
+merge this PR or start a later slice implicitly.

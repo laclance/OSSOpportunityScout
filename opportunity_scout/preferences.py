@@ -24,8 +24,8 @@ class ScoutPreferences:
     """Preference values, separate from credential-bearing RunConfig.
 
     Repository targets add strategic sources; exclusions take precedence across
-    both lanes. Repository, lane/source, primary-language, and final-effort controls
-    are wired; thresholds and result limits await Slice 3D.
+    both lanes. Final classification selects the score threshold; eligibility
+    precedes repository-slot settlement and the configured result limit.
     """
 
     version: Literal[1] = 1
