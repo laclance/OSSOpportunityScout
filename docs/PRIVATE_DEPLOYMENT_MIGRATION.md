@@ -11,9 +11,9 @@ final effort wiring implemented by Slice 3C (merged in PR #37), and final
 score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
 configuration guidance/examples published by Slice 4 (merged in PR #39), and public
 execution/private template assets supplied by Slice 5 (merged in PR #40).
-Slice 6 private migration is in progress; its operational acceptance is not yet
-complete. Upstream retirement and mandatory-config cutover remain planned Slice 7
-work.
+Slice 6 private migration and its operational acceptance are verified, with evidence
+retained privately. Upstream retirement and mandatory-config cutover remain planned
+Slice 7 work.
 
 ## Repository and workflow ownership
 
@@ -280,9 +280,9 @@ merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR 
 with language preferences. Slice 3C merged in PR #37 with effort preferences.
 Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
 merged in PR #39 with configuration guidance and validated examples. Slice 5 merged
-in PR #40 with the public action and private-instance template. Slice 6 is
-**in progress**, with private operational acceptance still pending. Slice 7 remains
-**planned** and requires that acceptance first.
+in PR #40 with the public action and private-instance template. Slice 6 private
+operational acceptance is **verified**, with supporting evidence retained privately.
+Slice 7 remains **planned** and requires separate authorization.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -418,13 +418,17 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 6 open documentation PR; private operational
-acceptance remains pending.** Historical recovery checks are complete and recorded
-privately. Instance provisioning awaits resolved personal configuration, delivery
-destinations, and separate report credentials. Live delivery, remote persistence,
-subsequent deduplication, serialization, stale-write rejection, and recovery-artifact
-handling have not yet been verified for the private instance. Keep upstream
-responsibilities and legacy invocation intact; do not begin Slice 7.
+**Current stopping boundary: Slice 6 documentation PR #41 remains draft and
+unmerged; private operational acceptance is verified.** Historical recovery,
+independent private provisioning and deliberate seeding, reviewed scanner pin,
+manual-only execution, separate report credentials, intended private delivery,
+exact resulting-state remote persistence, and subsequent deduplication are verified
+privately. Controlled checks verified serialization, current-state reads after
+queued admission, stale-write rejection, private short-retention recovery-artifact
+preservation/download, and exact normal restoration before scanning. Operational
+evidence and operator choices remain private; this status makes no exactly-once
+delivery claim. Keep upstream responsibilities and legacy invocation intact;
+do not begin Slice 7.
 Slice 2 merged in PR #34;
 Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37;
 Slice 3D merged in PR #38; Slice 4 merged in PR #39; Slice 5 merged in PR #40.
@@ -589,7 +593,7 @@ statement and branch coverage. The final real scanner pin was verified locally
 and the quality gate rerun after that YAML change. This records local validation;
 live private instance, delivery, and artifact upload validation remains Slice 6.
 
-Slice 5 merged in PR #40. Historical migration (Slice 6) is in progress with the
-private acceptance gates above still pending. Upstream retirement/mandatory-config
-cutover (Slice 7) remains deferred. Do not merge the Slice 6 documentation PR or
-start a later slice implicitly.
+Slice 5 merged in PR #40. Historical migration (Slice 6) and the private acceptance
+gates above are verified; supporting evidence stays private. Upstream retirement/
+mandatory-config cutover (Slice 7) remains deferred. Do not merge the Slice 6
+documentation PR or start a later slice implicitly.
