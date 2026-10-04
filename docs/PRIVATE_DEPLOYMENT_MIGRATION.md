@@ -1,19 +1,33 @@
-# Private deployment migration
+# Private deployment migration — completed record
 
-This is the authoritative implementation tracker for separating the public scanner
-distribution from private scout instances. The architecture and contracts below are
-agreed targets, except for the Python support contract implemented by Slice 1,
-the coverage-completeness fix implemented by Slice 1B, the preference
-model/parser/example implemented by Slice 2 (merged in PR #34), the explicit
-config/state and source-control wiring implemented by Slice 3A (merged in PR #35),
-primary repository-language wiring implemented by Slice 3B (merged in PR #36),
-final effort wiring implemented by Slice 3C (merged in PR #37), and final
-score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
-configuration guidance/examples published by Slice 4 (merged in PR #39), and public
-execution/private template assets supplied by Slice 5 (merged in PR #40).
-Slice 6 private migration and its operational acceptance are verified, with evidence
-retained privately; PR #41 is merged. Slice 7 implements upstream retirement and
-mandatory-config cutover and stops at its focused open PR.
+This is the authoritative completed migration and acceptance record for separating
+the public scanner distribution from private scout instances.
+
+Slices 1–7 are complete and merged. Private Slice 6 operational acceptance was
+verified privately, with operational evidence kept out of this public repository.
+The canonical upstream/private-instance ownership migration is complete.
+
+### Migration PR record
+
+| Work | PR | Status |
+| --- | --- | --- |
+| Slice 1 — Python 3.12+ | #32 | Complete and merged |
+| Slice 1B — coverage completeness | #33 | Complete and merged |
+| Slice 2 — immutable preferences / TOML | #34 | Complete and merged |
+| Slice 3A | #35 | Complete and merged |
+| Slice 3B | #36 | Complete and merged |
+| Slice 3C | #37 | Complete and merged |
+| Slice 3D | #38 | Complete and merged |
+| Slice 4 | #39 | Complete and merged |
+| Slice 5 | #40 | Complete and merged |
+| Slice 6 acceptance | #41 | Complete and merged |
+| Slice 7 — upstream retirement / mandatory config | #42 | Complete and merged |
+
+Post-migration correctness follow-ups are recorded separately because they are not
+migration slices:
+
+- #43 — durable recovery barrier for failed persistence
+- #44 — early language filtering before adaptive inspection
 
 ## Repository and workflow ownership
 
@@ -89,7 +103,7 @@ Snapshot verified on 2026-10-04; recheck it at the start of every slice:
   failure fail the scanner process. Both are merged in this baseline.
 - At the original migration baseline, the legacy upstream workflow was manual-only
   and required an absent remote `scout-state` branch, blocking restore. Slice 7
-  removes that workflow; this remains historical context, not a runtime contract.
+  removed that workflow; this remains historical context, not a runtime contract.
 - Historical candidate `f96022aa161974701e7ff906b48946cbfbb2f663` is available locally
   and parses as version 2 with eight entries. This does not establish that it is
   the latest trustworthy production snapshot.
@@ -195,13 +209,13 @@ Configuration contains preferences, never credentials or correctness controls.
 The generic v1 [scout.example.toml](../scout.example.toml) fixes the field names and
 defaults below. Slice 3A loads an explicit `--config PATH` and applies repositories,
 exclusions, lanes, and strategic global-search control. `--state PATH` selects every
-state read/write, independently of config. Slice 7 supersedes the migration-era
-no-config behavior: every scan requires `scout.toml` from the working directory or
+state read/write, independently of config. Slice 7 superseded the migration-era
+no-config behavior: every scan now requires `scout.toml` from the working directory or
 exactly the explicit `--config PATH`. Slice 3B applies languages across both lanes;
 Slice 3C applies final effort estimates. Slice 3D applies thresholds and result
 limits. Slice 4 publishes the [configuration reference](CONFIGURATION.md), including
 every supported field/default/bound, current path behavior, generic examples, and
-offline validation. Slice 7 completes mandatory-config cutover.
+offline validation. Slice 7 completed the mandatory-config cutover.
 
 ```toml
 version = 1
@@ -276,18 +290,10 @@ lists or state. Multi-profile support remains deferred.
 
 ## Implementation sequence and acceptance
 
-Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 is merged in
-PR #34 with the preference model, parser, example, and regressions. Slice 3A
-merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR #36
-with language preferences. Slice 3C merged in PR #37 with effort preferences.
-Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
-merged in PR #39 with configuration guidance and validated examples. Slice 5 merged
-in PR #40 with the public action and private-instance template. Slice 6 private
-operational acceptance is **verified**, with supporting evidence retained privately.
-Slice 7 implements retirement and mandatory configuration after the verified
-private acceptance and merged PR #41. Stop at its focused open-PR boundary.
-Complete them in order through small, independently verified PRs; 3A–3D remain
-separate slices.
+Slices 1–7 were completed in order through PR #42. Slice 6 operational acceptance
+was verified privately before Slice 7 retired upstream production-instance
+responsibilities and completed the mandatory-config cutover. Slices 3A–3D remained
+separate focused changes, as planned.
 
 Slice 1 establishes the Python support contract:
 
@@ -302,26 +308,25 @@ Slice 1 establishes the Python support contract:
   and its compatibility checks pass. `>=3.12` therefore never means arbitrary
   untested future interpreters.
 
-| Slice | Deliverable | Acceptance gate |
-| --- | --- | --- |
-| 1 | Raise the minimum runtime to Python 3.12 and add stable-version compatibility CI across workflows and documentation | Full strict quality gate on 3.12; recursive compile + tests on every stable CPython release >=3.12 available when the slice lands; no configuration changes; no newer-than-3.12 syntax; later Python releases are not supported until their CI checks pass |
-| 1B | Fix coverage completeness independently of warning thresholds | Any recognized verification/discovery failure prevents state advancement, including quiet-run maintenance |
-| 2 | Add immutable preferences, strict TOML parser, and generic example | Parser regressions; existing invocation behavior preserved |
-| 3A | Wire explicit config/state paths, repositories, exclusions, lanes, and global discovery | Disabled sources make no requests; legacy and configured invocation both work |
-| 3B | Wire language preferences | Cached metadata reused; no increased Search fan-out |
-| 3C | Wire effort preferences | Final estimates control acceptance; rejected candidates do not consume selection slots |
-| 3D | Wire thresholds and result limits | Final classification governs thresholds; deterministic ranking preserved |
-| 4 | Publish configuration guidance and validated examples | Every documented command and field works |
-| 5 | Add a public pinned composite action and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; post-delivery persistence failure preserves the resulting state as a private short-retention recovery artifact before the workflow fails; no persistent upstream deployment created |
-| 6 | Recover and migrate the personal instance privately | Trustworthy state seeded; private delivery, persistence, and subsequent deduplication verified |
-| 7 | Remove canonical public upstream production-instance responsibilities and complete config cutover | Slice 6 proven; upstream retains only development/release CI and reusable execution machinery |
+| Slice | Deliverable | Acceptance gate | Status |
+| --- | --- | --- | --- |
+| 1 | Raise the minimum runtime to Python 3.12 and add stable-version compatibility CI across workflows and documentation | Full strict quality gate on 3.12; recursive compile + tests on every stable CPython release >=3.12 available when the slice lands; no configuration changes; no newer-than-3.12 syntax; later Python releases are not supported until their CI checks pass | Complete |
+| 1B | Fix coverage completeness independently of warning thresholds | Any recognized verification/discovery failure prevents state advancement, including quiet-run maintenance | Complete |
+| 2 | Add immutable preferences, strict TOML parser, and generic example | Parser regressions; existing invocation behavior preserved | Complete |
+| 3A | Wire explicit config/state paths, repositories, exclusions, lanes, and global discovery | Disabled sources make no requests; legacy and configured invocation both work | Complete |
+| 3B | Wire language preferences | Cached metadata reused; no increased Search fan-out | Complete |
+| 3C | Wire effort preferences | Final estimates control acceptance; rejected candidates do not consume selection slots | Complete |
+| 3D | Wire thresholds and result limits | Final classification governs thresholds; deterministic ranking preserved | Complete |
+| 4 | Publish configuration guidance and validated examples | Every documented command and field works | Complete |
+| 5 | Add a public pinned composite action and a generic private-instance template | Private instance owns triggers, schedules, concurrency, secrets, config, state, persistence, delivery configuration, and scanner pin; post-delivery persistence failure preserves the resulting state as a private short-retention recovery artifact before the workflow fails; no persistent upstream deployment created | Complete |
+| 6 | Recover and migrate the personal instance privately | Trustworthy state seeded; private delivery, persistence, and subsequent deduplication verified | Complete |
+| 7 | Remove canonical public upstream production-instance responsibilities and complete config cutover | Slice 6 proven; upstream retains only development/release CI and reusable execution machinery | Complete |
 
-Slice 1 inspects all runtime declarations, updates existing sources of truth
-together, deliberately drops 3.11 compatibility, keeps syntax/types/tooling pinned
-to the 3.12 baseline, and adds compatibility CI for every stable CPython release
->=3.12 available when the slice lands. Do not add packaging metadata solely to
-declare the minimum version. Do not begin configuration or deployment implementation
-in that PR.
+Slice 1 inspected all runtime declarations, updated existing sources of truth
+together, deliberately dropped 3.11 compatibility, kept syntax/types/tooling pinned
+to the 3.12 baseline, and added compatibility CI for every stable CPython release
+>=3.12 available when the slice landed. It did not add packaging metadata solely to
+declare the minimum version or begin configuration/deployment implementation.
 
 For Slice 5, the chosen mechanism is a public composite action executing scanner
 source from its pinned action directory. The private workflow owns surrounding
@@ -342,32 +347,49 @@ serialization begins; reject stale writes without force-pushing. The pending que
 is bounded, and concurrency does not guarantee exactly-once delivery. See
 [GitHub concurrency semantics](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
-Slice 7 removes the upstream persistent scout workflow, `scout-state` ownership,
+Slice 7 removed the upstream persistent scout workflow, `scout-state` ownership,
 personal state persistence, deployment-only permissions, and documentation implying
 upstream is a production scout. The CLI no longer uses source defaults without
 configuration; personal preferences belong in private `scout.toml`. Generic schema
 defaults, curated sources, verification and ranking remain scanner policy. Obsolete
-branch/worktree transport is removed without deleting historical Git objects or
-private state. The empty root state seed moves to `examples/seen_bounties.example.json`;
+branch/worktree transport was removed without deleting historical Git objects or
+private state. The empty root state seed moved to `examples/seen_bounties.example.json`;
 root instance config/state are ignored by Git. Development CI retains read
 permissions; the public action and inactive private template remain reusable assets.
 
+## Post-migration correctness follow-ups
+
+PR #43 added the durable `.scout/recovery-required` barrier for failed remote
+persistence. The exact resulting state is preserved in the private short-retention
+recovery artifact; marker establishment starts from current remote history. Later
+runs fetch current private state and fail before scanner execution while the marker
+exists. Queue cancellation runs separately with only Actions write permission and
+remains defense in depth. Only deliberate operator recovery removes the marker.
+Delivery and persistence remain separate operations with no exactly-once claim.
+
+PR #44 moved language eligibility for authoritative direct-source repositories to
+immediately after the already-required cached repository-metadata lookup and before
+bounded base/adaptive inspection. Recognized wrapper/aggregator sources defer
+language judgment until upstream resolution. Final verification still rechecks the
+resolved repository's authoritative language. Search and repository-metadata
+fan-out are unchanged, and configured-repository scoring semantics were not changed.
+
 ## Historical state migration and recovery
 
-Slice 6 is operational work performed privately, after the preceding slices:
+Slice 6 was operational work performed privately. Its acceptance record required:
 
-1. Check later state sources before selecting the latest trustworthy snapshot;
-   `f96022aa161974701e7ff906b48946cbfbb2f663` is a candidate, not proof of freshness.
-2. Parse the selected snapshot with the canonical version-2 parser and record its
-   provenance and entry count without publishing opportunity contents.
-3. Create an independent private instance repository and populate its personal
-   `scout.toml`, workflow, scanner pin, secrets, and private delivery configuration.
-4. Seed `seen_bounties.json` from the selected historical snapshot and verify it was
-   not replaced by the empty public example or treated as a first run.
-5. Run manually and verify discovery, privacy-verified delivery, and remote state
-   persistence; verify a subsequent run does not repeat previously reported URLs.
-6. Verify serialization and stale-write handling before retiring upstream
-   responsibilities. Keep the initial private deployment manual-only.
+1. Later state sources were checked before selecting the latest trustworthy snapshot;
+   `f96022aa161974701e7ff906b48946cbfbb2f663` remained a candidate, not proof of freshness.
+2. The selected snapshot was parsed with the canonical version-2 parser and its
+   provenance/entry count recorded without publishing opportunity contents.
+3. An independent private instance was provisioned with private configuration,
+   workflow, scanner pin, secrets, and delivery configuration.
+4. `seen_bounties.json` was seeded from recovered history and verified not to be the
+   empty public example or a first-run reset.
+5. Manual execution verified discovery, privacy-verified delivery, remote state
+   persistence, and subsequent deduplication.
+6. Serialization and stale-write handling were verified before upstream production
+   responsibilities were retired; the initial private deployment remained manual-only.
 
 Keep the acceptance record privately using the
 [Slice 6 evidence checklist](PRIVATE_INSTANCE.md#slice-6-private-acceptance-record).
@@ -396,48 +418,39 @@ its own credential, that credential is never reused for scanner discovery, and i
 metadata check must report `private: true`. Config files and public docs contain no
 secrets or private opportunity contents.
 
-If delivery succeeds but remote state persistence fails, the deployment must first
-preserve the exact resulting `seen_bounties.json` outside the ephemeral runner, for
-example as a private, short-retention GitHub Actions recovery artifact, and then
-fail the workflow. That artifact is recovery-only, not the primary state backend.
-Before rerunning, the operator must restore that preserved snapshot into the private
-instance so already delivered opportunities remain seen. If the recovery snapshot
-cannot be preserved, do not treat an immediate rerun as safe; reconstruct the
-post-delivery state first. Never automatically replay delivery, reset to older
-state, force-push a stale snapshot, or claim exactly-once delivery.
+If delivery succeeds but remote state persistence fails, the private deployment
+preserves the exact resulting `seen_bounties.json` in a private short-retention
+recovery artifact and establishes `.scout/recovery-required` from current remote
+history before the shared transaction lock is released. A separate follow-up job
+with only `actions: write` cancels queued runs as defense in depth. Every later
+normal run fetches the current private default branch and fails before scanner
+execution while the marker exists. Operator recovery restores or reconciles state,
+removes the marker deliberately, and verifies remote state before scanning resumes.
+Never automatically replay delivery, reset to older state, force-push a stale
+snapshot, or claim exactly-once delivery.
 
-## Quality and slice protocol
+## Historical quality and slice protocol
 
-At the start of each slice, verify actual latest `main`, merged prerequisite PRs,
-worktree state, and the current Python Quality baseline. Branch from that verified
-`main`. Finish one logical slice and its docs/tests, run `make format` once if
-Python changed, then run `make quality`. Do not weaken Ruff, recursive compilation,
-strict mypy, all tests, or 100% statement and branch coverage. Unit tests remain
-independent of live network access.
+Slices 1–7 each began from verified current `main`, with prerequisite PRs and the
+current Python Quality baseline checked before branching. Each slice kept one
+logical boundary, ran the repository quality gate, and preserved Ruff, recursive
+compilation, strict mypy, all tests, and 100% statement/branch coverage. Operational
+verification stayed private.
 
-Required regressions include invalid configuration, disabled-source request counts,
-refreshed classifications, filtering before selection limits, incomplete coverage,
-aggregate delivery, state corruption/save failure, and custom state paths. Verify
-deployment serialization, version pins, private ownership, and stale-push failure
-with appropriate workflow checks; operational verification stays private.
+The migration used one focused PR per slice and stopped at the open-PR boundary for
+review. Those slices are now all merged; future work must not reuse or renumber the
+completed migration slices. General focused-PR and verify-current-`main` practices
+remain in `CONTRIBUTING.md` and `AGENTS.md`.
 
-Commit the finalized slice, open one focused PR, and stop at the open-PR boundary.
-Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
-Do not bundle later phases, merge the PR, or retire upstream deployment early.
-
-**Current stopping boundary: implement Slice 7, open one focused PR, and stop
-unmerged.** PR #41 is merged and private Slice 6 acceptance remains satisfied.
 Historical recovery, independent private provisioning and deliberate seeding,
 reviewed scanner pin, manual-only execution, separate report credentials, intended
 private delivery, exact resulting-state remote persistence, and subsequent
-deduplication are verified privately. Controlled checks verified serialization,
-current-state reads after queued admission, stale-write rejection, private
-short-retention recovery-artifact preservation/download, and exact normal restoration.
-Operational evidence and operator choices remain private; this status makes no
-exactly-once delivery claim. Private instances deliberately adopt scanner pins;
-Slice 7 does not modify them.
+deduplication were verified privately. Controlled checks covered serialization,
+current-state reads after queued admission, stale-write rejection, recovery-artifact
+preservation, and recovery. Operational evidence and operator choices remain
+private; this record makes no exactly-once delivery claim.
 
-Slices 1–5 merged through PR #40; Slice 6 acceptance documentation merged in PR #41.
+Slices 1–7 are complete and merged through PR #42; Slice 6 operational acceptance remains verified privately.
 Every scan loads default `scout.toml` or exactly explicit `--config PATH` before
 state/network/delivery activity. Missing or invalid config never selects legacy
 defaults. All state reads and delivery/quiet-maintenance writes use `--state PATH`,
@@ -451,7 +464,7 @@ make coverage incomplete; bounded quiet maintenance remains available.
 
 ## Earlier slice implementation records
 
-These records describe behavior at each earlier slice. Slice 7 supersedes their
+These records describe behavior at each earlier slice. Slice 7 superseded their
 migration-era opt-in configuration and legacy invocation contracts.
 
 Slice 3A originally covered enabled-source request counts with/without prefetch, target
@@ -602,12 +615,13 @@ Local Slice 5 validation ran `make format` once, then passed
 all 460 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
 statement and branch coverage. The final real scanner pin was verified locally
 and the quality gate rerun after that YAML change. This records local validation;
-live private instance, delivery, and artifact upload validation remains Slice 6.
+live private-instance, delivery, and recovery-artifact validation was subsequently
+verified in Slice 6.
 
 Slice 5 merged in PR #40. Historical migration (Slice 6) and the private acceptance
-gates above are verified; supporting evidence stays private. Upstream retirement/
-mandatory-config cutover is implemented in Slice 7 below. PR #41 is merged;
-private evidence remains private.
+gates above were verified; supporting evidence stays private. PR #41 recorded that
+acceptance. Slice 7 then completed upstream retirement and the mandatory-config
+cutover in merged PR #42; private evidence remains private.
 
 
 ## Slice 7 implementation
@@ -643,5 +657,6 @@ all 463 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100
 statement and branch coverage (2,715 statements and 998 branches, no misses or
 partial branches). Offline documentation checks validated local links, TOML examples,
 and documented scan commands through mocked assembly without scanning or delivery.
-This records local validation, not a GitHub CI result. Open one focused Slice 7 PR
-and stop unmerged; no private pin upgrade or later work is implied.
+This records the local Slice 7 validation. PR #42 subsequently merged the cutover.
+Post-migration corrections #43 and #44 are recorded separately above and are not
+additional migration slices; no private pin upgrade is implied.

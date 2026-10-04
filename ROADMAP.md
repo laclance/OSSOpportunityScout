@@ -6,7 +6,7 @@ This file is intentionally forward-looking.
 - `CONTRIBUTING.md` is the human contributor guide.
 - `AGENTS.md` contains AI coding-agent execution rules.
 - `ARCHITECTURE.md` describes the current system and its invariants.
-- [Private deployment migration](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed migration contracts, ordered PR slices, prerequisites, recovery procedure, and progress.
+- [Private deployment migration](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) is the completed migration/acceptance record, including historical contracts, PR provenance, recovery, and ownership rationale.
 
 ## Current baseline
 
@@ -29,21 +29,22 @@ OSS Opportunity Scout is a package-owned scanner with:
 - a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, and private recovery artifacts (Slice 5)
 
 Slice 1B enforces coverage completeness independently of warning thresholds,
-including quiet-run maintenance. Slice 6 private migration and acceptance remain
-satisfied, with evidence kept private. Slice 7 removes upstream production-instance
-responsibilities and completes mandatory configuration. Historical state remains
-private; public examples never replace that history.
+including quiet-run maintenance. Slices 1–7 are complete through PR #42; Slice 6
+private acceptance remains satisfied with evidence kept private. PR #43 added the
+durable failed-persistence recovery barrier, and PR #44 moved direct-source language
+filtering ahead of bounded adaptive inspection. Historical state remains private;
+public examples never replace that history.
 
-## Near term
+## Completed migration baseline
 
-### Separate the public distribution from private scout instances
+### Public distribution and private scout instances
 
 `laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner version pin. Forks are optional for scanner-code customization, not runtime state ownership.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) records Slices 1–5
-merged through PR #40 and verified private Slice 6 acceptance in merged PR #41.
-Slice 7 implements upstream retirement and mandatory configuration and stops at
-its focused open PR. No later work or private scanner-pin upgrade is implicit.
+The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) records
+Slices 1–7 through merged PR #42 and the separately numbered post-migration
+correctness follow-ups #43 and #44. This ownership model is the current baseline,
+not an active migration phase. No private scanner-pin upgrade is implicit.
 
 Do not restore upstream scheduling or `scout-state` ownership. Any future schedule
 belongs to the private instance and requires a deliberate operational decision.
@@ -63,6 +64,7 @@ Prioritize improvements that materially increase the quality of the opportunity 
 - use report/audit feedback to reduce false positives and false negatives
 - improve source adapters where they add unique paid or strategic opportunities
 - refine ranking only with regression-backed evidence
+- decide separately whether `discovery.repositories` should receive the built-in target-repository scoring bonus; the migration closeout makes no scoring-policy decision
 - improve report readability and decision support without exposing private results publicly
 
 Preserve the separation between discovery, verification, scoring, delivery, and state.

@@ -9,7 +9,7 @@ OSS Opportunity Scout has two lanes with different risk profiles:
 
 The architecture should make those lanes easy to reason about without forcing contributors or AI tools to load the full scanner into context.
 
-## Deployment ownership and migration boundary
+## Deployment ownership
 
 > `laclance/OSSOpportunityScout` is a distribution and development repository, not a persistent scout instance.
 
@@ -19,12 +19,11 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the configuration
-contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–5 are
-merged through PR #40; Slice 6 operational acceptance is verified privately and
-PR #41 is merged. Slice 7 retires the persistent upstream workflow and its
-state-branch/worktree transport. Only development CI and reusable distribution
-assets remain upstream. No historical Git objects or private state are removed.
+The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves the
+configuration contracts, implementation sequence, recovery history, and acceptance
+gates. Slices 1–7 are complete through merged PR #42. PRs #43 and #44 are separate
+post-migration correctness follow-ups. Only development CI and reusable distribution
+assets remain upstream; no historical Git objects or private state were removed.
 
 Application assembly loads `scout.toml` from the working directory by default,
 or exactly the explicit `--config PATH`, before constructing runtime configuration,
@@ -188,8 +187,8 @@ unknown keys, malformed types, unsupported versions, and invalid values fail clo
 The public [example](scout.example.toml) lists the runtime defaults with optional
 `name` commented out; `name` currently has no runtime effect. The
 [configuration reference](docs/CONFIGURATION.md) documents fields, bounds, examples,
-and current CLI behavior; the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
-owns the agreed contracts and cutover sequence.
+and current CLI behavior; the [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
+records the contracts and completed cutover sequence.
 Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
 Application assembly always loads preferences from default `scout.toml` in the
 working directory or exactly explicit `--config PATH`, before loading state or
@@ -386,4 +385,4 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - `AGENTS.md` owns AI coding-agent execution rules.
 - `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
 - `ROADMAP.md` owns forward-looking work and sequencing.
-- `docs/PRIVATE_DEPLOYMENT_MIGRATION.md` owns agreed migration contracts, PR slices, prerequisites, recovery, and progress; target behavior stays labelled planned until its slice is implemented.
+- `docs/PRIVATE_DEPLOYMENT_MIGRATION.md` is the completed migration/acceptance record: historical contracts, PR slices, recovery, provenance, and final ownership boundaries.
