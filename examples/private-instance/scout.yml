@@ -18,8 +18,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
-      actions: write
       contents: write
+    outputs:
+      recovery_required: ${{ steps.recovery_handoff.outputs.required }}
+      recovery_outcome: ${{ steps.recovery_handoff.outputs.recovery_outcome }}
+      recovery_barrier_outcome: ${{ steps.recovery_handoff.outputs.recovery_barrier_outcome }}
     env:
       INSTANCE_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
@@ -144,9 +147,29 @@ jobs:
           # Ordinary push preserves any newer remote history by failing on a race.
           git -C "$barrier_worktree" push origin "HEAD:refs/heads/$INSTANCE_BRANCH"
 
+      - name: Publish persistence-failure recovery handoff
+        id: recovery_handoff
+        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        shell: bash
+        env:
+          RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
+          RECOVERY_BARRIER_OUTCOME: ${{ steps.recovery_barrier.outcome }}
+        run: |
+          set -euo pipefail
+          printf 'required=true\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery_outcome=%s\n' "$RECOVERY_OUTCOME" >> "$GITHUB_OUTPUT"
+          printf 'recovery_barrier_outcome=%s\n' "$RECOVERY_BARRIER_OUTCOME" >> "$GITHUB_OUTPUT"
+
+  cancel_queued:
+    needs: scout
+    if: ${{ always() && needs.scout.outputs.recovery_required == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
       - name: Cancel queued state transactions before releasing lock
         id: cancel_queued
-        if: ${{ always() && steps.persist.outcome == 'failure' }}
         continue-on-error: true
         shell: bash
         env:
@@ -174,11 +197,11 @@ jobs:
           done <<< "$queued_run_ids"
 
       - name: Fail persistence transaction after recovery attempt
-        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        if: ${{ always() }}
         shell: bash
         env:
-          RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
-          RECOVERY_BARRIER_OUTCOME: ${{ steps.recovery_barrier.outcome }}
+          RECOVERY_OUTCOME: ${{ needs.scout.outputs.recovery_outcome }}
+          RECOVERY_BARRIER_OUTCOME: ${{ needs.scout.outputs.recovery_barrier_outcome }}
           QUEUE_CANCEL_OUTCOME: ${{ steps.cancel_queued.outcome }}
         run: |
           set -euo pipefail
