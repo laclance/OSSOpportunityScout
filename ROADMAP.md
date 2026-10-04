@@ -6,11 +6,10 @@ This file is intentionally forward-looking.
 - `CONTRIBUTING.md` is the human contributor guide.
 - `AGENTS.md` contains AI coding-agent execution rules.
 - `ARCHITECTURE.md` describes the current system and its invariants.
-- `PROVENANCE.md` records project history and the standalone boundary.
 
 ## Current baseline
 
-OSS Opportunity Scout is now a standalone, package-owned scanner with:
+OSS Opportunity Scout is a package-owned scanner with:
 
 - a stable `python opportunity_scout.py` entry point
 - typed/versioned transactional seen-state
@@ -39,25 +38,11 @@ When native scheduling is reconsidered:
 
 Do not add an external scheduler unless the deployment strategy is explicitly changed.
 
-### Decommission the historical development repository
-
-The historical `laclance/BountyScout` scanner is disabled and is no longer part of the production runtime.
-
-Before archive or deletion, perform one preservation audit covering:
-
-- unique issues/PR context
-- workflow history
-- repository settings/configuration worth retaining
-- provenance/reference value
-- any unique documentation
-
-Then choose archive or deletion deliberately.
-
 ### Establish a release baseline
 
-Consider tagging the current standalone state as the first stable OSS release once the desired public release/versioning convention is chosen.
+Consider tagging the current project state as the first stable OSS release once the desired public release/versioning convention is chosen.
 
-A release should summarize the standalone boundary, private-reporting model, GitHub API contract, and manual-only production status without reproducing internal migration history.
+A release should summarize the private-reporting model, GitHub API contract, and manual-only production status.
 
 ## Product improvements
 

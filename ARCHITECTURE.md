@@ -111,10 +111,6 @@ package/domain modules -X-> bountyscout.app
 
 New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `bountyscout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
 
-## Historical context
-
-For migration history and the standalone repository boundary, see `PROVENANCE.md`. Current architecture is defined by the module boundaries and contracts in this document.
-
 ## GitHub integration contract
 
 ### REST identity and version
@@ -211,7 +207,7 @@ Developer Program. Program participation is not GitHub approval, certification, 
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
 - `bountyscout.state` knows only the local state file. Production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
-- GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. A default standalone deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
+- GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. The bundled deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
 - Tests must cover scanner policy without live network access.
@@ -224,4 +220,3 @@ Developer Program. Program participation is not GitHub approval, certification, 
 - `AGENTS.md` owns AI coding-agent execution rules.
 - `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
 - `ROADMAP.md` owns forward-looking work and sequencing.
-- `PROVENANCE.md` owns project history and the standalone boundary.
