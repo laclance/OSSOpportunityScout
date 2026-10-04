@@ -12,8 +12,8 @@ score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
 configuration guidance/examples published by Slice 4 (merged in PR #39), and public
 execution/private template assets supplied by Slice 5 (merged in PR #40).
 Slice 6 private migration and its operational acceptance are verified, with evidence
-retained privately. Upstream retirement and mandatory-config cutover remain planned
-Slice 7 work.
+retained privately; PR #41 is merged. Slice 7 implements upstream retirement and
+mandatory-config cutover and stops at its focused open PR.
 
 ## Repository and workflow ownership
 
@@ -87,8 +87,9 @@ Snapshot verified on 2026-10-04; recheck it at the start of every slice:
   3.15 is listed as pre-release and is not supported.
 - PR #29 fixed paid claim-comment verification failing open; PR #30 made state-save
   failure fail the scanner process. Both are merged in this baseline.
-- The legacy upstream workflow is manual-only and requires `scout-state`; that
-  branch is absent remotely, so its restore step cannot succeed.
+- At the original migration baseline, the legacy upstream workflow was manual-only
+  and required an absent remote `scout-state` branch, blocking restore. Slice 7
+  removes that workflow; this remains historical context, not a runtime contract.
 - Historical candidate `f96022aa161974701e7ff906b48946cbfbb2f663` is available locally
   and parses as version 2 with eight entries. This does not establish that it is
   the latest trustworthy production snapshot.
@@ -194,12 +195,13 @@ Configuration contains preferences, never credentials or correctness controls.
 The generic v1 [scout.example.toml](../scout.example.toml) fixes the field names and
 defaults below. Slice 3A loads an explicit `--config PATH` and applies repositories,
 exclusions, lanes, and strategic global-search control. `--state PATH` selects every
-state read/write, independently of config. Legacy no-config invocation remains
-available and ignores `scout.toml`. Slice 3B applies languages across both lanes;
+state read/write, independently of config. Slice 7 supersedes the migration-era
+no-config behavior: every scan requires `scout.toml` from the working directory or
+exactly the explicit `--config PATH`. Slice 3B applies languages across both lanes;
 Slice 3C applies final effort estimates. Slice 3D applies thresholds and result
 limits. Slice 4 publishes the [configuration reference](CONFIGURATION.md), including
 every supported field/default/bound, current path behavior, generic examples, and
-offline validation. Mandatory-config cutover remains Slice 7.
+offline validation. Slice 7 completes mandatory-config cutover.
 
 ```toml
 version = 1
@@ -258,11 +260,11 @@ max_results = 8
   sound when refresh changes effort or paid classification. Preserve deterministic
   ranking and existing discovery/verification budgets.
 - Application assembly accepts `--config PATH` and `--state PATH`, retaining the
-  thin executable shim. Explicit configuration is opt-in; no-config invocation
-  remains available during migration. All state reads and writes use the selected
-  path, relative to the working directory unless absolute; the parent must exist.
-  In Slice 7, after verified private cutover, the default invocation will require
-  `scout.toml`; missing/invalid config must never silently select legacy defaults.
+  thin executable shim. The default invocation requires `scout.toml`; explicit
+  `--config PATH` selects exactly that file. Missing/unreadable/invalid config fails
+  before runtime assembly, state loading, network, maintenance, or delivery, with
+  no legacy fallback. All state reads and writes use the selected path, relative
+  to the working directory unless absolute; the parent must exist.
 
 Keep parsing, selection, verification, scoring, reporting, and persistence cohesive.
 Use pure selection functions, typed inputs, narrow injected dependencies, and
@@ -282,7 +284,8 @@ Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
 merged in PR #39 with configuration guidance and validated examples. Slice 5 merged
 in PR #40 with the public action and private-instance template. Slice 6 private
 operational acceptance is **verified**, with supporting evidence retained privately.
-Slice 7 remains **planned** and requires separate authorization.
+Slice 7 implements retirement and mandatory configuration after the verified
+private acceptance and merged PR #41. Stop at its focused open-PR boundary.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -340,10 +343,14 @@ is bounded, and concurrency does not guarantee exactly-once delivery. See
 [GitHub concurrency semantics](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
 Slice 7 removes the upstream persistent scout workflow, `scout-state` ownership,
-personal state persistence, permissions required solely for that deployment, and
-documentation implying upstream itself is a production scout. Remove personal
-hard-coded defaults and obsolete branch/worktree contracts only after the private
-instance is proven. Generic examples and reusable execution machinery may remain.
+personal state persistence, deployment-only permissions, and documentation implying
+upstream is a production scout. The CLI no longer uses source defaults without
+configuration; personal preferences belong in private `scout.toml`. Generic schema
+defaults, curated sources, verification and ranking remain scanner policy. Obsolete
+branch/worktree transport is removed without deleting historical Git objects or
+private state. The empty root state seed moves to `examples/seen_bounties.example.json`;
+root instance config/state are ignored by Git. Development CI retains read
+permissions; the public action and inactive private template remain reusable assets.
 
 ## Historical state migration and recovery
 
@@ -418,24 +425,23 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 6 documentation PR #41 remains draft and
-unmerged; private operational acceptance is verified.** Historical recovery,
-independent private provisioning and deliberate seeding, reviewed scanner pin,
-manual-only execution, separate report credentials, intended private delivery,
-exact resulting-state remote persistence, and subsequent deduplication are verified
-privately. Controlled checks verified serialization, current-state reads after
-queued admission, stale-write rejection, private short-retention recovery-artifact
-preservation/download, and exact normal restoration before scanning. Operational
-evidence and operator choices remain private; this status makes no exactly-once
-delivery claim. Keep upstream responsibilities and legacy invocation intact;
-do not begin Slice 7.
-Slice 2 merged in PR #34;
-Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37;
-Slice 3D merged in PR #38; Slice 4 merged in PR #39; Slice 5 merged in PR #40.
-Explicit `--config PATH` loads and validates preferences before state/network/delivery
-activity; missing or invalid explicit config never selects defaults. No-config
-invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
-writes use `--state PATH`, defaulting to `seen_bounties.json`; the parent must exist.
+**Current stopping boundary: implement Slice 7, open one focused PR, and stop
+unmerged.** PR #41 is merged and private Slice 6 acceptance remains satisfied.
+Historical recovery, independent private provisioning and deliberate seeding,
+reviewed scanner pin, manual-only execution, separate report credentials, intended
+private delivery, exact resulting-state remote persistence, and subsequent
+deduplication are verified privately. Controlled checks verified serialization,
+current-state reads after queued admission, stale-write rejection, private
+short-retention recovery-artifact preservation/download, and exact normal restoration.
+Operational evidence and operator choices remain private; this status makes no
+exactly-once delivery claim. Private instances deliberately adopt scanner pins;
+Slice 7 does not modify them.
+
+Slices 1–5 merged through PR #40; Slice 6 acceptance documentation merged in PR #41.
+Every scan loads default `scout.toml` or exactly explicit `--config PATH` before
+state/network/delivery activity. Missing or invalid config never selects legacy
+defaults. All state reads and delivery/quiet-maintenance writes use `--state PATH`,
+defaulting to `seen_bounties.json`; the parent must exist.
 Repository targets add strategic curated sources in first-seen, case-insensitive
 order; exclusions take precedence across both lanes, including resolved upstream
 repositories. Disabled lanes skip their discovery sources and reject corresponding
@@ -443,7 +449,12 @@ final classifications before repository-slot settlement and queue truncation.
 `global_search` controls strategic global discovery only. Disabled sources do not
 make coverage incomplete; bounded quiet maintenance remains available.
 
-Regressions cover enabled-source request counts with/without prefetch, target
+## Earlier slice implementation records
+
+These records describe behavior at each earlier slice. Slice 7 supersedes their
+migration-era opt-in configuration and legacy invocation contracts.
+
+Slice 3A originally covered enabled-source request counts with/without prefetch, target
 addition/deduplication, exclusions in source pools and after refresh/aggregator
 resolution, final classifications and selection slots, configured/legacy executable
 invocation, explicit invalid configuration, and custom state deduplication,
@@ -595,5 +606,42 @@ live private instance, delivery, and artifact upload validation remains Slice 6.
 
 Slice 5 merged in PR #40. Historical migration (Slice 6) and the private acceptance
 gates above are verified; supporting evidence stays private. Upstream retirement/
-mandatory-config cutover (Slice 7) remains deferred. Do not merge the Slice 6
-documentation PR or start a later slice implicitly.
+mandatory-config cutover is implemented in Slice 7 below. PR #41 is merged;
+private evidence remains private.
+
+
+## Slice 7 implementation
+
+Starting clean local/fetched `main`: `540d3fd07c34431554808be3e725b0c90549e5fa`.
+PR #41 was confirmed merged on 2026-10-04; private Slice 6 acceptance remains
+satisfied as confirmed by the operator. Baseline `make quality` on Python 3.12.3
+passed all 460 tests, every strict gate, and 100% statement/branch coverage.
+
+Slice 7 deletes the active upstream scout workflow and its production state-branch/
+worktree persistence, deployment permissions, and delivery-secret wiring. Only
+Python Quality CI remains active with `contents: read`. The reusable composite
+action and inactive private template remain. The empty root state file is relocated
+to a generic example; root instance config/state are ignored. No historical Git
+objects, branches, worktrees, private state, or private operational evidence are
+modified or deleted.
+
+The CLI requires `scout.toml` in the working directory by default, or exactly
+`--config PATH`. Both load before runtime assembly/state/network/delivery, with no
+legacy fallback. `--state PATH` and all verification, privacy, coverage, delivery,
+lifecycle maintenance, ranking, and local state contracts remain intact. Generic
+schema defaults and curated scanner policy remain unchanged; personal choices
+belong to private configuration. Documentation and examples describe current
+ownership and invocation consistently.
+
+Targeted regressions cover default executable and state-only invocation, explicit
+overrides beside missing/invalid/different defaults, missing/malformed/unsupported/
+unreadable/non-UTF-8 config before I/O, help without config, unchanged request
+budgets and selection, and the absence of upstream deployment/state responsibilities.
+After one `make format` across the completed Python worktree,
+`make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed on Python 3.12.3:
+all 463 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
+statement and branch coverage (2,715 statements and 998 branches, no misses or
+partial branches). Offline documentation checks validated local links, TOML examples,
+and documented scan commands through mocked assembly without scanning or delivery.
+This records local validation, not a GitHub CI result. Open one focused Slice 7 PR
+and stop unmerged; no private pin upgrade or later work is implied.

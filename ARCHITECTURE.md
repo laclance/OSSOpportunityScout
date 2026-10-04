@@ -19,14 +19,25 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–4 are merged through PR #39, providing Python support, coverage completeness, explicit immutable configuration and final preferences, and [configuration guidance](docs/CONFIGURATION.md). Slice 5 merged in PR #40 with reusable execution and a private template. Slice 6 private instance migration and operational acceptance are verified, with evidence retained privately. The legacy workflow still expects `scout-state`; upstream retirement and mandatory-config cutover remain separate, unstarted Slice 7 work.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the configuration
+contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–5 are
+merged through PR #40; Slice 6 operational acceptance is verified privately and
+PR #41 is merged. Slice 7 retires the persistent upstream workflow and its
+state-branch/worktree transport. Only development CI and reusable distribution
+assets remain upstream. No historical Git objects or private state are removed.
+
+Application assembly loads `scout.toml` from the working directory by default,
+or exactly the explicit `--config PATH`, before constructing runtime configuration,
+loading state, or doing network/delivery work. Missing or invalid config fails
+closed without legacy defaults. Root instance config/state are ignored by Git;
+the empty seed is distributed as `examples/seen_bounties.example.json`.
 
 ### Public action and private transaction template
 
 Root `action.yml` runs the scanner from its pinned `github.action_path` using
 isolated Python 3.12. It explicitly supplies config/state paths and separate
 discovery/delivery credentials, disables host reporting, and leaves Git transport
-to the caller. No scanner policy, local state semantics, or legacy CLI default changes.
+to the caller. Scanner policy and local state semantics remain unchanged.
 
 `examples/private-instance/scout.yml` is an inactive distribution template, outside
 upstream workflows. The private caller restricts execution to its private default
@@ -60,7 +71,7 @@ GitHub + bounty-platform sources
  ranked queue + audit diagnostics
             |
             v
- configured delivery channels (private GitHub in legacy workflow)
+ instance-configured delivery channels
             |
             v
       seen_bounties.json
@@ -75,7 +86,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout.py` | Stable executable entry point that calls `opportunity_scout.app.main()` | Root shim only; no scanner policy or compatibility façade |
 | `opportunity_scout/app.py` | Package-only executable/application assembly, CLI/environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
-| `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run; loaded explicitly by application assembly |
+| `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run; required by application assembly using the default or explicit path |
 | `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions and language matching, exact final-effort matching, lane acceptance, and classification-based score thresholds | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
 | `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
 | `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
@@ -92,7 +103,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `opportunity_scout.app` |
 | `opportunity_scout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` (or `--state PATH`) | Selected local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
-| `.github/workflows/oss-opportunity-scout.yml` | Legacy upstream scanner execution | Manual-only; requires the remote `scout-state` branch, absent as verified on 2026-10-04; retired after private migration is proven |
+| `examples/seen_bounties.example.json` | Generic empty version-2 state seed | New instances only; never a replacement for historical state |
 | `.github/workflows/python-quality.yml` | Authoritative formatting, lint, recursive compile, strict typing, tests, and coverage on Python 3.12; recursive compile and full-suite compatibility checks on 3.13 and 3.14 | Explicit CI versions define support; later releases require passing CI before support is claimed |
 | `action.yml` | Pinned-source composite scanner execution with explicit config/state and credentials | No instance checkout, Git persistence, or trigger ownership |
 | `examples/private-instance/scout.yml` | Generic manual private caller and serialized scan/state/recovery transaction | Private instance owns the deployed copy and pin; inactive in upstream |
@@ -167,10 +178,10 @@ The public [example](scout.example.toml) lists the runtime defaults with optiona
 and current CLI behavior; the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
 owns the agreed contracts and cutover sequence.
 Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
-Application assembly loads preferences only for `--config PATH`, before loading
-state or performing network/delivery activity. Invalid explicit configuration raises
-`ScoutPreferencesError` without falling back to defaults. Without `--config`, even
-an existing `scout.toml` is ignored. `--state PATH` is independent of config and
+Application assembly always loads preferences from default `scout.toml` in the
+working directory or exactly explicit `--config PATH`, before loading state or
+performing network/delivery activity. Missing or invalid configuration raises
+`ScoutPreferencesError` without falling back to legacy defaults. `--state PATH` is independent of config and
 defaults to `seen_bounties.json`; `RunConfig.state_path` reaches every state read and
 both delivery and quiet-maintenance saves. State code remains branch-agnostic.
 
@@ -246,15 +257,11 @@ compatibility work; the scanner does not automatically track GitHub's newest RES
 
 ### Authentication and workflow permissions
 
-The legacy upstream GitHub Action receives `GITHUB_TOKEN` for repository-scoped scanner GitHub REST
-access. The checkout credential also persists `seen_bounties.json` by pushing the production
-state snapshot to `scout-state`, so that workflow currently requires `contents: write`. It does
-not grant `issues: write` because host-repository reports are not enabled in that deployment.
-
-The Slice 5 private template uses workflow `permissions: {}` and job `contents: write`
-for discovery and same-repository persistence, without Issues write. Private report
-credentials remain separate. Upstream removes its legacy deployment-only permissions
-after private migration is proven. Python state code remains branch-agnostic.
+Upstream development CI grants only `contents: read` and has no scanner deployment
+job or delivery secrets. The inactive private template uses workflow
+`permissions: {}` and job `contents: write` for discovery and same-repository
+persistence, without Issues write. Instances own their permissions and credentials;
+private-report credentials remain separate. Python state code is branch-agnostic.
 
 Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
 `GITHUB_REPOSITORY` alone never enable them; a custom deployment must set
@@ -264,7 +271,7 @@ Private reports use a separate credential boundary:
 
 ```text
 scanner GITHUB_TOKEN
--> scanner GitHub REST access + scout-state repository persistence context
+-> scanner GitHub REST access; private caller may also use it for same-instance persistence
 
 PRIVATE_GITHUB_REPORTS_TOKEN
 -> private report repository metadata verification + issue creation only
@@ -305,7 +312,7 @@ implemented. Per-run caches already eliminate important duplicate reads, while u
 conditional reuse would require persistent ownership of both validators and the prior response
 bodies. That complexity is not currently justified by measured request volume.
 
-The legacy `scout-state` contract is persistence for scanner seen-state, not an HTTP cache.
+Instance-owned seen-state is deduplication/lifecycle persistence, not an HTTP cache.
 GitHub validators and response bodies must not be stored in seen-state. Conditional requests
 can be reconsidered if polling or request volume materially increases.
 
@@ -344,8 +351,8 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - Seen-state maintenance is bounded to 20 direct GitHub issue checks per successful run with a 30-day minimum recheck interval. Selection is deterministic: never-checked entries first, then oldest `last_checked_at`, then URL. `last_checked_at` records the maintenance attempt time, including not-found and failed checks, so one bad entry cannot monopolize later maintenance batches.
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
-- `opportunity_scout.state` knows only the local state file, and Python state code contains no Git branch/worktree logic. Git transport belongs to the instance workflow; the current legacy workflow uses `scout-state`, while the target private repository owns its state/history without an upstream state-branch contract.
-- GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. The bundled deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
+- `opportunity_scout.state` knows only the local state file, and Python state code contains no Git branch/worktree logic. Git transport belongs to the private instance workflow, which owns its state/history without an upstream state-branch contract.
+- GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. Reusable execution machinery must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
 - Tests must cover scanner policy without live network access.

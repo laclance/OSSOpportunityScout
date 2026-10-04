@@ -3,10 +3,9 @@ from __future__ import annotations
 import io
 import os
 import runpy
-import tempfile
 import unittest
 import urllib.request
-from contextlib import chdir, redirect_stdout
+from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, cast
@@ -1540,23 +1539,6 @@ class DiscoveryTests(unittest.TestCase):
 
 
 class FormattingAndMainTests(unittest.TestCase):
-    def test_legacy_main_ignores_scout_toml_and_does_not_load_preferences(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            Path(directory, "scout.toml").write_text("not valid TOML", encoding="utf-8")
-            with (
-                chdir(directory),
-                patch.dict(os.environ, {"GITHUB_TOKEN": "tok"}, clear=True),
-                patch.object(preferences, "load_scout_preferences") as loader,
-                patch.object(run, "run_combined_scan") as combined,
-            ):
-                scout.main([])
-            loader.assert_not_called()
-            combined.assert_called_once()
-            config = combined.call_args.args[0]
-            self.assertIsInstance(config, run.RunConfig)
-            self.assertEqual(config.token, "tok")
-            self.assertEqual(combined.call_args.kwargs["report_limit"], scout.REPORT_LIMIT)
-
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
         paid_prefetch: list[SearchBatch] = [("paid-q", {"items": []})]
@@ -1564,16 +1546,21 @@ class FormattingAndMainTests(unittest.TestCase):
 
         def prefetch(
             _token: str | None,
+            *,
+            scout_preferences: preferences.ScoutPreferences,
         ) -> tuple[list[SearchBatch], list[SearchBatch]]:
             order.append("searches")
             return paid_prefetch, strategic_prefetch
 
-        def paid(*args: Any) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
+        def paid(
+            *args: Any, **kwargs: Any
+        ) -> tuple[list[dict[str, Any]], dict[str, int], list[dict[str, Any]]]:
             order.append("paid")
             return [], {}, []
 
         def strategic_discovery(
             *args: Any,
+            **kwargs: Any,
         ) -> tuple[
             list[dict[str, Any]],
             dict[str, int],
@@ -1595,7 +1582,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(scout, "discover_paid", side_effect=paid) as paid_discovery,
             patch.object(scout, "discover_strategic", side_effect=strategic_discovery) as strategic,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         self.assertEqual(order, ["searches", "paid", "strategic"])
         self.assertIs(paid_discovery.call_args.args[4], paid_prefetch)
@@ -1622,7 +1611,12 @@ class FormattingAndMainTests(unittest.TestCase):
                     patch.dict(os.environ, env, clear=True),
                     patch.object(run, "run_combined_scan") as combined,
                 ):
-                    scout.main([])
+                    scout.main(
+                        [
+                            "--config",
+                            str(Path(__file__).resolve().parents[1] / "scout.example.toml"),
+                        ]
+                    )
 
                 config = combined.call_args.args[0]
                 self.assertEqual(config.token, "tok")
@@ -1640,7 +1634,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(scout, "discover_paid") as discover_paid,
         ):
             with self.assertRaises(state.SeenStateLoadError):
-                scout.main([])
+                scout.main(
+                    ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+                )
 
         discover_paid.assert_not_called()
 
@@ -1653,7 +1649,9 @@ class FormattingAndMainTests(unittest.TestCase):
             io.StringIO() as buf,
             redirect_stdout(buf),
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
             self.assertIn("No new verified OSS opportunities found.", buf.getvalue())
 
     def test_main_dedupes_notifies_reports_and_saves(self) -> None:
@@ -1708,7 +1706,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
         tg.assert_called_once()
         dc.assert_called_once()
         gh.assert_called_once()
@@ -1768,7 +1768,12 @@ class FormattingAndMainTests(unittest.TestCase):
                         patch.object(state, "save_seen_state") as save,
                         redirect_stdout(output),
                     ):
-                        scout.main([])
+                        scout.main(
+                            [
+                                "--config",
+                                str(Path(__file__).resolve().parents[1] / "scout.example.toml"),
+                            ]
+                        )
 
                     self.assertEqual(telegram.call_count, int(has_candidates))
                     lifecycle.assert_not_called()
@@ -1810,7 +1815,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         gh.assert_called_once()
         self.assertIn("0 new verified candidates", gh.call_args.args[2])
@@ -1844,7 +1851,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         gh.assert_called_once()
         self.assertIn(
@@ -1885,7 +1894,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(state, "save_seen_state") as save,
             redirect_stdout(buf),
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         gh.assert_called_once()
         self.assertIn(
@@ -1911,7 +1922,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(delivery, "create_github_issue", return_value=False),
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         save.assert_not_called()
 
@@ -1931,7 +1944,9 @@ class FormattingAndMainTests(unittest.TestCase):
             ),
         ):
             with self.assertRaisesRegex(state.SeenStateSaveError, "save failed"):
-                scout.main([])
+                scout.main(
+                    ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+                )
 
     def test_main_no_delivery_does_not_save(self) -> None:
         paid = candidate()
@@ -1944,7 +1959,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(delivery, "send_telegram_notification", return_value=False),
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
             save.assert_not_called()
 
     def test_main_quiet_complete_run_performs_bounded_maintenance(self) -> None:
@@ -1962,7 +1979,9 @@ class FormattingAndMainTests(unittest.TestCase):
             ) as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         lifecycle.assert_called_once_with(old_url, None)
         save.assert_called_once()
@@ -1998,7 +2017,9 @@ class FormattingAndMainTests(unittest.TestCase):
                 state.SeenStateSaveError,
                 "maintenance save failed",
             ):
-                scout.main([])
+                scout.main(
+                    ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+                )
 
     def test_main_successful_delivery_saves_maintenance_and_new_urls_atomically(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
@@ -2021,7 +2042,9 @@ class FormattingAndMainTests(unittest.TestCase):
             ),
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
 
         saved = save.call_args.args[0]
         self.assertFalse(saved.contains(old_url))
@@ -2047,7 +2070,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(github, "issue_lifecycle") as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
         lifecycle.assert_not_called()
         save.assert_not_called()
 
@@ -2079,7 +2104,9 @@ class FormattingAndMainTests(unittest.TestCase):
             patch.object(github, "issue_lifecycle") as lifecycle,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
         lifecycle.assert_not_called()
         save.assert_not_called()
 
@@ -2236,7 +2263,9 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(delivery, "create_github_issue", return_value=True) as gh,
             patch.object(state, "save_seen_state"),
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
         body = gh.call_args.args[3]
         self.assertNotIn("Verification rejects", body)
 
@@ -2252,7 +2281,9 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(delivery, "create_github_issue") as gh,
             patch.object(state, "save_seen_state") as save,
         ):
-            scout.main([])
+            scout.main(
+                ["--config", str(Path(__file__).resolve().parents[1] / "scout.example.toml")]
+            )
         tg.assert_not_called()
         gh.assert_not_called()
         save.assert_not_called()

@@ -14,23 +14,25 @@ OSS Opportunity Scout is a package-owned scanner with:
 
 - a stable `python opportunity_scout.py` entry point
 - typed/versioned transactional seen-state
-- a legacy workflow contract requiring `scout-state`, absent remotely as verified on 2026-10-04
+- upstream development CI with read permissions; instance-owned execution/state, with no upstream state-branch/worktree contract
 - privacy-verified private GitHub report delivery
 - public host-repository reports disabled by default
 - hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
 - strict Ruff, mypy, and 100% statement/branch coverage gates
 - Python 3.12 as the minimum runtime and authoritative quality baseline, with compile/test compatibility CI on CPython 3.13 and 3.14
 - immutable non-secret preferences, a strict version-1 TOML parser, and a generic example
-- explicit config/state paths and repository/lane/strategic global-search controls (Slice 3A)
+- mandatory default `scout.toml` or explicit `--config PATH`, independent `--state PATH`, and repository/lane/strategic global-search controls
 - primary repository-language preferences across both lanes with cached metadata (Slice 3B)
 - exact final-effort preferences across both lanes, applied before selection limits (Slice 3C)
 - inclusive final-classification score thresholds and a 1–8 result limit (Slice 3D)
 - a [configuration reference](docs/CONFIGURATION.md) with generic examples and offline validation (Slice 4)
 - a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, and private recovery artifacts (Slice 5)
 
-The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. Slice 1B enforces coverage completeness independently of warning thresholds, including quiet-run maintenance.
-
-Native GitHub `schedule` events are paused while GitHub investigates a reproducible scheduler-delivery failure. The preserved reproduction repository is `laclance/actions-scheduler-probe`.
+Slice 1B enforces coverage completeness independently of warning thresholds,
+including quiet-run maintenance. Slice 6 private migration and acceptance remain
+satisfied, with evidence kept private. Slice 7 removes upstream production-instance
+responsibilities and completes mandatory configuration. Historical state remains
+private; public examples never replace that history.
 
 ## Near term
 
@@ -38,17 +40,15 @@ Native GitHub `schedule` events are paused while GitHub investigates a reproduci
 
 `laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner version pin. Forks are optional for scanner-code customization, not runtime state ownership.
 
-Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through its focused PR slices:
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) records Slices 1–5
+merged through PR #40 and verified private Slice 6 acceptance in merged PR #41.
+Slice 7 implements upstream retirement and mandatory configuration and stops at
+its focused open PR. No later work or private scanner-pin upgrade is implicit.
 
-- Slice 1 establishes Python 3.12 as the minimum runtime/tooling baseline, with compatibility CI on CPython 3.13 and 3.14
-- Slice 1B fixes coverage completeness in its separate prerequisite PR
-- add immutable, versioned preferences and wire configuration incrementally
-- provide pinned public execution machinery and a generic private-instance template
-- recover historical state and prove the private instance before removing upstream production responsibilities
-
-Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
-
-Slice 1's Python support contract is merged in PR #32, and Slice 1B's coverage-completeness fix is merged in PR #33. Slice **2** merged in PR #34 with immutable preferences, the strict TOML parser, and a generic example. Slice **3A** merged in PR #35 with explicit configuration/state paths and source controls. Slice **3B** merged in PR #36 with language preferences. Slice **3C** merged in PR #37 with effort preferences. Slice **3D** merged in PR #38 with final score thresholds and result limits. Slice **4** merged in PR #39 with configuration guidance and validated generic examples. Slice **5** merged in PR #40 with the public action/private template. Personal migration (Slice 6) and its operational acceptance are verified privately. Upstream retirement/mandatory-config cutover (Slice 7) remains deferred and requires separate authorization. Legacy invocation and defaults remain available. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
+Do not restore upstream scheduling or `scout-state` ownership. Any future schedule
+belongs to the private instance and requires a deliberate operational decision.
+Forks remain optional for code customization; instances consume reviewed immutable
+upstream or fork SHAs. Remaining compatibility-wrapper cleanup is separate work.
 
 ### Establish a release baseline
 

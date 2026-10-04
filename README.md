@@ -7,13 +7,19 @@ A lightweight GitHub scanner for finding open-source work worth doing across two
 
 The scout ranks new opportunities and delivers them only through configured channels, including a separately configured **private** GitHub reports repository. Public host-repository reports are disabled by default. Newly reported seen-state requires successful aggregate delivery and complete scan coverage.
 
-## Deployment direction
+## Deployment ownership
 
-`laclance/OSSOpportunityScout` is the canonical public source of truth for scanner code. Its target role is a distribution and development repository, not a persistent scout instance: upstream runs project CI and publishes reusable execution machinery, while an independent private instance repository owns the actual scout workflow, configuration, state/history, triggers, schedules, concurrency, secrets, delivery configuration, and scanner version pin.
+`laclance/OSSOpportunityScout` is the canonical public source of truth for scanner code. It is a distribution and development repository, not a persistent scout instance: upstream runs project CI and publishes reusable execution machinery, while an independent private instance repository owns the actual scout workflow, configuration, state/history, triggers, schedules, concurrency, secrets, delivery configuration, and scanner version pin.
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires final score thresholds and the result limit. Slice 4 (merged in PR #39) publishes the [configuration reference and generic examples](docs/CONFIGURATION.md). Slice 5 (merged in PR #40) adds a [public composite action and manual-only private-instance template](docs/PRIVATE_INSTANCE.md), including serialized state persistence and private recovery before rerunning. Slice 6 personal migration and operational acceptance are verified privately; upstream retirement and mandatory-config cutover remain deferred to Slice 7. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
+The migration is implemented through Slice 7: upstream retains development CI,
+scanner code, generic examples, and the [reusable action/private-instance template](docs/PRIVATE_INSTANCE.md).
+The persistent upstream workflow and state-branch/worktree transport are retired.
+Slice 6 acceptance is verified privately; its operational evidence stays private.
+Every scan now requires valid configuration, defaulting to `scout.toml`.
+See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts,
+acceptance status, and historical state recovery.
 
 ## How it works
 
@@ -74,15 +80,28 @@ The caller owns configuration, state/history, triggers, concurrency, credentials
 delivery, and the full scanner SHA pin. Read its recovery procedure before rerunning
 a transaction whose delivery may have succeeded but persistence failed.
 
-The legacy upstream GitHub Action remains **manual-only** while native scheduling is paused. As verified on 2026-10-04, its required remote `scout-state` branch is absent, so the restore step cannot succeed. Treat this as a blocked legacy deployment, not a healthy production instance; preserve historical state for private migration rather than resetting it to the empty example.
+Upstream workflows use no deployment secrets and own no production scout or runtime state.
+Private instances own execution and persistence. Historical state is retained in
+private storage; the [empty state example](examples/seen_bounties.example.json) is
+only for a deliberately new instance and must never replace recovered history.
 
 For local development:
 
 ```bash
 python -m pip install -r requirements-dev.txt
 make quality
-GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 ```
+
+For an actual local scan, create instance-owned configuration first and configure
+credentials and a delivery channel through the environment:
+
+```bash
+cp scout.example.toml scout.toml
+python opportunity_scout.py --state /path/to/private-instance/seen_bounties.json
+```
+
+Root `scout.toml` and `seen_bounties.json` are ignored by Git. Keep personal
+preferences, credentials, and historical state in the private instance.
 
 ### Explicit configuration and state paths
 
@@ -95,10 +114,11 @@ Paths are relative to the working directory unless absolute. `--state` defaults 
 commit, and quiet-run maintenance write uses that selected path. Its parent directory
 must already exist. Missing state means first run; invalid existing state fails closed.
 
-An explicit config must be a valid version-1 TOML file. Missing, unreadable, or invalid
-config fails before state loading, discovery, or delivery; it never falls back to
-legacy defaults. Without `--config`, the scout retains its existing source behavior
-and ignores any `scout.toml` in the working directory.
+Every invocation loads a valid version-1 TOML file: `scout.toml` in the working
+directory by default, or exactly the supplied `--config PATH`. Missing, unreadable,
+or invalid config fails before state loading, discovery, lifecycle maintenance,
+or delivery. There is no legacy fallback or search for alternate files.
+`--help` remains available without configuration.
 
 See the [configuration reference](docs/CONFIGURATION.md) for every supported field,
 default, bound, preference semantic, and generic example. Preferences cover lanes,
@@ -112,14 +132,10 @@ offline regression commands; the invocation above performs an actual scan.
 
 `GITHUB_TOKEN` authenticates scanner GitHub REST access. `GITHUB_REPOSITORY` identifies the workflow host repository. Neither enables public report publishing.
 
-The legacy bundled workflow grants `GITHUB_TOKEN` only:
-
-```yaml
-permissions:
-  contents: write
-```
-
-That permission is required for its existing `scout-state` persistence mechanism. The legacy deployment does not grant Issues write. After private migration is proven, upstream removes that workflow and its deployment-only permissions; the private instance owns state persistence.
+Upstream development CI grants only `contents: read`. The private workflow owns
+permissions for discovery and same-instance state persistence; the generic private
+template uses `contents: write` for that transaction and no Issues write. Scanner
+and private-report credentials remain separate.
 
 Host-repository GitHub reports remain supported as an explicit custom-deployment option through:
 

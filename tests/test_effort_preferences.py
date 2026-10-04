@@ -4,7 +4,7 @@ import io
 import os
 import tempfile
 import unittest
-from contextlib import ExitStack, redirect_stdout
+from contextlib import ExitStack, chdir, redirect_stdout
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -268,7 +268,7 @@ class EffortOrchestrationTests(unittest.TestCase):
                     {"duplicate"} if complete and delivered else set(),
                 )
 
-    def test_explicit_effort_and_legacy_defaults_keep_request_budgets(self) -> None:
+    def test_explicit_effort_and_default_config_keep_request_budgets(self) -> None:
         paid_source = issue(
             html_url="https://github.com/example/project/issues/1", body="Bounty $500", comments=0
         )
@@ -282,10 +282,13 @@ class EffortOrchestrationTests(unittest.TestCase):
                 with (
                     self.subTest(prefetch=authenticated, allowed=allowed),
                     tempfile.TemporaryDirectory() as directory,
+                    chdir(directory),
                 ):
-                    config_path = Path(directory, "config.toml")
+                    config_path = Path(directory, "scout.toml")
                     config_path.write_text(
-                        f"version = 1\n[preferences]\neffort = {list(allowed or ())!r}\n",
+                        "version = 1\n"
+                        if allowed is None
+                        else f"version = 1\n[preferences]\neffort = {list(allowed)!r}\n",
                         encoding="utf-8",
                     )
                     state_path = Path(directory, "state.json")

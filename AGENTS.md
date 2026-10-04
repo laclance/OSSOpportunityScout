@@ -23,7 +23,7 @@ For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](doc
 - Treat existing seen-state corruption conservatively: malformed, unreadable, or unsupported state must fail the run rather than silently becoming empty.
 - Advance newly reported seen-state only when combined coverage is complete and at least one configured delivery channel succeeds. A failed channel does not count as successful delivery, but another configured channel may satisfy the aggregate delivery result. For the optional host-report channel, issue creation plus auto-close must both succeed for that channel to count as delivered.
 - Keep GitHub API authentication separate from report delivery. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` must never imply permission to publish ranked scout results; host-repository GitHub reports require explicit opt-in and must default off. Private GitHub reports require their own repository and credential, and delivery must fail closed unless GitHub metadata retrieved with that credential explicitly reports `private: true`.
-- Keep `opportunity_scout.state` branch-agnostic. Git/worktree/`scout-state` transport belongs to the workflow, not Python state code.
+- Keep `opportunity_scout.state` branch-agnostic. Git transport belongs to private instance workflows, not Python state code; upstream has no runtime state-branch/worktree contract.
 - Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
@@ -32,7 +32,7 @@ For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](doc
 
 ## Migration execution
 
-Follow the tracker in order. Verify actual latest `main`, merged prerequisite PRs, worktree state, and the quality baseline before branching for each slice. Keep configuration initially opt-in and current invocation behavior available until verified cutover. Do not recreate upstream `scout-state` ownership as the final remedy, reset historical state to the empty example, or restore upstream scheduling.
+Follow the tracker in order. Verify actual latest `main`, merged prerequisite PRs, worktree state, and the quality baseline before branching for each slice. After the verified Slice 7 cutover, require default `scout.toml` or explicit `--config PATH` before state/network/delivery activity without legacy fallback. Do not recreate upstream `scout-state` ownership as the final remedy, reset historical state to the empty example, or restore upstream scheduling.
 
 Preserve historical state privately and prove the private instance before retiring upstream production responsibilities. Keep private opportunity contents and scout credentials out of public files and PRs. Complete one focused slice, run the full quality gate, commit, open its PR, and stop at the open-PR boundary; do not merge or start a later slice implicitly.
 

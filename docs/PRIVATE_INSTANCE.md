@@ -2,9 +2,10 @@
 
 Slice 5 provides the public [composite action](../action.yml) and a generic,
 manual-only [private workflow template](../examples/private-instance/scout.yml).
-These are distribution assets. Publishing them does not create an instance,
-migrate historical state, retire the legacy upstream workflow, or require config
-for existing local invocations. Operational migration belongs to Slice 6 of the
+These are distribution assets; they do not create an instance or migrate history.
+Slice 6 operational acceptance is verified privately. Slice 7 retires the upstream
+production workflow and requires configuration for local scans: `scout.toml` in the
+working directory or explicit `--config PATH`. See the
 [migration tracker](PRIVATE_DEPLOYMENT_MIGRATION.md).
 
 ## Ownership and pins
@@ -36,7 +37,8 @@ and [immutable action pins](https://docs.github.com/en/actions/how-tos/write-wor
 For future instance setup, copy the workflow to `.github/workflows/scout.yml`, copy
 the [generic config](../scout.example.toml) to `scout.toml`, and supply deliberately
 seeded version-2 state at `seen_bounties.json` on the private default branch. A new
-instance with no history may deliberately initialize `{"version": 2, "seen": {}}`.
+instance with no history may deliberately copy the
+[empty state example](../examples/seen_bounties.example.json) to `seen_bounties.json`.
 An existing instance must preserve its trustworthy history; never substitute this
 empty example for migration state. The template rejects missing files and symlinks;
 the scanner validates config and existing state before discovery or delivery.
@@ -78,8 +80,8 @@ not rechecked remain explicit gaps rather than successful acceptance claims.
 Public tracker/PR updates contain only non-sensitive status and public source/check
 identifiers. Keep personal repository identities, preferences, secrets, state
 contents/counts, opportunity URLs, run IDs, recovery hashes, and operational logs
-private. Slice 7 remains blocked until all applicable private acceptance gates are
-proven; the Slice 6 documentation PR remains unmerged.
+private. These gates are verified for the migrated instance and PR #41 is merged;
+operational evidence remains private. Future instances must prove their own gates.
 
 ## Action inputs and credentials
 
@@ -97,7 +99,8 @@ Paths can be relative to the caller workspace or absolute. The state parent must
 exist. Missing, unreadable, malformed, or unsupported explicit config fails closed,
 as does unreadable/malformed/unsupported existing state. Only absent state means
 first run in the raw scanner/action; this template instead requires deliberately
-seeded state. No-config legacy CLI behavior remains available outside this action.
+seeded state. Local invocations require `scout.toml` by default or explicit
+`--config PATH`. There is no legacy fallback.
 See the [configuration reference](CONFIGURATION.md).
 
 The template sets workflow-level `permissions: {}` and grants only `contents: write`
