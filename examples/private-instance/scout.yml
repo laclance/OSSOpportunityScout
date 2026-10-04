@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
+      actions: write
       contents: write
     env:
       INSTANCE_BRANCH: ${{ github.event.repository.default_branch }}
@@ -102,16 +103,47 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
+      - name: Cancel queued state transactions before releasing lock
+        id: cancel_queued
+        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          mapfile -t queued_run_ids < <(
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GH_REPO/actions/concurrency_groups/scout-seen-state" \
+              --jq ".group_members[] | select(.run_id != $CURRENT_RUN_ID) | .run_id" \
+              | sort -u
+          )
+          for run_id in "${queued_run_ids[@]}"; do
+            gh api \
+              --method POST \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GH_REPO/actions/runs/$run_id/cancel" \
+              >/dev/null
+          done
+
       - name: Fail persistence transaction after recovery attempt
         if: ${{ always() && steps.persist.outcome == 'failure' }}
         shell: bash
         env:
           RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
+          QUEUE_CANCEL_OUTCOME: ${{ steps.cancel_queued.outcome }}
         run: |
           set -euo pipefail
-          if test "$RECOVERY_OUTCOME" = success; then
-            echo '::error::State persistence failed. Restore the private recovery artifact before rerunning.'
+          if test "$QUEUE_CANCEL_OUTCOME" != success; then
+            echo '::error::State persistence failed and queued state transactions could not be cancelled. Stop all scout runs before rerunning, then recover or reconstruct state.'
+          elif test "$RECOVERY_OUTCOME" = success; then
+            echo '::error::State persistence failed. Queued state transactions were cancelled; restore the private recovery artifact before rerunning.'
           else
-            echo '::error::State persistence and recovery preservation failed. Reconstruct post-delivery state before rerunning.'
+            echo '::error::State persistence and recovery preservation failed. Queued state transactions were cancelled; reconstruct post-delivery state before rerunning.'
           fi
           exit 1
