@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires final score thresholds and the result limit. Slice 4 publishes the [configuration reference and generic examples](docs/CONFIGURATION.md); deployment work remains deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
+The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires final score thresholds and the result limit. Slice 4 (merged in PR #39) publishes the [configuration reference and generic examples](docs/CONFIGURATION.md). Slice 5 adds a [public composite action and manual-only private-instance template](docs/PRIVATE_INSTANCE.md), including serialized state persistence and private recovery before rerunning. Personal migration and upstream retirement remain deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
 
 ## How it works
 
@@ -68,6 +68,11 @@ Reported candidates include:
 Complete discovery and verification coverage is required before seen-state advancement. Any recognized failure blocks newly reported URLs and quiet-run maintenance writes, even when strategic failures remain below the warning threshold. Warning thresholds control diagnostics only; successfully delivered candidates may still be reported during an incomplete run, but its state is not committed.
 
 ## Running
+
+For the generic private deployment assets, see the [private instance guide](docs/PRIVATE_INSTANCE.md).
+The caller owns configuration, state/history, triggers, concurrency, credentials,
+delivery, and the full scanner SHA pin. Read its recovery procedure before rerunning
+a transaction whose delivery may have succeeded but persistence failed.
 
 The legacy upstream GitHub Action remains **manual-only** while native scheduling is paused. As verified on 2026-10-04, its required remote `scout-state` branch is absent, so the restore step cannot succeed. Treat this as a blocked legacy deployment, not a healthy production instance; preserve historical state for private migration rather than resetting it to the empty example.
 

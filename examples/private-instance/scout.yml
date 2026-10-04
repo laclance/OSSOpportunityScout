@@ -1,0 +1,117 @@
+# Copy into .github/workflows/scout.yml in an independent PRIVATE repository.
+# Review the scanner SHA before adoption; upgrades are deliberate instance changes.
+# All workflows writing this state must share the same concurrency group.
+name: Private OSS Opportunity Scout
+
+"on":
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: scout-seen-state
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  scout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      INSTANCE_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Require private default-branch execution
+        shell: bash
+        env:
+          INSTANCE_PRIVATE: ${{ github.event.repository.private }}
+        run: |
+          set -euo pipefail
+          test "$INSTANCE_PRIVATE" = true
+          test "$GITHUB_REF" = "refs/heads/$INSTANCE_BRANCH"
+
+      - name: Check out current private instance after serialization
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          # Same-repository state push uses the caller's contents: write token.
+          persist-credentials: true
+
+      - name: Read current state and record transaction base
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/$INSTANCE_BRANCH"
+          git checkout --detach FETCH_HEAD
+          # This template requires deliberately seeded state, including for a
+          # genuinely new instance. It never silently bootstraps missing state.
+          test -f scout.toml
+          test -f seen_bounties.json
+          test ! -L scout.toml
+          test ! -L seen_bounties.json
+          printf 'sha=%s\n' "$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run pinned scanner source
+        id: scan
+        uses: laclance/OSSOpportunityScout@fde5e99d10385a14f51140ebde18ed117c084c7a # Slice 5 action source
+        timeout-minutes: 25
+        with:
+          config-path: scout.toml
+          state-path: seen_bounties.json
+          github-token: ${{ github.token }}
+          private-reports-repository: ${{ secrets.PRIVATE_GITHUB_REPORTS_REPOSITORY }}
+          private-reports-token: ${{ secrets.PRIVATE_GITHUB_REPORTS_TOKEN }}
+          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
+          discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
+      - name: Persist resulting state without replay or force push
+        id: persist
+        continue-on-error: true
+        shell: bash
+        env:
+          SCOUT_BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # Fetch never replaces the working state produced by the scanner.
+          # Reject any intervening branch change, even one outside this file.
+          git fetch --no-tags origin "refs/heads/$INSTANCE_BRANCH"
+          if test "$(git rev-parse FETCH_HEAD)" != "$SCOUT_BASE_SHA"; then
+            echo '::error::Private instance changed during scan; recover state before rerunning.'
+            exit 1
+          fi
+          git add -- seen_bounties.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: persist scout state [skip ci]'
+          # A race after fetch is rejected by the ordinary non-forced push.
+          git push origin "HEAD:refs/heads/$INSTANCE_BRANCH"
+
+      - name: Preserve exact state for private recovery
+        id: recovery
+        if: ${{ always() && steps.persist.outcome == 'failure' && github.event.repository.private == true }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: scout-state-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: seen_bounties.json
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Fail persistence transaction after recovery attempt
+        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        shell: bash
+        env:
+          RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
+        run: |
+          set -euo pipefail
+          if test "$RECOVERY_OUTCOME" = success; then
+            echo '::error::State persistence failed. Restore the private recovery artifact before rerunning.'
+          else
+            echo '::error::State persistence and recovery preservation failed. Reconstruct post-delivery state before rerunning.'
+          fi
+          exit 1

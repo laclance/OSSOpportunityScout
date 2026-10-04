@@ -34,8 +34,10 @@ make quality     # local quality gate
 
 Run these commands with Python 3.12 active, or select its interpreter explicitly,
 for example `make quality PYTHON=/path/to/python3.12`. For compatibility checks on
-3.13 or 3.14, run `make compile PYTHON=/path/to/python` followed by
-`/path/to/python -m unittest -v`; these checks need only the standard library.
+3.13 or 3.14, install `PyYAML==6.0.3` for the offline workflow tests, then run
+`make compile PYTHON=/path/to/python` followed by `/path/to/python -m unittest -v`.
+PyYAML and its typing stubs are development-only; scanner execution remains
+standard-library-only.
 
 ## Where changes belong
 
@@ -57,6 +59,11 @@ separate from credentials/delivery, and current behavior distinct from the plann
 mandatory-config cutover.
 
 ## Pull requests
+
+For action/template changes, follow the [offline deployment checks](docs/PRIVATE_INSTANCE.md#offline-validation).
+They parse YAML and execute Bash against local temporary Git repositories; do not
+create a live private instance or trigger delivery to validate distribution assets.
+Keep pins immutable, state reads inside serialization, and recovery uploads private.
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
 
