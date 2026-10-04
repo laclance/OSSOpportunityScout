@@ -346,7 +346,7 @@ def run_combined_scan(
     if strategic_audit:
         print("=== POTENTIAL SCANNER MISSES ===")
         for item in strategic_audit:
-            print(f"- {item['url']}: {item['reason']}")
+            print(f"- {item.get('url')}: {item['reason']}")
 
     rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
     coverage = coverage_status(
