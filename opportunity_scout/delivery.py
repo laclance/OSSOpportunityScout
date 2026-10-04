@@ -10,7 +10,7 @@ import json
 import urllib.request
 from collections.abc import Mapping
 
-from bountyscout import github
+from opportunity_scout import github
 
 NOTIFICATION_TIMEOUT_SECONDS = 10
 GITHUB_TIMEOUT_SECONDS = 15

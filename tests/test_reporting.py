@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from bountyscout import reporting
+from opportunity_scout import reporting
 from tests.helpers import candidate
 
 
@@ -191,7 +191,7 @@ class ReportAssemblyTests(unittest.TestCase):
             reject_counts={"active claim by @dev": 3, "not ready": 1},
         )
         self.assertTrue(
-            body.startswith("<!-- bountyscout-report: automated; actionable: false -->")
+            body.startswith("<!-- opportunity-scout-report: automated; actionable: false -->")
         )
         self.assertIn(
             "Automated OSS Opportunity Scout scan report — not a development task.",

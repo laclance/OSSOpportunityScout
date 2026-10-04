@@ -5,9 +5,9 @@ import unittest
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-import bountyscout.app as app
-from bountyscout import delivery, run, state
-from bountyscout.types import (
+import opportunity_scout.app as app
+from opportunity_scout import delivery, run, state
+from opportunity_scout.types import (
     GitHubIssue,
     IssueLifecycleStatus,
     RejectionRecord,

@@ -4,9 +4,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from bountyscout import github, paid_verification
-from bountyscout.strategic import competition
-from bountyscout.types import GitHubComment
+from opportunity_scout import github, paid_verification
+from opportunity_scout.strategic import competition
+from opportunity_scout.types import GitHubComment
 from tests.helpers import comment, issue
 
 

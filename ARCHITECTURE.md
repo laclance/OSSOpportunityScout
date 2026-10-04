@@ -42,23 +42,23 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
-| `opportunity_scout.py` | Stable executable entry point that calls `bountyscout.app.main()` | Root shim only; no scanner policy or compatibility façade |
-| `bountyscout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
-| `bountyscout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `bountyscout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
-| `bountyscout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
-| `bountyscout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
-| `bountyscout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
-| `bountyscout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
-| `bountyscout/state.py` | Canonical typed, versioned seen-state parsing, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
-| `bountyscout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
-| `bountyscout/delivery.py` | Telegram, Discord, host GitHub report delivery, and privacy-verified private GitHub report delivery | Transport only; the private path verifies repository metadata before issue creation, while report rendering and state orchestration remain elsewhere |
-| `bountyscout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
-| `bountyscout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
-| `bountyscout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
-| `bountyscout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses package-owned paid verification plus strategic-only evidence |
-| `bountyscout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for paid predicates/signals; never imports `bountyscout.app` |
-| `bountyscout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `bountyscout.app` |
-| `bountyscout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
+| `opportunity_scout.py` | Stable executable entry point that calls `opportunity_scout.app.main()` | Root shim only; no scanner policy or compatibility façade |
+| `opportunity_scout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
+| `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
+| `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
+| `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
+| `opportunity_scout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
+| `opportunity_scout/types.py` | Canonical static domain literals and mapping records shared across package-owned scanner code | Dependency-light typing vocabulary only; raw external JSON remains dynamic until validated |
+| `opportunity_scout/state.py` | Canonical typed, versioned seen-state parsing, logical membership/mutation, and deterministic atomic persistence | Local-file state only; branch-agnostic and fail-closed for malformed or unsupported existing state |
+| `opportunity_scout/reporting.py` | GitHub queue reports, compact reject/audit summaries, and length-safe notification rendering | Presentation-only; no network I/O or scanner policy decisions |
+| `opportunity_scout/delivery.py` | Telegram, Discord, host GitHub report delivery, and privacy-verified private GitHub report delivery | Transport only; the private path verifies repository metadata before issue creation, while report rendering and state orchestration remain elsewhere |
+| `opportunity_scout/scoring.py` | Pure-ish effort estimation plus cash/career ranking over already-fetched evidence | No network I/O; owns scoring math and effort calibration, including trusted maintainer-history signals |
+| `opportunity_scout/sources.py` | Curated GitHub issue pools, issue/comment fetches, contribution-guide lookup, bounty-platform adapters, and bounded adaptive inspection selection | Owns external source retrieval/parsing; does not rank final candidates or decide readiness |
+| `opportunity_scout/strategic/claims.py` | Pure first-person ownership / implementation / PR-intent language detection | No network I/O and no dependency on `opportunity_scout.py` |
+| `opportunity_scout/strategic/competition.py` | Active-claim, linked/timeline implementation-PR detection, and competition precedence | Uses package-owned paid verification plus strategic-only evidence |
+| `opportunity_scout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for paid predicates/signals; never imports `opportunity_scout.app` |
+| `opportunity_scout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `opportunity_scout.app` |
+| `opportunity_scout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
 | `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
 | `.github/workflows/oss-opportunity-scout.yml` | Production scanner execution | Runtime workflow, currently manual-only while native GitHub scheduling is paused |
 | `.github/workflows/python-quality.yml` | Formatting, lint, compile, typing, tests, coverage | Must stay fast enough for normal PR iteration |
@@ -66,56 +66,56 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 ## Dependency direction
 
 ```text
-opportunity_scout.py --> bountyscout.app
+opportunity_scout.py --> opportunity_scout.app
 
-bountyscout.app
-    |-- bountyscout.delivery
-    |-- bountyscout.github
-    |-- bountyscout.paid
-    |-- bountyscout.paid_verification
-    |-- bountyscout.run
-    |-- bountyscout.reporting
-    |-- bountyscout.scoring
-    |-- bountyscout.sources
-    |-- bountyscout.strategic.claims
-    |-- bountyscout.strategic.competition
-    |-- bountyscout.strategic.discovery
-    |-- bountyscout.strategic.verification
-    |-- bountyscout.strategic.readiness
+opportunity_scout.app
+    |-- opportunity_scout.delivery
+    |-- opportunity_scout.github
+    |-- opportunity_scout.paid
+    |-- opportunity_scout.paid_verification
+    |-- opportunity_scout.run
+    |-- opportunity_scout.reporting
+    |-- opportunity_scout.scoring
+    |-- opportunity_scout.sources
+    |-- opportunity_scout.strategic.claims
+    |-- opportunity_scout.strategic.competition
+    |-- opportunity_scout.strategic.discovery
+    |-- opportunity_scout.strategic.verification
+    |-- opportunity_scout.strategic.readiness
 
-bountyscout.run --> bountyscout.reporting
-bountyscout.run --> bountyscout.state
-bountyscout.run -X-> bountyscout.app
-bountyscout.run -X-> opportunity_scout.py
-bountyscout.types -X-> package policy / orchestration modules
-bountyscout.paid_verification --> bountyscout.github
-bountyscout.paid_verification --> bountyscout.paid
-bountyscout.sources --> bountyscout.github
-bountyscout.scoring --> bountyscout.github
-bountyscout.scoring --> bountyscout.strategic.readiness
-bountyscout.strategic.competition --> bountyscout.github
-bountyscout.strategic.competition --> bountyscout.paid_verification
-bountyscout.strategic.competition --> bountyscout.strategic.claims
-bountyscout.strategic.discovery --> bountyscout.github
-bountyscout.strategic.discovery --> bountyscout.scoring
-bountyscout.strategic.discovery --> bountyscout.sources
-bountyscout.strategic.discovery --> bountyscout.strategic.readiness
-bountyscout.strategic.verification --> bountyscout.sources
-bountyscout.strategic.verification --> bountyscout.strategic.discovery
-bountyscout.strategic.verification -X-> bountyscout.app
-bountyscout.strategic.readiness --> bountyscout.strategic.claims
+opportunity_scout.run --> opportunity_scout.reporting
+opportunity_scout.run --> opportunity_scout.state
+opportunity_scout.run -X-> opportunity_scout.app
+opportunity_scout.run -X-> opportunity_scout.py
+opportunity_scout.types -X-> package policy / orchestration modules
+opportunity_scout.paid_verification --> opportunity_scout.github
+opportunity_scout.paid_verification --> opportunity_scout.paid
+opportunity_scout.sources --> opportunity_scout.github
+opportunity_scout.scoring --> opportunity_scout.github
+opportunity_scout.scoring --> opportunity_scout.strategic.readiness
+opportunity_scout.strategic.competition --> opportunity_scout.github
+opportunity_scout.strategic.competition --> opportunity_scout.paid_verification
+opportunity_scout.strategic.competition --> opportunity_scout.strategic.claims
+opportunity_scout.strategic.discovery --> opportunity_scout.github
+opportunity_scout.strategic.discovery --> opportunity_scout.scoring
+opportunity_scout.strategic.discovery --> opportunity_scout.sources
+opportunity_scout.strategic.discovery --> opportunity_scout.strategic.readiness
+opportunity_scout.strategic.verification --> opportunity_scout.sources
+opportunity_scout.strategic.verification --> opportunity_scout.strategic.discovery
+opportunity_scout.strategic.verification -X-> opportunity_scout.app
+opportunity_scout.strategic.readiness --> opportunity_scout.strategic.claims
 
 package/domain modules -X-> opportunity_scout.py
-package/domain modules -X-> bountyscout.app
+package/domain modules -X-> opportunity_scout.app
 ```
 
-New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `bountyscout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
+New leaf modules should follow the same rule. The orchestration layer may compose domain modules; domain modules should not reach back into the orchestrator. `opportunity_scout.types` is deliberately dependency-light so policy, scoring, reporting, and orchestration can share domain contracts without creating circular imports.
 
 ## GitHub integration contract
 
 ### REST identity and version
 
-`bountyscout.github` is the canonical owner of GitHub REST request identity. GitHub JSON
+`opportunity_scout.github` is the canonical owner of GitHub REST request identity. GitHub JSON
 requests use:
 
 ```http
@@ -206,7 +206,7 @@ Developer Program. Program participation is not GitHub approval, certification, 
 - Seen-state maintenance is bounded to 20 direct GitHub issue checks per successful run with a 30-day minimum recheck interval. Selection is deterministic: never-checked entries first, then oldest `last_checked_at`, then URL. `last_checked_at` records the maintenance attempt time, including not-found and failed checks, so one bad entry cannot monopolize later maintenance batches.
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
-- `bountyscout.state` knows only the local state file. Production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
+- `opportunity_scout.state` knows only the local state file. Production persistence remains the workflow's `scout-state` responsibility, and Python state code contains no Git branch/worktree logic.
 - GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. The bundled deployment must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.

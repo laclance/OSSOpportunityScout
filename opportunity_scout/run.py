@@ -8,8 +8,8 @@ from datetime import datetime
 from time import monotonic
 from typing import Final
 
-from bountyscout import reporting, sources, state
-from bountyscout.types import (
+from opportunity_scout import reporting, sources, state
+from opportunity_scout.types import (
     Candidate,
     GitHubIssue,
     IssueLifecycleStatus,

@@ -6,7 +6,7 @@ from typing import Any, cast
 import unittest
 from unittest.mock import patch
 
-from bountyscout import delivery, github
+from opportunity_scout import delivery, github
 from tests.helpers import FakeResponse
 
 

@@ -10,13 +10,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 from unittest.mock import patch
 
-import bountyscout.app as scout
-from bountyscout import delivery, github, run, sources
-from bountyscout import paid as paid_policy
-from bountyscout import paid_verification
-from bountyscout import state
-from bountyscout.strategic import competition as competition_policy
-from bountyscout.types import (
+import opportunity_scout.app as scout
+from opportunity_scout import delivery, github, run, sources
+from opportunity_scout import paid as paid_policy
+from opportunity_scout import paid_verification
+from opportunity_scout import state
+from opportunity_scout.strategic import competition as competition_policy
+from opportunity_scout.types import (
     GitHubComment,
     GitHubIssue,
     RejectionRecord,
@@ -1054,7 +1054,7 @@ class DiscoveryTests(unittest.TestCase):
     def test_possible_miss_signal_delegates_to_strategic_discovery(self) -> None:
         item = issue()
         with patch(
-            "bountyscout.strategic.discovery.possible_miss_signal",
+            "opportunity_scout.strategic.discovery.possible_miss_signal",
             return_value=True,
         ) as signal:
             self.assertTrue(scout.possible_miss_signal(item))
@@ -1066,13 +1066,13 @@ class DiscoveryTests(unittest.TestCase):
         provisional: list[sources.IssueRow] = []
 
         with patch(
-            "bountyscout.strategic.discovery.basic_rejection_audit_reason",
+            "opportunity_scout.strategic.discovery.basic_rejection_audit_reason",
             return_value="reason",
         ) as reason:
             self.assertEqual(scout.basic_rejection_audit_reason(item), "reason")
         reason.assert_called_once_with(item)
 
-        with patch("bountyscout.strategic.discovery.add_audit") as add:
+        with patch("opportunity_scout.strategic.discovery.add_audit") as add:
             scout.add_audit(audit, item, "reason")
         add.assert_called_once_with(
             audit,
@@ -1082,7 +1082,7 @@ class DiscoveryTests(unittest.TestCase):
         )
 
         with patch(
-            "bountyscout.strategic.discovery.strategic_inspection_items",
+            "opportunity_scout.strategic.discovery.strategic_inspection_items",
             return_value={"a/a": [item]},
         ) as inspect:
             self.assertEqual(scout.strategic_inspection_items(provisional), {"a/a": [item]})
@@ -1643,7 +1643,7 @@ class FormattingAndMainTests(unittest.TestCase):
         )
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
             "TELEGRAM_BOT_TOKEN": "tb",
             "TELEGRAM_CHAT_ID": "chat",
@@ -1714,7 +1714,7 @@ class FormattingAndMainTests(unittest.TestCase):
     def test_main_incomplete_coverage_reports_and_preserves_seen_state(self) -> None:
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
         }
         buf = io.StringIO()
@@ -1754,7 +1754,7 @@ class FormattingAndMainTests(unittest.TestCase):
     def test_main_paid_search_failure_warns_and_preserves_seen_state(self) -> None:
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
         }
         strategic = candidate(paid=False)
@@ -1787,7 +1787,7 @@ class FormattingAndMainTests(unittest.TestCase):
     def test_main_discovery_failure_warns_and_preserves_seen_state(self) -> None:
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
         }
         buf = io.StringIO()
@@ -1830,7 +1830,7 @@ class FormattingAndMainTests(unittest.TestCase):
         paid = candidate()
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
         }
         with (
@@ -1987,7 +1987,7 @@ class FormattingAndMainTests(unittest.TestCase):
 
         env = {
             "GITHUB_TOKEN": "tok",
-            "GITHUB_REPOSITORY": "me/BountyScout",
+            "GITHUB_REPOSITORY": "me/OSSOpportunityScout",
             "GITHUB_REPORTS_ENABLED": "true",
         }
         with (

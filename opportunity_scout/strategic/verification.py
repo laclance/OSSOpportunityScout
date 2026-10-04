@@ -12,9 +12,9 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from bountyscout import sources
-from bountyscout.strategic import discovery as strategic_discovery
-from bountyscout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
+from opportunity_scout import sources
+from opportunity_scout.strategic import discovery as strategic_discovery
+from opportunity_scout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
 
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11

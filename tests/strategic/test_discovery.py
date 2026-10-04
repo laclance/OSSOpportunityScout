@@ -3,9 +3,9 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 
-from bountyscout import github
-from bountyscout.strategic import discovery
-from bountyscout.types import (
+from opportunity_scout import github
+from opportunity_scout.strategic import discovery
+from opportunity_scout.types import (
     Candidate,
     CandidateLane,
     GitHubIssue,

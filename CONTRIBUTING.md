@@ -32,8 +32,8 @@ make quality     # local quality gate
 
 ## Where changes belong
 
-- Put focused strategic policy in `bountyscout/strategic/`.
-- Keep root `opportunity_scout.py` as the thin stable executable entry point. `bountyscout.app` owns application/environment assembly and package adapters; `bountyscout.run` owns the combined scan lifecycle.
+- Put focused strategic policy in `opportunity_scout/strategic/`.
+- Keep root `opportunity_scout.py` as the thin stable executable entry point. `opportunity_scout.app` owns application/environment assembly and package adapters; `opportunity_scout.run` owns the combined scan lifecycle.
 - Keep pure policy separate from network I/O where practical.
 
 ## Tests

@@ -46,7 +46,7 @@ jobs:
         run: ruff check .
 
       - name: Compile Python
-        run: python -m compileall -q opportunity_scout.py bountyscout tests
+        run: python -m compileall -q opportunity_scout.py opportunity_scout tests
 
       - name: Type check with mypy
         run: mypy

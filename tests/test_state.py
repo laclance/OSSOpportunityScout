@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-import bountyscout.state as state_module
-from bountyscout.state import (
+import opportunity_scout.state as state_module
+from opportunity_scout.state import (
     SeenState,
     SeenStateLoadError,
     SeenStateSaveError,
@@ -15,7 +15,7 @@ from bountyscout.state import (
     parse_seen_state,
     save_seen_state,
 )
-from bountyscout.types import IssueLifecycleStatus
+from opportunity_scout.types import IssueLifecycleStatus
 
 
 FIXED_REPORTED_AT = "2026-10-02T08:30:00Z"
@@ -225,7 +225,7 @@ class SeenStateLogicTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "state.json"
             path.write_text("old-state\n", encoding="utf-8")
-            with patch("bountyscout.state.os.replace", side_effect=OSError("replace failed")):
+            with patch("opportunity_scout.state.os.replace", side_effect=OSError("replace failed")):
                 with self.assertRaisesRegex(SeenStateSaveError, "Could not save seen-state"):
                     save_seen_state(SeenState.from_urls([URL_A]), path)
 

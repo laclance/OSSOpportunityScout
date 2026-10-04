@@ -15,7 +15,7 @@ lint:
 	$(PYTHON) -m ruff check .
 
 compile:
-	$(PYTHON) -m compileall -q opportunity_scout.py bountyscout tests
+	$(PYTHON) -m compileall -q opportunity_scout.py opportunity_scout tests
 
 typecheck:
 	$(PYTHON) -m mypy

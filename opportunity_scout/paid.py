@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Final
 
-from bountyscout.types import GitHubIssue
+from opportunity_scout.types import GitHubIssue
 
 MAX_COMMENTS: Final = 25
 PAYMENT_TERM_RE: Final = r"(?:bounty|reward|payout|compensation|pay(?:ment|s|ing|s)?|paid)"

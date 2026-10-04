@@ -9,18 +9,18 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 ## How it works
 
-Production code lives under `bountyscout/`; `opportunity_scout.py` is the stable executable entry point.
+Production code lives under `opportunity_scout/`; `opportunity_scout.py` is the stable executable entry point.
 
 The main boundaries are:
 
-- `bountyscout/app.py` — environment wiring and application assembly.
-- `bountyscout/run.py` — combined scan lifecycle, delivery aggregation, and transactional seen-state commit.
-- `bountyscout/github.py` — canonical GitHub REST transport, safe-read retries, pagination, and per-scan caching.
-- `bountyscout/paid.py` / `paid_verification.py` — paid-opportunity policy and verification.
-- `bountyscout/strategic/` — strategic discovery, readiness, competition, and verification policy.
-- `bountyscout/scoring.py` — effort estimation and cash/career ranking.
-- `bountyscout/delivery.py` — optional notification/report transports, including privacy-verified private GitHub reports.
-- `bountyscout/state.py` — typed/versioned seen-state parsing and maintenance.
+- `opportunity_scout/app.py` — environment wiring and application assembly.
+- `opportunity_scout/run.py` — combined scan lifecycle, delivery aggregation, and transactional seen-state commit.
+- `opportunity_scout/github.py` — canonical GitHub REST transport, safe-read retries, pagination, and per-scan caching.
+- `opportunity_scout/paid.py` / `paid_verification.py` — paid-opportunity policy and verification.
+- `opportunity_scout/strategic/` — strategic discovery, readiness, competition, and verification policy.
+- `opportunity_scout/scoring.py` — effort estimation and cash/career ranking.
+- `opportunity_scout/delivery.py` — optional notification/report transports, including privacy-verified private GitHub reports.
+- `opportunity_scout/state.py` — typed/versioned seen-state parsing and maintenance.
 
 See `ARCHITECTURE.md` for data flow, module boundaries, GitHub API behavior, and invariants.
 

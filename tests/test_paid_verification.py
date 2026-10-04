@@ -4,8 +4,8 @@ import unittest
 from typing import Any
 from unittest.mock import patch
 
-from bountyscout import github, paid_verification
-from bountyscout.types import GitHubIssue
+from opportunity_scout import github, paid_verification
+from opportunity_scout.types import GitHubIssue
 from tests.helpers import issue
 
 

@@ -13,15 +13,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from bountyscout import github, scoring, sources
-from bountyscout.strategic.readiness import (
+from opportunity_scout import github, scoring, sources
+from opportunity_scout.strategic.readiness import (
     automated_tracking_issue_reason,
     manual_tracking_issue_reason,
     release_tracking_reason,
     reward_history_reason,
     security_disclosure_reason,
 )
-from bountyscout.types import (
+from opportunity_scout.types import (
     Candidate,
     CandidateLane,
     GitHubIssue,

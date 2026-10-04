@@ -7,8 +7,8 @@ network I/O and do not depend on the application orchestrator.
 from __future__ import annotations
 
 import re
-from bountyscout.strategic.claims import normalized_claim_text
-from bountyscout.types import GitHubComment, GitHubIssue
+from opportunity_scout.strategic.claims import normalized_claim_text
+from opportunity_scout.types import GitHubComment, GitHubIssue
 
 TRUSTED_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
 

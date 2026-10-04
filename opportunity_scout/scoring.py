@@ -11,9 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Collection, cast
 
-from bountyscout import github
-from bountyscout.strategic.readiness import TRUSTED_ASSOCIATIONS
-from bountyscout.types import (
+from opportunity_scout import github
+from opportunity_scout.strategic.readiness import TRUSTED_ASSOCIATIONS
+from opportunity_scout.types import (
     Candidate,
     CandidateLane,
     CompetitionLevel,

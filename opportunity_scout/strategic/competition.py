@@ -11,9 +11,9 @@ import re
 from datetime import datetime, timezone
 from typing import Callable
 
-from bountyscout import github, paid_verification
-from bountyscout.strategic.claims import strategic_claim_text
-from bountyscout.types import GitHubComment, GitHubIssue
+from opportunity_scout import github, paid_verification
+from opportunity_scout.strategic.claims import strategic_claim_text
+from opportunity_scout.types import GitHubComment, GitHubIssue
 
 STRATEGIC_CLAIM_MAX_AGE_DAYS = 365
 

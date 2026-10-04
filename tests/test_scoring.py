@@ -4,10 +4,10 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from typing import Any, cast
 
-from bountyscout import reporting
-from bountyscout import scoring
-from bountyscout.types import Candidate, GitHubComment, GitHubIssue, RepositoryMetadata
-import bountyscout.app as scout
+from opportunity_scout import reporting
+from opportunity_scout import scoring
+from opportunity_scout.types import Candidate, GitHubComment, GitHubIssue, RepositoryMetadata
+import opportunity_scout.app as scout
 
 
 AMOUNT_RE = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"

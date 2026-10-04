@@ -10,7 +10,7 @@ import re
 from collections import Counter
 from typing import Mapping, Sequence
 
-from bountyscout.types import Candidate, RejectionRecord
+from opportunity_scout.types import Candidate, RejectionRecord
 
 
 def github_report_ref(text: object | None) -> str:
@@ -219,7 +219,7 @@ def github_report_body(
 ) -> str:
     """Render the full GitHub queue report."""
     body = (
-        "<!-- bountyscout-report: automated; actionable: false -->\n"
+        "<!-- opportunity-scout-report: automated; actionable: false -->\n"
         "> [!IMPORTANT]\n"
         "> **Automated OSS Opportunity Scout scan report — not a development task.**\n"
         "> Do not claim this report or open a pull request to resolve it. "
