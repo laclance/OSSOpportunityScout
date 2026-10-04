@@ -25,6 +25,7 @@ _VERIFICATION_FAILURE_REASONS: Final = (
     "could not refresh issue comments",
     "could not verify open implementation PR timeline",
 )
+_PAID_VERIFICATION_FAILURE_REASONS: Final = ("could not verify active claim comments",)
 
 PaidDiscoveryResult = tuple[list[Candidate], dict[str, int], list[RejectionRecord]]
 StrategicDiscoveryResult = tuple[
@@ -146,12 +147,19 @@ def coverage_status(
     strategic_rejects: dict[str, int],
     strategic_audit: list[RejectionRecord],
     *,
+    paid_rejects: dict[str, int] | None = None,
     warning_threshold: int = STRATEGIC_COVERAGE_WARNING_THRESHOLD,
 ) -> CoverageStatus:
     """Calculate the exact combined coverage warning semantics."""
-    verification_failures = sum(
+    strategic_verification_failures = sum(
         strategic_rejects.get(reason, 0) for reason in _VERIFICATION_FAILURE_REASONS
     )
+    paid_verification_failures = 0
+    if paid_rejects is not None:
+        paid_verification_failures = sum(
+            paid_rejects.get(reason, 0) for reason in _PAID_VERIFICATION_FAILURE_REASONS
+        )
+    verification_failures = strategic_verification_failures + paid_verification_failures
     discovery_failures = sum(
         1
         for item in strategic_audit
@@ -160,7 +168,11 @@ def coverage_status(
     failure_count = verification_failures + discovery_failures
 
     warning = None
-    if discovery_failures or verification_failures >= warning_threshold:
+    if (
+        discovery_failures
+        or paid_verification_failures
+        or strategic_verification_failures >= warning_threshold
+    ):
         warning = (
             "Opportunity discovery/verification coverage is incomplete: "
             f"{failure_count} discovery/source/comment/competition checks failed, "
@@ -352,6 +364,7 @@ def run_combined_scan(
     coverage = coverage_status(
         strategic_rejects,
         strategic_audit,
+        paid_rejects=paid_rejects,
         warning_threshold=coverage_warning_threshold,
     )
     if coverage.warning is not None:

@@ -110,14 +110,29 @@ class ActiveClaimTests(unittest.TestCase):
         )
         self.assertEqual(calls, [])
 
-    def test_failed_or_non_list_comments_returns_none(self) -> None:
+    def test_failed_or_non_list_comments_fails_closed(self) -> None:
+        values: tuple[object, ...] = (None, {})
+        for value in values:
+            with self.subTest(value=value):
+                self.assertEqual(
+                    paid_verification.active_claim_reason(
+                        "acme/widget",
+                        42,
+                        2,
+                        "tok",
+                        fetch_json=lambda *_, value=value: value,
+                    ),
+                    "could not verify active claim comments",
+                )
+
+    def test_valid_empty_comments_has_no_claim(self) -> None:
         self.assertIsNone(
             paid_verification.active_claim_reason(
                 "acme/widget",
                 42,
                 2,
                 "tok",
-                fetch_json=lambda *_: None,
+                fetch_json=lambda *_: [],
             )
         )
 
