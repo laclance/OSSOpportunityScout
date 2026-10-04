@@ -153,32 +153,12 @@ def linked_open_pr_reason(
 
 
 def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
-    """Detect open timeline-linked PRs and fail closed when timeline evidence is unavailable."""
+    """Adapt strategic issue identity to the canonical implementation-PR timeline check."""
     repo, number = github.issue_repo_and_number(item)
     if not repo or not number:
         return "could not identify repository/issue number"
 
-    timeline = github.github_collection(
-        f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
-        token,
-    )
-    if not isinstance(timeline, list):
-        return "could not verify open implementation PR timeline"
-
-    for event in timeline:
-        if event.get("event") != "cross-referenced":
-            continue
-        source = event.get("source") or {}
-        source_issue = source.get("issue") if isinstance(source, dict) else None
-        if not isinstance(source_issue, dict) or not source_issue.get("pull_request"):
-            continue
-        if source_issue.get("state") != "open":
-            continue
-        url = source_issue.get("html_url")
-        if url:
-            return f"existing open implementation PR: {url}"
-
-    return None
+    return paid_verification.has_existing_implementation_pr(repo, number, token)
 
 
 def supplemental_claim_reason(
