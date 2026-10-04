@@ -46,8 +46,10 @@ branch and owns the full transaction under one shared concurrency group with
 inside that lock; the recorded branch head is the persistence base. Persistence
 rejects intervening branch updates and uses a normal non-forced push. Failed
 persistence preserves the exact resulting file in a three-day private recovery
-artifact before the workflow fails. Recovery is operator-driven before rerunning;
-delivery and persistence are separate operations without exactly-once guarantees.
+artifact, then uses narrowly scoped `actions: write` permission to cancel every
+other run waiting in the same `scout-seen-state` group before the failed run
+releases the lock. Recovery remains operator-driven before rerunning; delivery and
+persistence are separate operations without exactly-once guarantees.
 See the [private instance guide](docs/PRIVATE_INSTANCE.md) for adoption and recovery.
 
 ## Data flow
