@@ -48,7 +48,8 @@ class TargetRepoSourceTests(unittest.TestCase):
 
         self.assertIsNone(error)
         self.assertEqual(
-            [item["html_url"] for item in items], [i1["html_url"], i2["html_url"], i3["html_url"]]
+            [item.get("html_url") for item in items],
+            [i1.get("html_url"), i2.get("html_url"), i3.get("html_url")],
         )
         self.assertEqual(getter.call_count, 2)
         self.assertIn("page=2", getter.call_args.args[0])
@@ -63,7 +64,9 @@ class TargetRepoSourceTests(unittest.TestCase):
                 fetch_pages=3,
                 result_limit=5,
             )
-        self.assertEqual([item["html_url"] for item in items], [i1["html_url"], i1["html_url"]])
+        self.assertEqual(
+            [item.get("html_url") for item in items], [i1.get("html_url"), i1.get("html_url")]
+        )
         self.assertIn("scan coverage incomplete", str(error))
 
     def test_target_repo_pool_exhausts_pages_when_results_are_only_prs(self) -> None:
@@ -277,7 +280,7 @@ class AdaptiveInspectionTests(unittest.TestCase):
         )
         self.assertEqual(len(selected["a/a"]), 3)
         self.assertEqual(len(selected["b/b"]), 3)
-        selected_urls = {item["html_url"] for rows in selected.values() for item in rows}
+        selected_urls = {item.get("html_url") for rows in selected.values() for item in rows}
         self.assertIn("https://github.com/a/a/issues/3", selected_urls)
         self.assertIn("https://github.com/b/b/issues/3", selected_urls)
         self.assertNotIn("https://github.com/a/a/issues/4", selected_urls)
@@ -294,8 +297,8 @@ class AdaptiveInspectionTests(unittest.TestCase):
             should_expand=lambda _: False,
         )
         self.assertEqual(
-            [item["html_url"] for item in selected["example/project"]],
-            [issue(1)["html_url"]],
+            [item.get("html_url") for item in selected["example/project"]],
+            [issue(1).get("html_url")],
         )
 
     def test_invalid_issue_urls_are_not_selected(self) -> None:

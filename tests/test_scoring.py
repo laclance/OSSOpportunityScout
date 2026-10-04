@@ -632,7 +632,7 @@ class EffortCalibrationTests(unittest.TestCase):
             issue(title="Repair broken image in documentation"),
         )
         for item in cases:
-            with self.subTest(title=item["title"]):
+            with self.subTest(title=item.get("title")):
                 self.assertTrue(scoring.documentation_microfix(item))
                 self.assertEqual(scoring.estimate_effort(item), "<1h")
 
@@ -720,7 +720,7 @@ class EffortCalibrationTests(unittest.TestCase):
             (issue(title="Ordinary bug", body="normal report"), "3–6h"),
         )
         for item, expected in cases:
-            with self.subTest(title=item["title"]):
+            with self.subTest(title=item.get("title")):
                 self.assertEqual(scoring.estimate_effort(item), expected)
 
     def test_feature_request_and_environment_heavy_signals_remain_large(self) -> None:

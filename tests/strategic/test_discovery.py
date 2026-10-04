@@ -61,8 +61,8 @@ class StrategicDiscoveryTests(unittest.TestCase):
             audit,
             [
                 {
-                    "url": strong["html_url"],
-                    "title": strong["title"],
+                    "url": strong.get("html_url"),
+                    "title": strong.get("title"),
                     "reason": "one",
                 }
             ],
@@ -169,7 +169,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
             adaptive_budget=1,
         )
         self.assertEqual(len(expanded["a/a"]), 16)
-        self.assertEqual(expanded["a/a"][-1]["html_url"], strong["html_url"])
+        self.assertEqual(expanded["a/a"][-1].get("html_url"), strong.get("html_url"))
 
     def test_global_search_results_preserve_query_order_and_page_budget(self) -> None:
         calls: list[tuple[str, str | None, int]] = []
@@ -225,19 +225,19 @@ class StrategicDiscoveryTests(unittest.TestCase):
         ) -> Candidate:
             self.assertEqual(lane, "strategic")
             self.assertIsNone(signal)
-            self.assertEqual(meta["language"], "Go")
+            self.assertEqual(meta.get("language"), "Go")
             self.assertIsNone(guide)
             score = 80 if item is first else 90
             return candidate(
-                url=str(item["html_url"]),
+                url=str(item.get("html_url")),
                 priority_score=score,
                 career_score=score,
             )
 
         selection = discovery.select_strategic_candidates(
             "tok",
-            {str(seen["html_url"])},
-            {str(paid["html_url"])},
+            {str(seen.get("html_url"))},
+            {str(paid.get("html_url"))},
             cache,
             [("global", {"items": [first]})],
             target_repos=["a/a"],
@@ -255,8 +255,8 @@ class StrategicDiscoveryTests(unittest.TestCase):
 
         ranked = selection.ranked_by_repo["a/a"]
         self.assertEqual(
-            [row[3]["html_url"] for row in ranked],
-            [second["html_url"], first["html_url"]],
+            [row[3].get("html_url") for row in ranked],
+            [second.get("html_url"), first.get("html_url")],
         )
         self.assertEqual(metadata_calls, ["a/a"])
         self.assertEqual(selection.audit, [])

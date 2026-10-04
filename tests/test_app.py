@@ -127,11 +127,11 @@ class BasicHeuristicTests(unittest.TestCase):
             items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
         self.assertIsNone(error)
         self.assertEqual(
-            [item["html_url"] for item in items],
+            [item.get("html_url") for item in items],
             [
-                i1["html_url"],
-                i2["html_url"],
-                i3["html_url"],
+                i1.get("html_url"),
+                i2.get("html_url"),
+                i3.get("html_url"),
             ],
         )
         self.assertEqual(getter.call_count, 2)
@@ -147,7 +147,7 @@ class BasicHeuristicTests(unittest.TestCase):
             ),
         ):
             items, error = scout.target_repo_issue_pool("grpc/grpc-go", "t")
-        self.assertEqual([item["html_url"] for item in items], [i1["html_url"]])
+        self.assertEqual([item.get("html_url") for item in items], [i1.get("html_url")])
         self.assertIn("scan coverage incomplete", str(error))
 
         with (
@@ -478,12 +478,12 @@ class CalibrationTests(unittest.TestCase):
             patch.object(
                 scout,
                 "build_candidate",
-                return_value={"url": upstream["html_url"]},
+                return_value={"url": upstream.get("html_url")},
             ),
         ):
             result, reason = scout.verify(wrapper, "t", {}, {}, require_paid=True)
         self.assertIsNone(reason)
-        self.assertEqual(result, {"url": upstream["html_url"]})
+        self.assertEqual(result, {"url": upstream.get("html_url")})
 
 
 class CandidateTests(unittest.TestCase):
@@ -526,7 +526,7 @@ class VerificationTests(unittest.TestCase):
             self.assertIsNone(reason)
             self.assertIsNotNone(fresh)
             assert fresh is not None
-            self.assertEqual(fresh["state"], "open")
+            self.assertEqual(fresh.get("state"), "open")
 
     def test_strategic_rejection_paths(self) -> None:
         with patch.object(paid_policy, "is_clean_candidate", return_value=False):
@@ -1111,7 +1111,7 @@ class DiscoveryTests(unittest.TestCase):
         )
         reason = "automated monitoring tracker, not an implementation task"
         preview = candidate(
-            url=tracker["html_url"],
+            url=tracker.get("html_url"),
             paid=False,
             career_score=51,
             priority_score=51,
@@ -1132,7 +1132,7 @@ class DiscoveryTests(unittest.TestCase):
 
         self.assertEqual(found, [])
         self.assertEqual(rejected[reason], 1)
-        self.assertEqual(examples[0]["url"], tracker["html_url"])
+        self.assertEqual(examples[0].get("url"), tracker.get("html_url"))
         self.assertEqual(audit, [])
 
     def test_discover_strategic_keeps_crowded_issue_for_real_competition_checks(self) -> None:
@@ -1157,11 +1157,11 @@ class DiscoveryTests(unittest.TestCase):
                 "verify",
                 return_value=(
                     candidate(
-                        url=crowded["html_url"],
+                        url=crowded.get("html_url"),
                         paid=False,
                         career_score=70,
                         priority_score=70,
-                        comments=crowded["comments"],
+                        comments=crowded.get("comments"),
                     ),
                     None,
                 ),
@@ -1169,7 +1169,7 @@ class DiscoveryTests(unittest.TestCase):
         ):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
-        self.assertEqual([item["url"] for item in found], [crowded["html_url"]])
+        self.assertEqual([item["url"] for item in found], [crowded.get("html_url")])
         verify_mock.assert_called_once()
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
@@ -1214,7 +1214,7 @@ class DiscoveryTests(unittest.TestCase):
             *rest: Any,
         ) -> dict[str, Any]:
             return candidate(
-                url=item_["html_url"],
+                url=item_.get("html_url"),
                 paid=False,
                 priority_score=90 if item_ is best else 80,
                 career_score=90 if item_ is best else 80,
@@ -1239,17 +1239,20 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "verify",
-                return_value=(candidate(url=best["html_url"], paid=False, career_score=90), None),
+                return_value=(
+                    candidate(url=best.get("html_url"), paid=False, career_score=90),
+                    None,
+                ),
             ),
             patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 1),
             patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 0),
         ):
             found, _, _, audit = scout.discover_strategic("t", set(), set(), {}, {})
 
-        self.assertEqual([item["url"] for item in found], [best["html_url"]])
+        self.assertEqual([item["url"] for item in found], [best.get("html_url")])
         self.assertTrue(any("adaptive repo inspection pool" in item["reason"] for item in audit))
-        self.assertFalse(any(item["url"] == dirty_weak["html_url"] for item in audit))
-        self.assertFalse(any(item["url"] == archived_weak["html_url"] for item in audit))
+        self.assertFalse(any(item.get("url") == dirty_weak.get("html_url") for item in audit))
+        self.assertFalse(any(item.get("url") == archived_weak.get("html_url") for item in audit))
 
     def test_strategic_preflight_rejects_only_source_visible_states(self) -> None:
         with patch.object(paid_policy, "is_clean_candidate", return_value=False):
@@ -1316,7 +1319,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
         self.assertEqual(len(audit), 1)
-        self.assertEqual(audit[0]["url"], "https://github.com/a/a/issues")
+        self.assertEqual(audit[0].get("url"), "https://github.com/a/a/issues")
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
     def test_default_discovery_searches_fit_five_request_budget(self) -> None:
@@ -1373,7 +1376,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(rejected, {})
         self.assertEqual(examples, [])
         self.assertEqual(len(audit), 1)
-        self.assertEqual(audit[0]["url"], "https://github.com/issues")
+        self.assertEqual(audit[0].get("url"), "https://github.com/issues")
         self.assertIn("global strategic discovery search failed", audit[0]["reason"])
         self.assertIn("coverage incomplete", audit[0]["reason"])
 
@@ -1403,24 +1406,24 @@ class DiscoveryTests(unittest.TestCase):
                 paid_policy,
                 "is_clean_candidate",
                 side_effect=lambda x: (
-                    x["html_url"] != dirty["html_url"]
-                    and x["html_url"] != platform_dirty["html_url"]
+                    x.get("html_url") != dirty.get("html_url")
+                    and x.get("html_url") != platform_dirty.get("html_url")
                 ),
             ),
             patch.object(
                 scout,
                 "verify",
                 side_effect=[
-                    (candidate(url=a["html_url"]), None),
-                    (candidate(url=platform["html_url"]), None),
+                    (candidate(url=a.get("html_url")), None),
+                    (candidate(url=platform.get("html_url")), None),
                 ],
             ),
             patch.object(
                 scout,
                 "platform_paid_refs",
                 return_value={
-                    platform["html_url"]: "sig",
-                    platform_dirty["html_url"]: "sig",
+                    platform.get("html_url"): "sig",
+                    platform_dirty.get("html_url"): "sig",
                     platform_bad: "sig",
                 },
             ),
@@ -1428,23 +1431,23 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "issue_from_github_url",
                 side_effect=lambda url, token: {
-                    platform["html_url"]: platform,
-                    platform_dirty["html_url"]: platform_dirty,
+                    platform.get("html_url"): platform,
+                    platform_dirty.get("html_url"): platform_dirty,
                     platform_bad: None,
                 }[url],
             ),
         ):
             found, rejected, examples = scout.discover_paid("t", set(), {}, {})
         selfEqual = self.assertEqual
-        selfEqual({x["url"] for x in found}, {a["html_url"], platform["html_url"]})
+        selfEqual({x["url"] for x in found}, {a.get("html_url"), platform.get("html_url")})
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
     def test_discover_paid_rejects_low_value_direct_and_platform_candidates(self) -> None:
         direct = issue(html_url="https://github.com/a/a/issues/1")
         platform = issue(html_url="https://github.com/p/p/issues/2")
-        low_direct = candidate(url=direct["html_url"], cash_score=41, priority_score=41)
-        low_platform = candidate(url=platform["html_url"], cash_score=42, priority_score=42)
+        low_direct = candidate(url=direct.get("html_url"), cash_score=41, priority_score=41)
+        low_platform = candidate(url=platform.get("html_url"), cash_score=42, priority_score=42)
 
         with (
             patch.object(github, "search_github", return_value={"items": [direct]}),
@@ -1458,7 +1461,7 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "platform_paid_refs",
                 return_value={
-                    platform["html_url"]: "confirmed bounty platform feed (IssueHunt): $2"
+                    platform.get("html_url"): "confirmed bounty platform feed (IssueHunt): $2"
                 },
             ),
             patch.object(scout, "issue_from_github_url", return_value=platform),
@@ -1481,7 +1484,9 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(scout, "verify", return_value=(None, "claimed")),
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
-            found, rejected, examples = scout.discover_paid("t", {seen["html_url"]}, {}, {})
+            found, rejected, examples = scout.discover_paid(
+                "t", {str(seen.get("html_url"))}, {}, {}
+            )
         self.assertEqual(found, [])
         self.assertGreater(rejected["claimed"], 0)
         self.assertEqual(examples[0]["reason"], "claimed")
@@ -1508,7 +1513,7 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "build_candidate",
                 side_effect=lambda item_, lane, signal, meta_, guide, *rest: candidate(
-                    url=item_["html_url"],
+                    url=item_.get("html_url"),
                     paid=(lane == "paid"),
                     priority_score=90 if item_ is paid else 80,
                 ),
@@ -1517,17 +1522,19 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "verify",
                 side_effect=lambda item_, *args, **kwargs: (
-                    (None, "reject") if item_ is paid else (candidate(url=item_["html_url"]), None)
+                    (None, "reject")
+                    if item_ is paid
+                    else (candidate(url=item_.get("html_url")), None)
                 ),
             ),
         ):
             found, rejected, examples, audit = scout.discover_strategic("t", set(), set(), {}, {})
-        self.assertEqual([x["url"] for x in found], [good["html_url"]])
+        self.assertEqual([x["url"] for x in found], [good.get("html_url")])
         self.assertEqual(len(audit), 1)
-        self.assertEqual(audit[0]["url"], archived["html_url"])
+        self.assertEqual(audit[0].get("url"), archived.get("html_url"))
         self.assertIn("repository metadata", audit[0]["reason"])
         self.assertEqual(rejected["reject"], 1)
-        self.assertEqual(examples[0]["url"], paid["html_url"])
+        self.assertEqual(examples[0].get("url"), paid.get("html_url"))
 
 
 class FormattingAndMainTests(unittest.TestCase):
@@ -2110,7 +2117,7 @@ class CoverageGapTests(unittest.TestCase):
             found, rejected, examples = scout.discover_paid("t", {source_seen}, {}, {})
         self.assertEqual(found, [])
         self.assertEqual(rejected["claimed"], 1)
-        self.assertEqual(examples[0]["url"], source_reject)
+        self.assertEqual(examples[0].get("url"), source_reject)
 
     def test_discover_strategic_seen_dirty_and_cached_repo_branches(self) -> None:
         seen_item = issue(html_url="https://github.com/a/a/issues/1")
@@ -2128,26 +2135,26 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(
                 paid_policy,
                 "is_clean_candidate",
-                side_effect=lambda x: x["html_url"] != dirty["html_url"],
+                side_effect=lambda x: x.get("html_url") != dirty.get("html_url"),
             ),
             patch.object(scout, "fetch_repo_metadata") as fetch_meta,
             patch.object(
                 scout,
                 "build_candidate",
-                return_value=candidate(url=cached["html_url"], priority_score=70),
+                return_value=candidate(url=cached.get("html_url"), priority_score=70),
             ),
             patch.object(
                 scout,
                 "verify",
-                return_value=(candidate(url=cached["html_url"]), None),
+                return_value=(candidate(url=cached.get("html_url")), None),
             ),
         ):
             found, rejected, examples, audit = scout.discover_strategic(
-                "t", {seen_item["html_url"]}, set(), cache, {}
+                "t", {str(seen_item.get("html_url"))}, set(), cache, {}
             )
-        self.assertEqual([x["url"] for x in found], [cached["html_url"]])
+        self.assertEqual([x["url"] for x in found], [cached.get("html_url")])
         self.assertEqual(len(audit), 1)
-        self.assertEqual(audit[0]["url"], dirty["html_url"])
+        self.assertEqual(audit[0].get("url"), dirty.get("html_url"))
         self.assertIn("basic eligibility filter", audit[0]["reason"])
         fetch_meta.assert_not_called()
         self.assertEqual(rejected, {})
