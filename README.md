@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade in Slice 1 and coverage-completeness fix in Slice 1B are merged. Slice 2 adds immutable preferences, a strict TOML parser, and [scout.example.toml](scout.example.toml). The parser is available for explicit loading through `opportunity_scout.preferences.load_scout_preferences(Path(...))`; the executable does not yet read `scout.toml` or apply preferences. Current invocation behavior is preserved. Configuration/state flags, runtime preference wiring, and the composite action belong to later slices. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
+The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Language, effort, threshold, and result-limit wiring remain deferred to Slices 3B–3D; deployment work also remains deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
 
 ## How it works
 
@@ -23,6 +23,7 @@ The main boundaries are:
 
 - `opportunity_scout/app.py` — environment wiring and application assembly.
 - `opportunity_scout/preferences.py` — immutable non-secret preferences and strict version-1 TOML validation, separate from runtime credentials.
+- `opportunity_scout/selection.py` — pure repository exclusions, additive strategic targets, and final lane acceptance.
 - `opportunity_scout/run.py` — combined scan lifecycle, delivery aggregation, and transactional seen-state commit.
 - `opportunity_scout/github.py` — canonical GitHub REST transport, safe-read retries, pagination, and per-scan caching.
 - `opportunity_scout/paid.py` / `paid_verification.py` — paid-opportunity policy and verification.
@@ -77,6 +78,40 @@ python -m pip install -r requirements-dev.txt
 make quality
 GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 ```
+
+### Explicit configuration and state paths
+
+```bash
+python opportunity_scout.py --config scout.example.toml --state seen_bounties.json
+```
+
+Paths are relative to the working directory unless absolute. `--state` defaults to
+`seen_bounties.json` and works with or without `--config`; every state read, delivery
+commit, and quiet-run maintenance write uses that selected path. Its parent directory
+must already exist. Missing state means first run; invalid existing state fails closed.
+
+An explicit config must be a valid version-1 TOML file. Missing, unreadable, or invalid
+config fails before state loading, discovery, or delivery; it never falls back to
+legacy defaults. Without `--config`, the scout retains its existing source behavior
+and ignores any `scout.toml` in the working directory.
+
+Slice 3A applies `[lanes].paid`, `[lanes].strategic`, and
+`[discovery].repositories`, `exclude_repositories`, and `global_search`:
+
+- Repository targets add strategic sources to the existing curated list; they are
+  not an allowlist. Targets are deduplicated case-insensitively in first-seen order.
+- Exclusions match case-insensitively across both lanes and resolved upstream
+  repositories, and take precedence over targets.
+- Disabled lanes skip their discovery requests and reject corresponding final
+  classifications. Both lanes may be disabled; bounded state maintenance still runs
+  on a complete quiet scan.
+- `global_search = false` skips strategic global searches while retaining curated
+  strategic sources and paid discovery.
+
+`name`, languages, effort, score thresholds, and `max_results` are parsed and
+validated but do not yet affect runtime behavior. The existing scoring, thresholds,
+verification budgets, and eight-result queue remain in effect until their designated
+slices. Delivery credentials and privacy controls remain environment configuration.
 
 ### GitHub credentials and delivery
 

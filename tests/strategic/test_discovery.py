@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
 
 from opportunity_scout import github
 from opportunity_scout.strategic import discovery
@@ -26,6 +27,33 @@ def repo_meta(*, archived: bool = False) -> RepositoryMetadata:
 
 
 class StrategicDiscoveryTests(unittest.TestCase):
+    def test_excluded_repository_is_removed_before_metadata_and_inspection(self) -> None:
+        blocked = issue(html_url="https://github.com/blocked/repo/issues/1")
+        allowed = issue(html_url="https://github.com/example/project/issues/2")
+        metadata = Mock(return_value=repo_meta())
+        result = discovery.select_strategic_candidates(
+            None,
+            set(),
+            set(),
+            {},
+            [("global", {"items": [blocked, allowed]})],
+            target_repos=[],
+            network_workers=1,
+            target_repo_pool=lambda *_args: ([], None),
+            basic_candidate=lambda _item: True,
+            fetch_repo_metadata=metadata,
+            payment_signal=lambda _item: None,
+            build_candidate=lambda item, *_args: candidate(url=item["html_url"]),
+            cache_locks=github.KeyedLockPool(),
+            inspect_per_repo=1,
+            adaptive_budget=0,
+            repository_excluded=lambda repository: repository == "blocked/repo",
+        )
+        metadata.assert_called_once_with("example/project", None)
+        self.assertEqual(list(result.ranked_by_repo), ["example/project"])
+        self.assertEqual(result.ranked_by_repo["example/project"][0][3], allowed)
+        self.assertEqual(result.audit, [])
+
     def test_possible_miss_and_bounded_audit_helpers(self) -> None:
         now = datetime.now(timezone.utc)
         strong = issue(

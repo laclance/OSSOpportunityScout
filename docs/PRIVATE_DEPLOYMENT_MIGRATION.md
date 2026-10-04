@@ -2,10 +2,11 @@
 
 This is the authoritative implementation tracker for separating the public scanner
 distribution from private scout instances. The architecture and contracts below are
-agreed targets, except for the Python support contract implemented by Slice 1 and
-coverage-completeness fix implemented by Slice 1B, and the standalone preference
-model/parser/example implemented by Slice 2. Runtime configuration wiring and
-deployment features remain planned.
+agreed targets, except for the Python support contract implemented by Slice 1,
+the coverage-completeness fix implemented by Slice 1B, the preference
+model/parser/example implemented by Slice 2 (merged in PR #34), and the explicit
+config/state and source-control wiring implemented by Slice 3A. Language, effort,
+threshold/result-limit wiring and deployment features remain planned.
 
 ## Repository and workflow ownership
 
@@ -117,6 +118,13 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   Before branching, `make quality` passed on Python 3.12.3: all 389 tests,
   every strict check, and 100% statement and branch coverage.
 
+- Slice 3A starting local and freshly fetched remote `main`:
+  `688a789dbd880c6f65f2d999143aa71f897af691`. PR #34 was confirmed merged on
+  2026-10-04, local `main` matched remote `main`, and the starting worktree was clean.
+  Before branching, `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed
+  on Python 3.12.3: all 409 tests, every strict check, and 100% statement and branch
+  coverage. The explicit interpreter selects the available development environment.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
@@ -131,8 +139,10 @@ deterministic defaults, and the existing canonical `EffortBucket` vocabulary.
 Configuration contains preferences, never credentials or correctness controls.
 
 The generic v1 [scout.example.toml](../scout.example.toml) fixes the field names and
-defaults below. The standalone parser can load this schema, but the current
-executable does not read or apply it. Slices 3A–3D own runtime integration.
+defaults below. Slice 3A loads an explicit `--config PATH` and applies repositories,
+exclusions, lanes, and strategic global-search control. `--state PATH` selects every
+state read/write, independently of config. Legacy no-config invocation remains
+available and ignores `scout.toml`. Slices 3B–3D own the remaining runtime fields.
 
 ```toml
 version = 1
@@ -205,9 +215,10 @@ lists or state. Multi-profile support remains deferred.
 
 ## Implementation sequence and acceptance
 
-Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 implements the
-preference model, parser, example, and regressions and stops at its open PR.
-Slices 3A onward remain **planned**. Complete them in order through small,
+Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 is merged in
+PR #34 with the preference model, parser, example, and regressions. Slice 3A
+implements explicit paths and source controls and stops at its open PR.
+Slices 3B onward remain **planned**. Complete them in order through small,
 independently verified PRs; 3A–3D remain separate slices.
 
 Slice 1 establishes the Python support contract:
@@ -333,13 +344,25 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 2 open PR.** Immutable preferences, strict TOML
-parsing, and the generic example are implemented; current invocation behavior is
-preserved, including ignoring an existing `scout.toml`. Parser regressions cover
-defaults, every field, strict types/bounds, unknown keys, invalid repository/effort
-values, immutability, malformed/duplicate TOML, invalid UTF-8, and missing/unreadable
-files. Do not merge this PR or start a later slice implicitly. After Slice 2 merges,
-the next task is Slice 3A: explicit config/state paths, repositories, exclusions,
-lanes, and global discovery. Runtime wiring and deployment implementation remain
-outside Slice 2. The runtime/tooling minimum is Python 3.12; compatibility CI
-explicitly covers 3.13 and 3.14.
+**Current stopping boundary: Slice 3A open PR.** Slice 2 merged in PR #34.
+Explicit `--config PATH` loads and validates preferences before state/network/delivery
+activity; missing or invalid explicit config never selects defaults. No-config
+invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
+writes use `--state PATH`, defaulting to `seen_bounties.json`; the parent must exist.
+Repository targets add strategic curated sources in first-seen, case-insensitive
+order; exclusions take precedence across both lanes, including resolved upstream
+repositories. Disabled lanes skip their discovery sources and reject corresponding
+final classifications before repository-slot settlement and queue truncation.
+`global_search` controls strategic global discovery only. Disabled sources do not
+make coverage incomplete; bounded quiet maintenance remains available.
+
+Regressions cover enabled-source request counts with/without prefetch, target
+addition/deduplication, exclusions in source pools and after refresh/aggregator
+resolution, final classifications and selection slots, configured/legacy executable
+invocation, explicit invalid configuration, and custom state deduplication,
+delivery/maintenance persistence, corruption, save failure, incomplete coverage,
+and failed delivery. Existing verification, privacy, coverage, and aggregate-delivery
+contracts remain in force. Language, effort, thresholds, and result-limit fields are
+validated but inactive; name has no current runtime effect. Slices 3B–3D and all
+deployment work remain deferred. Do not merge this PR or start a later slice
+implicitly. After Slice 3A merges, the next designated slice is 3B (language wiring).

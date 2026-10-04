@@ -1,13 +1,25 @@
 from __future__ import annotations
 
+import argparse
 import os
 import re
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from functools import partial
+from pathlib import Path
 from time import sleep
 from typing import Any, cast
 
-from opportunity_scout import delivery, github, paid, paid_verification
+from opportunity_scout import (
+    delivery,
+    github,
+    paid,
+    paid_verification,
+    preferences,
+    selection,
+    state,
+)
 from opportunity_scout import reporting as reporting
 from opportunity_scout import run
 from opportunity_scout import scoring
@@ -553,6 +565,8 @@ def verify(
     require_paid: bool = False,
     payment_signal_override: str | None = None,
     activity_comments: list[GitHubComment] | None = None,
+    *,
+    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[Candidate | None, str | None]:
     fresh, reason = refresh_issue(item, token)
     if reason:
@@ -570,6 +584,10 @@ def verify(
             return None, f"upstream source: {reason}"
         if fresh is None:
             return None, "could not refresh upstream issue from aggregator wrapper"
+
+    repo, _ = github.issue_repo_and_number(fresh)
+    if selection.repository_excluded(repo, scout_preferences):
+        return None, "repository excluded by configuration"
 
     clean = paid.is_clean_candidate(fresh) if require_paid else strategic_basic_candidate(fresh)
     if not clean:
@@ -631,6 +649,9 @@ def verify(
             return None, reason
         lane = "strategic"
 
+    if not (scout_preferences.paid if lane == "paid" else scout_preferences.strategic):
+        return None, "final candidate lane disabled by configuration"
+
     repo, _ = github.issue_repo_and_number(fresh)
     if repo is None:
         return None, "could not identify repository/issue number"
@@ -679,6 +700,8 @@ def discover_paid(
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     search_results: list[SearchBatch] | None = None,
+    *,
+    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
     found: list[Candidate] = []
     touched: set[str] = set()
@@ -704,7 +727,10 @@ def discover_paid(
             if not url or url in seen or url in touched:
                 continue
             touched.add(url)
-            if paid.is_clean_candidate(item):
+            repo, _ = github.issue_repo_and_number(item)
+            if not selection.repository_excluded(
+                repo, scout_preferences
+            ) and paid.is_clean_candidate(item):
                 pending.append((item, None, False))
 
     # Official platform feeds can expose funded issues that contain no bounty
@@ -713,6 +739,9 @@ def discover_paid(
     platform_sources: list[tuple[str, str]] = []
     for source_url, platform_signal in platform_paid_refs().items():
         if source_url in seen or source_url in touched:
+            continue
+        source_repo, _ = github.issue_repo_and_number(GitHubIssue(html_url=source_url))
+        if selection.repository_excluded(source_repo, scout_preferences):
             continue
         touched.add(source_url)
         platform_sources.append((source_url, platform_signal))
@@ -751,6 +780,7 @@ def discover_paid(
                 guide_cache,
                 require_paid=True,
                 payment_signal_override=platform_signal,
+                scout_preferences=scout_preferences,
             ),
         )
 
@@ -766,6 +796,10 @@ def discover_paid(
             continue
 
         assert candidate is not None
+        preference_reason = selection.candidate_rejection(candidate, scout_preferences)
+        if preference_reason:
+            add_reject(rejected, examples, item, preference_reason)
+            continue
         if candidate["cash_score"] < PAID_MIN_CASH_SCORE:
             reason = (
                 f"cash score {candidate['cash_score']}/100 below paid threshold "
@@ -837,10 +871,16 @@ def strategic_global_search_results(
 
 def prefetch_discovery_searches(
     token: str | None,
+    *,
+    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[list[SearchBatch], list[SearchBatch]]:
     """Pace paid and strategic Search calls to avoid burst/secondary rate limits."""
-    requests = [("paid", query, 15) for query in PAID_DISCOVERY_QUERIES] + [
-        ("strategic", query, STRATEGIC_GLOBAL_SEARCH_PER_PAGE) for query in STRATEGIC_GLOBAL_QUERIES
+    requests = [
+        ("paid", query, 15) for query in PAID_DISCOVERY_QUERIES if scout_preferences.paid
+    ] + [
+        ("strategic", query, STRATEGIC_GLOBAL_SEARCH_PER_PAGE)
+        for query in STRATEGIC_GLOBAL_QUERIES
+        if scout_preferences.strategic and scout_preferences.global_search
     ]
     paid_results: list[SearchBatch] = []
     strategic_results: list[SearchBatch] = []
@@ -864,22 +904,26 @@ def discover_strategic(
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
     global_search_results: list[SearchBatch] | None = None,
+    *,
+    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[
     list[Candidate],
     dict[str, int],
     list[RejectionRecord],
     list[RejectionRecord],
 ]:
-    if global_search_results is None:
+    if not scout_preferences.global_search:
+        global_search_results = []
+    elif global_search_results is None:
         global_search_results = strategic_global_search_results(token)
 
-    selection = strategic_discovery.select_strategic_candidates(
+    discovery_selection = strategic_discovery.select_strategic_candidates(
         token,
         seen,
         paid_urls,
         repo_cache,
         global_search_results,
-        target_repos=TARGET_REPOS,
+        target_repos=selection.strategic_repositories(TARGET_REPOS, scout_preferences),
         network_workers=NETWORK_WORKERS,
         target_repo_pool=target_repo_issue_pool,
         basic_candidate=strategic_basic_candidate,
@@ -890,13 +934,21 @@ def discover_strategic(
         inspect_per_repo=STRATEGIC_INSPECT_PER_REPO,
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         audit_limit=STRATEGIC_AUDIT_LIMIT,
+        repository_excluded=lambda repo: selection.repository_excluded(repo, scout_preferences),
     )
 
     def deep_verify(item: GitHubIssue) -> tuple[Candidate | None, str | None]:
-        return verify(item, token, repo_cache, guide_cache)
+        candidate, reason = verify(
+            item, token, repo_cache, guide_cache, scout_preferences=scout_preferences
+        )
+        if candidate is not None and reason is None:
+            reason = selection.candidate_rejection(candidate, scout_preferences)
+            if reason is not None:
+                candidate = None
+        return candidate, reason
 
     result = strategic_verification.verify_strategic_selection(
-        selection,
+        discovery_selection,
         deep_verify,
         strategic_preflight_rejection,
         keep_per_repo=STRATEGIC_KEEP_PER_REPO,
@@ -909,12 +961,48 @@ def discover_strategic(
     return result.candidates, result.rejected, result.examples, result.audit
 
 
-def main() -> None:
+def _run_dependencies(
+    token: str | None, scout_preferences: preferences.ScoutPreferences | None
+) -> run.RunDependencies:
+    """Bind explicit preferences without mutable globals or widening run callbacks."""
+    paid_discovery: run.PaidDiscovery = discover_paid
+    strategic_discovery_callback: run.StrategicDiscovery = discover_strategic
+    prefetch: run.DiscoveryPrefetch = prefetch_discovery_searches
+    if scout_preferences is not None:
+        paid_discovery = partial(discover_paid, scout_preferences=scout_preferences)
+        strategic_discovery_callback = partial(
+            discover_strategic, scout_preferences=scout_preferences
+        )
+        prefetch = partial(prefetch_discovery_searches, scout_preferences=scout_preferences)
+    return run.RunDependencies(
+        discover_paid=paid_discovery,
+        discover_strategic=strategic_discovery_callback,
+        prefetch_discovery_searches=prefetch,
+        append_audit=add_audit,
+        send_telegram=delivery.send_telegram_notification,
+        send_discord=delivery.send_discord_notification,
+        send_github_report=delivery.create_github_issue,
+        issue_lifecycle=lambda url: github.issue_lifecycle(url, token).status,
+        send_private_github_report=delivery.create_private_github_issue,
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(description="Find verified OSS opportunities.")
+    parser.add_argument("--config", type=Path, help="Explicit version-1 scout TOML preferences")
+    parser.add_argument(
+        "--state", type=Path, default=Path(state.DEFAULT_STATE_FILE), help="Seen-state path"
+    )
+    arguments = parser.parse_args(argv)
+    scout_preferences = (
+        preferences.load_scout_preferences(arguments.config)
+        if arguments.config is not None
+        else None
+    )
     token = os.environ.get("GITHUB_TOKEN")
-    repo_fullname = os.environ.get("GITHUB_REPOSITORY")
     config = run.RunConfig(
         token=token,
-        repo_fullname=repo_fullname,
+        repo_fullname=os.environ.get("GITHUB_REPOSITORY"),
         telegram_token=os.environ.get("TELEGRAM_BOT_TOKEN"),
         telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID"),
         discord_webhook=os.environ.get("DISCORD_WEBHOOK_URL"),
@@ -923,21 +1011,12 @@ def main() -> None:
         ),
         private_github_reports_repository=os.environ.get("PRIVATE_GITHUB_REPORTS_REPOSITORY"),
         private_github_reports_token=os.environ.get("PRIVATE_GITHUB_REPORTS_TOKEN"),
-    )
-    dependencies = run.RunDependencies(
-        discover_paid=discover_paid,
-        discover_strategic=discover_strategic,
-        prefetch_discovery_searches=prefetch_discovery_searches,
-        append_audit=add_audit,
-        send_telegram=delivery.send_telegram_notification,
-        send_discord=delivery.send_discord_notification,
-        send_github_report=delivery.create_github_issue,
-        issue_lifecycle=lambda url: github.issue_lifecycle(url, token).status,
-        send_private_github_report=delivery.create_private_github_issue,
+        preferences=scout_preferences or preferences.ScoutPreferences(),
+        state_path=arguments.state,
     )
     run.run_combined_scan(
         config,
-        dependencies,
+        _run_dependencies(token, scout_preferences),
         datetime.now(timezone.utc),
         report_limit=REPORT_LIMIT,
         coverage_warning_threshold=STRATEGIC_COVERAGE_WARNING_THRESHOLD,

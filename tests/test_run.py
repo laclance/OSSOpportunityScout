@@ -453,7 +453,11 @@ class RunLifecycleTests(unittest.TestCase):
         saved: list[state.SeenState] = []
         with (
             patch.object(state, "load_seen_state", return_value=seen),
-            patch.object(state, "save_seen_state", side_effect=saved.append),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=lambda next_state, _path: saved.append(next_state),
+            ),
         ):
             result = run.run_combined_scan(
                 run.RunConfig(None, None, None, None, None),
@@ -519,7 +523,11 @@ class RunLifecycleTests(unittest.TestCase):
                 "load_seen_state",
                 return_value=state.SeenState.from_urls([old_url]),
             ),
-            patch.object(state, "save_seen_state", side_effect=saved.append),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=lambda next_state, _path: saved.append(next_state),
+            ),
         ):
             result = run.run_combined_scan(
                 run.RunConfig(None, None, "tb", "chat", None),
@@ -695,7 +703,11 @@ class RunLifecycleTests(unittest.TestCase):
         saved: list[state.SeenState] = []
         with (
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
-            patch.object(state, "save_seen_state", side_effect=saved.append),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=lambda next_state, _path: saved.append(next_state),
+            ),
         ):
             result = run.run_combined_scan(
                 run.RunConfig(None, None, None, None, "hook"),

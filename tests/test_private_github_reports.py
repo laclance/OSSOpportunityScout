@@ -282,7 +282,7 @@ class PrivateGitHubRunTests(unittest.TestCase):
             patch.dict(os.environ, env, clear=True),
             patch.object(run, "run_combined_scan") as combined,
         ):
-            app.main()
+            app.main([])
 
         config = combined.call_args.args[0]
         deps = combined.call_args.args[1]

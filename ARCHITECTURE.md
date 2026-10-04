@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 supplies immutable preferences and a standalone strict TOML parser. Runtime wiring and deployment migration remain planned: active scanner preferences are still hard-coded, and the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Language, effort, thresholds, result limits, and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -55,9 +55,10 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | Module | Responsibility | Boundary |
 | --- | --- | --- |
 | `opportunity_scout.py` | Stable executable entry point that calls `opportunity_scout.app.main()` | Root shim only; no scanner policy or compatibility façade |
-| `opportunity_scout/app.py` | Package-only executable/application assembly, environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
+| `opportunity_scout/app.py` | Package-only executable/application assembly, CLI/environment wiring, and mixed paid/strategic verification adapter | Uses the canonical package GitHub transport and package-owned delivery callbacks |
 | `opportunity_scout/run.py` | Combined scan lifecycle, queue assembly, coverage accounting, delivery aggregation, and transactional seen-state commit | Owns one combined run without importing `opportunity_scout.app` or `opportunity_scout.py`; delivery transports enter only through typed callbacks, host reports remain explicit opt-in, and private reports require their own repository plus credential |
-| `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run, and is not yet used by application assembly |
+| `opportunity_scout/preferences.py` | Frozen `ScoutPreferences`, pure version-1 schema parsing, and explicit TOML file loading | Non-secret preferences only; depends on canonical `EffortBucket`, never imports app/run; loaded explicitly by application assembly |
+| `opportunity_scout/selection.py` | Pure additive strategic targets, case-insensitive repository exclusions, and final lane acceptance | Uses immutable preferences and canonical candidates; no I/O or app/run dependency |
 | `opportunity_scout/github.py` | Canonical GitHub JSON transport, explicit collection pagination, bounded Issues Search, issue/timestamp parsing, and keyed per-scan cache fills | `github_get()` stays single-page; `github_collection()` follows validated Links through the same safe-read retries and discards incomplete evidence; injectable fetchers remain deterministic test seams |
 | `opportunity_scout/paid.py` | Pure paid-opportunity basic eligibility and issue-level payment-signal recognition over already-fetched issue evidence | No network I/O; canonical owner of `MAX_COMMENTS`, `PAYMENT_TERM_RE`, `AMOUNT_RE`, `payment_signal()`, and `is_clean_candidate()` |
 | `opportunity_scout/paid_verification.py` | Paid proposal/meta rejection, active-claim detection, and open implementation-PR competition verification | May perform GitHub-backed verification through injectable transport; does not own discovery, scoring, or delivery |
@@ -72,7 +73,7 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `opportunity_scout/strategic/discovery.py` | Strategic source-pool collection, near-miss audit diagnostics, adaptive inspection selection, and deterministic pre-verification ranking | Accepts narrow app adapters for paid predicates/signals; never imports `opportunity_scout.app` |
 | `opportunity_scout/strategic/verification.py` | Ranked strategic deep-verification orchestration, bounded per-repo settlement, source-failure handling, and final strategic selection | Accepts typed app callbacks for mixed verification/preflight behavior; never imports `opportunity_scout.app` |
 | `opportunity_scout/strategic/readiness.py` | Pure maintainer-readiness, triage, lifecycle, dashboard, and release-tracking policy | Interprets issue/comment evidence only; no network I/O or dependency on `opportunity_scout.py` |
-| `seen_bounties.json` | Local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
+| `seen_bounties.json` (or `--state PATH`) | Selected local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
 | `.github/workflows/oss-opportunity-scout.yml` | Legacy upstream scanner execution | Manual-only; requires the remote `scout-state` branch, absent as verified on 2026-10-04; retired after private migration is proven |
 | `.github/workflows/python-quality.yml` | Authoritative formatting, lint, recursive compile, strict typing, tests, and coverage on Python 3.12; recursive compile and full-suite compatibility checks on 3.13 and 3.14 | Explicit CI versions define support; later releases require passing CI before support is claimed |
 
@@ -98,9 +99,11 @@ opportunity_scout.app
 
 opportunity_scout.run --> opportunity_scout.reporting
 opportunity_scout.run --> opportunity_scout.state
+opportunity_scout.run --> opportunity_scout.preferences / opportunity_scout.selection
 opportunity_scout.run -X-> opportunity_scout.app
 opportunity_scout.run -X-> opportunity_scout.py
 opportunity_scout.types -X-> package policy / orchestration modules
+opportunity_scout.selection --> opportunity_scout.preferences / opportunity_scout.types
 opportunity_scout.preferences --> opportunity_scout.types
 opportunity_scout.preferences -X-> opportunity_scout.app / opportunity_scout.run
 opportunity_scout.paid_verification --> opportunity_scout.github
@@ -140,8 +143,30 @@ unknown keys, malformed types, unsupported versions, and invalid values fail clo
 The public [example](scout.example.toml) exercises every preference with those defaults.
 The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns field semantics.
 Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
-Application assembly does not load preferences, even when `scout.toml` exists;
-configuration/state flags and runtime application belong to Slices 3A–3D.
+Application assembly loads preferences only for `--config PATH`, before loading
+state or performing network/delivery activity. Invalid explicit configuration raises
+`ScoutPreferencesError` without falling back to defaults. Without `--config`, even
+an existing `scout.toml` is ignored. `--state PATH` is independent of config and
+defaults to `seen_bounties.json`; `RunConfig.state_path` reaches every state read and
+both delivery and quiet-maintenance saves. State code remains branch-agnostic.
+
+Slice 3A binds immutable preferences into narrow discovery callbacks. Combined-run
+orchestration skips disabled lanes; paced prefetch requests include only enabled
+paid Search and enabled strategic global Search. Disabling global Search preserves
+curated strategic and paid sources. Disabled sources produce no coverage failures.
+Configured repository targets add to the existing curated list with case-insensitive
+first-seen deduplication; exclusions win and remove curated requests. Search/platform
+results are excluded before metadata/deep checks where their repository is known.
+After source refresh and aggregator resolution, verification checks exclusions again
+against the resolved upstream repository. Final paid/unpaid classification controls
+lane acceptance before strategic repository-slot settlement, and queue assembly
+filters again before deduplication and truncation. Preference rejection does not
+weaken payment, readiness, competition, privacy, or coverage evidence requirements.
+
+Language, effort, threshold, and result-limit fields remain validated but inactive
+until Slices 3B–3D. Name remains display metadata without current runtime use.
+Existing scoring, thresholds, deterministic ranking, and verification budgets remain
+in effect; this slice does not change deployment ownership or workflows.
 
 ## GitHub integration contract
 

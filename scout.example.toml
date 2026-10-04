@@ -1,5 +1,6 @@
-# Generic version-1 preferences. Runtime wiring is planned for later slices;
-# the current executable does not read this file or scout.toml.
+# Generic version-1 preferences. Opt in with --config PATH; no automatic loading.
+# Slice 3A applies lanes, repositories/exclusions, and strategic global_search.
+# Language, effort, thresholds, and result limits await Slices 3B–3D.
 # Keep credentials and delivery configuration outside this file.
 version = 1
 # Optional non-secret display name:
