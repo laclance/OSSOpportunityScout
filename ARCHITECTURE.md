@@ -211,17 +211,21 @@ lane acceptance before strategic repository-slot settlement, and queue assembly
 filters again before deduplication and truncation. Preference rejection does not
 weaken payment, readiness, competition, privacy, or coverage evidence requirements.
 
-Slice 3B matches configured languages case-insensitively against the resolved
-repository's primary language from the existing shared per-run metadata cache.
-Verification filters after refresh/aggregator resolution and metadata availability
-and archive checks, before contribution-guide lookup. It does not prune using
-source/wrapper language or issue text/labels. Final candidate language carries that
-metadata into the pure acceptance guard in both discovery lanes and combined-run
-queue assembly, before repository-slot settlement and final truncation. An empty
-list accepts all languages; explicit lists exclude absent/null/empty primary
-language and the canonical `Unknown` display value. Language policy adds neither
-metadata requests nor Search queries; discovery and deep-verification budgets and
-coverage accounting remain unchanged.
+Slice 3B matches configured languages case-insensitively against primary repository
+language from the existing shared per-run metadata cache. Strategic discovery uses
+already-fetched metadata to exclude direct-source candidates before bounded base and
+adaptive inspection when the source repository identity is authoritative. Recognized
+wrapper/aggregator candidates are not rejected by wrapper language because their
+upstream repository is resolved later. Verification always re-applies the language
+preference after refresh/aggregator resolution and metadata/archive checks, before
+contribution-guide lookup, so the resolved upstream repository remains authoritative.
+Final candidate language carries that metadata into the pure acceptance guard in both
+discovery lanes and combined-run queue assembly, before repository-slot settlement
+and final truncation. An empty list accepts all languages; explicit lists exclude
+absent/null/empty primary language and the canonical `Unknown` display value.
+Language policy adds neither metadata requests nor Search queries; inspection budget
+constants and coverage accounting remain unchanged, while ineligible direct-source
+candidates can avoid later deep verification work.
 
 Slice 3C adds pure `effort_accepted(EffortBucket, Sequence[EffortBucket])` policy
 to the existing final-candidate acceptance guard. Exact membership uses the

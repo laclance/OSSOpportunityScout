@@ -930,6 +930,10 @@ def discover_strategic(
         adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         audit_limit=STRATEGIC_AUDIT_LIMIT,
         repository_excluded=lambda repo: selection.repository_excluded(repo, scout_preferences),
+        language_eligible=lambda item, meta: (
+            bool(upstream_wrapper_issue_url(item))
+            or selection.language_accepted(meta.get("language"), scout_preferences)
+        ),
     )
 
     def deep_verify(item: GitHubIssue) -> tuple[Candidate | None, str | None]:

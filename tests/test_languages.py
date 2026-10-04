@@ -210,6 +210,73 @@ class ResolvedLanguageTests(unittest.TestCase):
 
 
 class LanguageOrchestrationTests(unittest.TestCase):
+    def test_strategic_prefilter_defers_wrapper_language_to_resolved_upstream(self) -> None:
+        wrapper = issue(
+            html_url="https://github.com/aggregator/jobs/issues/4",
+            title="[READY FOR ENGINEERING] upstream task",
+            body=(
+                "TARGET_REPOSITORY https://github.com/upstream/repo\n"
+                "ORIGINAL_ISSUE_URL https://github.com/upstream/repo/issues/7"
+            ),
+            labels=[{"name": "help wanted"}],
+            comments=0,
+        )
+        resolved = candidate(
+            repo="upstream/repo",
+            issue_number=7,
+            url="https://github.com/upstream/repo/issues/7",
+            language="Go",
+            career_score=90,
+            priority_score=90,
+        )
+        metadata_calls: list[str] = []
+
+        def fetch(repo: str, _token: str | None) -> RepositoryMetadata:
+            metadata_calls.append(repo)
+            return {"language": "Rust", "archived": False}
+
+        def build(
+            source: GitHubIssue,
+            _lane: CandidateLane,
+            _signal: str | None,
+            meta: RepositoryMetadata,
+            _guide: str | None,
+        ) -> Candidate:
+            repo, number = github.issue_repo_and_number(source)
+            return candidate(
+                repo=repo,
+                issue_number=number,
+                url=source["html_url"],
+                language=meta.get("language") or "Unknown",
+                career_score=90,
+                priority_score=90,
+            )
+
+        with (
+            patch.object(app, "TARGET_REPOS", []),
+            patch.object(app, "strategic_basic_candidate", return_value=True),
+            patch.object(app, "fetch_repo_metadata", side_effect=fetch),
+            patch.object(app, "build_candidate", side_effect=build),
+            patch.object(app, "strategic_preflight_rejection", return_value=None),
+            patch.object(app, "verify", return_value=(resolved, None)) as verify,
+        ):
+            found, rejected, examples, audit = app.discover_strategic(
+                None,
+                set(),
+                set(),
+                {},
+                {},
+                [("global", {"items": [wrapper]})],
+                scout_preferences=preferences.ScoutPreferences(languages=("Go",)),
+            )
+
+        self.assertEqual(found, [resolved])
+        self.assertEqual(rejected, {})
+        self.assertEqual(examples, [])
+        self.assertEqual(audit, [])
+        self.assertEqual(metadata_calls, ["aggregator/jobs"])
+        verify.assert_called_once()
+
     def test_configured_languages_reuse_metadata_without_search_fanout(self) -> None:
         metadata: dict[str, RepositoryMetadata] = {
             "example/go": {"language": "Go"},
@@ -308,7 +375,8 @@ class LanguageOrchestrationTests(unittest.TestCase):
                     )
                     self.assertEqual(fetch.call_count, 3)
                     self.assertEqual({call.args[0] for call in fetch.call_args_list}, set(metadata))
-                    self.assertEqual(refresh.call_count, 12)
+                    expected_refreshes = 12 if not languages else 8 if len(languages) == 1 else 10
+                    self.assertEqual(refresh.call_count, expected_refreshes)
                     self.assertEqual(paid_checks.call_count, 6)
                     accepted_repos = (
                         set(metadata)

@@ -54,6 +54,107 @@ class StrategicDiscoveryTests(unittest.TestCase):
         self.assertEqual(result.ranked_by_repo["example/project"][0][3], allowed)
         self.assertEqual(result.audit, [])
 
+    def test_language_filter_runs_before_shared_adaptive_overflow(self) -> None:
+        rust_base = issue(
+            html_url="https://github.com/example/rust/issues/1",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        rust_overflow = issue(
+            html_url="https://github.com/example/rust/issues/2",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        go_base = issue(
+            html_url="https://github.com/example/go/issues/1",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        go_overflow = issue(
+            html_url="https://github.com/example/go/issues/2",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        items = [rust_base, rust_overflow, go_base, go_overflow]
+        scores = {
+            rust_base["html_url"]: 100,
+            rust_overflow["html_url"]: 99,
+            go_base["html_url"]: 98,
+            go_overflow["html_url"]: 97,
+        }
+        metadata: dict[str, RepositoryMetadata] = {
+            "example/rust": {**repo_meta(), "language": "Rust"},
+            "example/go": repo_meta(),
+        }
+
+        def fetch(repo: str, _token: str | None) -> RepositoryMetadata:
+            return metadata[repo]
+
+        def build(
+            item: GitHubIssue,
+            _lane: CandidateLane,
+            _signal: str | None,
+            meta: RepositoryMetadata,
+            _guide: str | None,
+        ) -> Candidate:
+            repo, number = github.issue_repo_and_number(item)
+            score = scores[item["html_url"]]
+            return candidate(
+                repo=repo,
+                issue_number=number,
+                url=item["html_url"],
+                priority_score=score,
+                career_score=score,
+                language=meta.get("language") or "Unknown",
+            )
+
+        unfiltered = discovery.select_strategic_candidates(
+            None,
+            set(),
+            set(),
+            {},
+            [("global", {"items": items})],
+            target_repos=[],
+            network_workers=1,
+            target_repo_pool=lambda *_args: ([], None),
+            basic_candidate=lambda _item: True,
+            fetch_repo_metadata=fetch,
+            payment_signal=lambda _item: None,
+            build_candidate=build,
+            cache_locks=github.KeyedLockPool(),
+            inspect_per_repo=1,
+            adaptive_budget=1,
+        )
+        self.assertEqual(
+            [row[3]["html_url"] for row in unfiltered.ranked_by_repo["example/rust"]],
+            [rust_base["html_url"], rust_overflow["html_url"]],
+        )
+        self.assertEqual(
+            [row[3]["html_url"] for row in unfiltered.ranked_by_repo["example/go"]],
+            [go_base["html_url"]],
+        )
+
+        filtered = discovery.select_strategic_candidates(
+            None,
+            set(),
+            set(),
+            {},
+            [("global", {"items": items})],
+            target_repos=[],
+            network_workers=1,
+            target_repo_pool=lambda *_args: ([], None),
+            basic_candidate=lambda _item: True,
+            fetch_repo_metadata=fetch,
+            payment_signal=lambda _item: None,
+            build_candidate=build,
+            cache_locks=github.KeyedLockPool(),
+            inspect_per_repo=1,
+            adaptive_budget=1,
+            language_eligible=lambda _item, meta: meta.get("language") == "Go",
+        )
+        self.assertNotIn("example/rust", filtered.ranked_by_repo)
+        self.assertEqual(
+            [row[3]["html_url"] for row in filtered.ranked_by_repo["example/go"]],
+            [go_base["html_url"], go_overflow["html_url"]],
+        )
+        self.assertEqual(filtered.audit, [])
+
     def test_possible_miss_and_bounded_audit_helpers(self) -> None:
         now = datetime.now(timezone.utc)
         strong = issue(
