@@ -8,8 +8,9 @@ model/parser/example implemented by Slice 2 (merged in PR #34), the explicit
 config/state and source-control wiring implemented by Slice 3A (merged in PR #35),
 primary repository-language wiring implemented by Slice 3B (merged in PR #36),
 final effort wiring implemented by Slice 3C (merged in PR #37), and final
-score-threshold/result-limit wiring implemented by Slice 3D. Configuration guidance
-and deployment features remain planned.
+score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
+and configuration guidance/examples published by Slice 4. Deployment features and
+mandatory-config cutover remain planned.
 
 ## Repository and workflow ownership
 
@@ -150,13 +151,21 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   on Python 3.12.3: all 439 tests, every strict check, and 100% statement and branch
   coverage. The explicit interpreter selects the available development environment.
 
+- Slice 4 starting local and freshly verified remote `main`:
+  `2dd6095b49e9dff5bbc67e6085a35e93b9adeab8`. PR #38 was confirmed merged on
+  2026-10-04, local `main` matched remote `main`, and the starting worktree was clean.
+  The Python Quality workflow for that SHA passed. Before branching,
+  `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed on Python 3.12.3:
+  all 447 tests, every strict check, and 100% statement and branch coverage.
+  The explicit interpreter selects the available development environment.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
 superseded; initial private deployment is manual-only, and any future schedule
 belongs to the private instance. Compatibility-wrapper cleanup remains separate.
 
-## Preference schema and planned runtime semantics
+## Preference schema and runtime semantics
 
 Slice 2 adds immutable `ScoutPreferences` in `opportunity_scout/preferences.py`,
 separate from credential-bearing `RunConfig`. It uses standard-library `tomllib`,
@@ -168,11 +177,14 @@ defaults below. Slice 3A loads an explicit `--config PATH` and applies repositor
 exclusions, lanes, and strategic global-search control. `--state PATH` selects every
 state read/write, independently of config. Legacy no-config invocation remains
 available and ignores `scout.toml`. Slice 3B applies languages across both lanes;
-Slice 3C applies final effort estimates. Slice 3D owns thresholds and result limits.
+Slice 3C applies final effort estimates. Slice 3D applies thresholds and result
+limits. Slice 4 publishes the [configuration reference](CONFIGURATION.md), including
+every supported field/default/bound, current path behavior, generic examples, and
+offline validation. Mandatory-config cutover remains Slice 7.
 
 ```toml
 version = 1
-# Optional non-secret display name:
+# Optional non-secret metadata; currently has no runtime effect:
 # name = "Weekend scout"
 
 [lanes]
@@ -201,9 +213,11 @@ max_results = 8
   list entries must be non-empty strings after surrounding whitespace is trimmed.
   Repository entries must be `owner/repository` identifiers, not URLs. Effort
   entries must use the canonical labels above (including en dashes). Tuples retain
-  input order, spelling/case, and duplicates; matching policy remains runtime work.
+  input order, spelling/case, and duplicates; runtime matching follows the policies
+  below.
   Empty lists and both lanes disabled are valid: an empty effort list accepts no
-  final estimates once wired, while an empty language list accepts all languages.
+  final estimates, while an empty language list accepts all languages. `name`
+  currently has no runtime effect.
   `parse_scout_preferences(document)` is pure; `load_scout_preferences(Path(...))`
   reads an explicit path. Both raise `ScoutPreferencesError` on invalid input;
   missing/unreadable/invalid files never fall back to defaults. The parser does not
@@ -224,12 +238,12 @@ max_results = 8
   so ineligible candidates cannot hide eligible ones. Early pruning must remain
   sound when refresh changes effort or paid classification. Preserve deterministic
   ranking and existing discovery/verification budgets.
-- Add `--config PATH` and `--state PATH` through application assembly, retaining the
-  thin executable shim. Explicit configuration is initially opt-in; the current
-  no-config invocation remains available during migration. After verified cutover,
-  the default invocation requires `scout.toml`. All state reads and writes use the
-  selected path; missing/invalid configuration must not silently select legacy
-  defaults after cutover.
+- Application assembly accepts `--config PATH` and `--state PATH`, retaining the
+  thin executable shim. Explicit configuration is opt-in; no-config invocation
+  remains available during migration. All state reads and writes use the selected
+  path, relative to the working directory unless absolute; the parent must exist.
+  In Slice 7, after verified private cutover, the default invocation will require
+  `scout.toml`; missing/invalid config must never silently select legacy defaults.
 
 Keep parsing, selection, verification, scoring, reporting, and persistence cohesive.
 Use pure selection functions, typed inputs, narrow injected dependencies, and
@@ -245,8 +259,9 @@ Slice 1 is merged in PR #32. Slice 1B is merged in PR #33. Slice 2 is merged in
 PR #34 with the preference model, parser, example, and regressions. Slice 3A
 merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR #36
 with language preferences. Slice 3C merged in PR #37 with effort preferences.
-Slice 3D implements final score thresholds and result limits and stops at its
-open PR. Slices 4 onward remain **planned**.
+Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
+publishes configuration guidance and validated examples and stops at its open PR.
+Slices 5 onward remain **planned**.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -373,8 +388,9 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 3D open PR.** Slice 2 merged in PR #34;
-Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37.
+**Current stopping boundary: Slice 4 open PR.** Slice 2 merged in PR #34;
+Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37;
+Slice 3D merged in PR #38.
 Explicit `--config PATH` loads and validates preferences before state/network/delivery
 activity; missing or invalid explicit config never selects defaults. No-config
 invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
@@ -469,5 +485,28 @@ Local Slice 3D validation ran `make format` once, then passed
 all 447 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
 statement and branch coverage. This records local validation, not a CI result.
 
-Configuration guidance (Slice 4) and all deployment work remain deferred. Do not
-merge this PR or start a later slice implicitly.
+Slice 4 publishes [configuration guidance](CONFIGURATION.md), refreshes the
+complete default example, and aligns README, architecture, roadmap, and contributor
+validation guidance. The reference documents all version-1 fields, strict types,
+defaults/bounds, normalization and matching, path resolution, opt-in configuration,
+legacy `scout.toml` ignorance, and the lack of runtime effect for `name`. Generic
+examples contain no personal targets, state, or credentials. Preferences remain
+separate from authentication and delivery; private instance ownership and optional
+fork customization remain in force.
+
+Local Slice 4 offline validation checked all 13 documented fields against the
+preference model, the complete default file and all three TOML blocks in the
+reference/tracker, five documented scan invocations through mocked executable
+assembly, relative/custom state paths, legacy invocation beside an invalid
+`scout.toml`, the parser-only command, CLI help, and local documentation links.
+Network, state I/O, and delivery were forbidden during the example/command checks.
+The documented five-module regression command passed all 56 tests with fake
+network/delivery results. No live scanning or delivery was performed. No Python
+changed, so `make format` was unnecessary. Local Slice 4 validation passed
+`make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
+all 447 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
+statement and branch coverage. This records local validation, not a Slice 4 CI result.
+
+Deployment implementation (Slice 5), historical migration (Slice 6), and upstream
+retirement/mandatory-config cutover (Slice 7) remain deferred. Do not merge this PR
+or start a later slice implicitly.

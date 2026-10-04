@@ -1,10 +1,8 @@
 # Generic version-1 preferences. Opt in with --config PATH; no automatic loading.
-# Slice 3A applies lanes, repositories/exclusions, and strategic global_search.
-# Slice 3B applies primary repository languages across both lanes.
-# Slice 3C applies final effort estimates; thresholds/result limits await Slice 3D.
+# See docs/CONFIGURATION.md for every field, default, bound, and runtime semantic.
 # Keep credentials and delivery configuration outside this file.
 version = 1
-# Optional non-secret display name:
+# Optional non-secret metadata; currently has no runtime effect:
 # name = "Weekend scout"
 
 [lanes]
@@ -28,4 +26,5 @@ effort = ["<1h", "1–3h", "3–6h", "6–12h", "1d+"]
 # Final paid candidates use cash; final unpaid candidates use career.
 min_career_score = 55
 min_cash_score = 55
+# Final ranked queue limit (1–8); discovery/verification budgets are unchanged.
 max_results = 8

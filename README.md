@@ -13,7 +13,7 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D wires final score thresholds and the result limit; configuration guidance and deployment work remain deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
+The Python support upgrade (Slice 1), coverage-completeness fix (Slice 1B), and immutable preferences/parser/example (Slice 2, PR #34) are merged. Slice 3A (merged in PR #35) adds opt-in `--config PATH` and `--state PATH`, repository targets/exclusions, lane controls, and strategic global-search control. Legacy invocation remains available and does not automatically read `scout.toml`. Slice 3B (merged in PR #36) wires primary repository-language preferences across both lanes. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires final score thresholds and the result limit. Slice 4 publishes the [configuration reference and generic examples](docs/CONFIGURATION.md); deployment work remains deferred. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for schema semantics, prerequisites, and historical state recovery.
 
 ## How it works
 
@@ -95,42 +95,13 @@ config fails before state loading, discovery, or delivery; it never falls back t
 legacy defaults. Without `--config`, the scout retains its existing source behavior
 and ignores any `scout.toml` in the working directory.
 
-Slice 3A applies `[lanes].paid`, `[lanes].strategic`, and
-`[discovery].repositories`, `exclude_repositories`, and `global_search`:
-
-- Repository targets add strategic sources to the existing curated list; they are
-  not an allowlist. Targets are deduplicated case-insensitively in first-seen order.
-- Exclusions match case-insensitively across both lanes and resolved upstream
-  repositories, and take precedence over targets.
-- Disabled lanes skip their discovery requests and reject corresponding final
-  classifications. Both lanes may be disabled; bounded state maintenance still runs
-  on a complete quiet scan.
-- `global_search = false` skips strategic global searches while retaining curated
-  strategic sources and paid discovery.
-
-Slice 3B applies `[discovery].languages` across both lanes using the final upstream
-repository's primary language from cached GitHub metadata. Matching is
-case-insensitive. `languages = []` accepts every language, including unknown; an
-explicit list excludes unknown languages. Issue text, labels, and wrapper-repository
-language do not decide acceptance. Filtering precedes strategic repository-slot
-settlement and final queue truncation; it adds no Search queries or metadata reads.
-
-Slice 3C applies `[preferences].effort` across both lanes by exact membership in
-the existing final estimate buckets: `<1h`, `1–3h`, `3–6h`, `6–12h`, and `1d+`.
-`effort = []` accepts no candidates; omitted effort accepts all five buckets.
-Estimation policy is unchanged. Source refresh, resolved upstream evidence, and
-already-fetched strategic discussion determine the final estimate. Preview effort
-does not filter candidates. Rejections precede strategic repository-slot settlement,
-queue deduplication, and truncation.
-
-Slice 3D applies inclusive score thresholds (integers from 0–100): final paid
-candidates require `min_cash_score`, and final unpaid candidates require
-`min_career_score`, regardless of discovery source. Refreshed evidence controls
-classification and scores. Eligibility precedes repository-slot settlement, URL
-deduplication, and the final `max_results` limit (1–8). Legacy defaults remain
-55 for both thresholds and eight results. Ranking, scoring, and discovery/verification
-budgets are unchanged. `name` has no current runtime effect. Delivery credentials
-and privacy controls remain environment configuration.
+See the [configuration reference](docs/CONFIGURATION.md) for every supported field,
+default, bound, preference semantic, and generic example. Preferences cover lanes,
+additive strategic repositories and cross-lane exclusions, primary repository
+languages, final effort estimates, score thresholds, and a 1–8 result limit.
+`name` currently has no runtime effect. Credentials and delivery remain separate
+from TOML preferences. The reference also provides parser-only validation and
+offline regression commands; the invocation above performs an actual scan.
 
 ### GitHub credentials and delivery
 

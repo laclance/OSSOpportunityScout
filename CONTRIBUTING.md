@@ -48,6 +48,14 @@ for example `make quality PYTHON=/path/to/python3.12`. For compatibility checks 
 
 Every functional change needs a regression test. Use mocked/fake GitHub responses rather than live network calls.
 
+For configuration documentation and examples, follow the
+[offline validation commands](docs/CONFIGURATION.md#offline-validation): use the
+strict parser and existing invocation/preference regressions. Check documented
+scan invocations through mocked application assembly; do not run live discovery
+or delivery merely to validate guidance. Keep examples generic, preferences
+separate from credentials/delivery, and current behavior distinct from the planned
+mandatory-config cutover.
+
 ## Pull requests
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.

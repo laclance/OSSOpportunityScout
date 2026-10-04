@@ -19,7 +19,7 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D wires score thresholds and result limits. Configuration guidance and deployment migration remain planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires score thresholds and result limits. Slice 4 publishes the [configuration reference](docs/CONFIGURATION.md) and validated generic examples. Deployment migration remains planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
 
 ## Data flow
 
@@ -141,8 +141,11 @@ Diagnostics identify invalid fields without echoing configuration values or cont
 
 Version 1 is required. Omitted tables/fields receive deterministic generic defaults;
 unknown keys, malformed types, unsupported versions, and invalid values fail closed.
-The public [example](scout.example.toml) exercises every preference with those defaults.
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns field semantics.
+The public [example](scout.example.toml) lists the runtime defaults with optional
+`name` commented out; `name` currently has no runtime effect. The
+[configuration reference](docs/CONFIGURATION.md) documents fields, bounds, examples,
+and current CLI behavior; the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
+owns the agreed contracts and cutover sequence.
 Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
 Application assembly loads preferences only for `--config PATH`, before loading
 state or performing network/delivery activity. Invalid explicit configuration raises
