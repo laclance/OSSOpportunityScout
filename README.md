@@ -5,7 +5,15 @@ A lightweight GitHub scanner for finding open-source work worth doing across two
 - **Cash now:** explicit paid bounties and sponsored issues.
 - **Career value:** bounded, mergeable issues in respected infrastructure/backend repositories.
 
-The scout ranks new opportunities and delivers them only through configured channels. The bundled production deployment writes ranked output to a separately configured **private** GitHub reports repository. Public host-repository reports are disabled by default, and seen-state advances only after successful delivery with complete scan coverage.
+The scout ranks new opportunities and delivers them only through configured channels, including a separately configured **private** GitHub reports repository. Public host-repository reports are disabled by default. Newly reported seen-state requires successful aggregate delivery and complete scan coverage; the known coverage discrepancy is described below.
+
+## Deployment direction
+
+`laclance/OSSOpportunityScout` is the canonical public source of truth for scanner code. Its target role is a distribution and development repository, not a persistent scout instance: upstream runs project CI and publishes reusable execution machinery, while an independent private instance repository owns the actual scout workflow, configuration, state/history, triggers, schedules, concurrency, secrets, delivery configuration, and scanner version pin.
+
+Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
+
+This migration is planned, not implemented. See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts, prerequisites, ordered PR slices, and historical state recovery. Current commands remain below; `scout.toml`, configuration/state flags, and the composite action are not available yet.
 
 ## How it works
 
@@ -55,11 +63,11 @@ Reported candidates include:
 - scoring reasons
 - contribution-guide link when available
 
-Incomplete discovery or verification coverage is reported explicitly and prevents seen-state advancement.
+Complete discovery and verification coverage is required before seen-state advancement. The current implementation does not enforce that requirement for one to four recognized strategic verification failures; [Slice 1B](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#verified-baseline-and-prerequisites) fixes this separately from the deployment migration.
 
 ## Running
 
-The production GitHub Action is currently **manual-only** while native GitHub scheduling is paused. Trigger it from **Actions → OSS Opportunity Scout**.
+The legacy upstream GitHub Action remains **manual-only** while native scheduling is paused. As verified on 2026-10-04, its required remote `scout-state` branch is absent, so the restore step cannot succeed. Treat this as a blocked legacy deployment, not a healthy production instance; preserve historical state for private migration rather than resetting it to the empty example.
 
 For local development:
 
@@ -73,14 +81,14 @@ GITHUB_TOKEN=... GITHUB_REPOSITORY=owner/repository python opportunity_scout.py
 
 `GITHUB_TOKEN` authenticates scanner GitHub REST access. `GITHUB_REPOSITORY` identifies the workflow host repository. Neither enables public report publishing.
 
-The bundled workflow grants `GITHUB_TOKEN` only:
+The legacy bundled workflow grants `GITHUB_TOKEN` only:
 
 ```yaml
 permissions:
   contents: write
 ```
 
-That permission is required to persist `seen_bounties.json` to the `scout-state` branch. The bundled deployment does not grant Issues write.
+That permission is required for its existing `scout-state` persistence mechanism. The legacy deployment does not grant Issues write. After private migration is proven, upstream removes that workflow and its deployment-only permissions; the private instance owns state persistence.
 
 Host-repository GitHub reports remain supported as an explicit custom-deployment option through:
 
@@ -107,7 +115,7 @@ Optional Telegram and Discord transports remain supported through:
 
 ## Development quality
 
-Python 3.11+ is required. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** are enforced by the project quality gate.
+Python 3.11+ is currently required. [Slice 1](docs/PRIVATE_DEPLOYMENT_MIGRATION.md#implementation-sequence-and-acceptance) raises the minimum to Python 3.12. The planned contract keeps 3.12 as the syntax/type/tooling baseline and strict quality-gate interpreter, while CI also runs compile/test compatibility checks on every stable CPython release >=3.12 available when Slice 1 lands. Later Python releases are not supported until they are added to CI successfully. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** remain authoritative on Python 3.12.
 
 Useful commands:
 
@@ -117,4 +125,3 @@ make quality
 ```
 
 Human contributors should read `CONTRIBUTING.md` before submitting changes. AI coding agents should additionally follow `AGENTS.md`. `ARCHITECTURE.md` is the shared technical reference for both.
-

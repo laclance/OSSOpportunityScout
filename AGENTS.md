@@ -10,9 +10,11 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 4. `CONTRIBUTING.md` — shared setup, quality, and pull-request expectations.
 5. Relevant tests under `tests/` — executable behavior and regression cases.
 
+For migration work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](docs/PRIVATE_DEPLOYMENT_MIGRATION.md), the authoritative tracker for contracts, PR slices, prerequisites, historical recovery, and progress.
+
 ## Project constraints
 
-- Python 3.11+.
+- Python 3.11+ currently; migration Slice 1 raises the minimum to Python 3.12, keeps 3.12 as the syntax/type/tooling baseline and authoritative strict gate, and adds CI compile/test compatibility checks for every stable CPython release >=3.12 available when that slice lands. Later releases are not supported until added to CI successfully. Do not change that contract or begin later slices in a documentation-only change.
 - Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
@@ -25,6 +27,14 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 - Never equate a lifecycle check failure, malformed response, auth/rate-limit error, or GitHub 404 with a confirmed closed issue. Only confirmed `closed` lifecycle evidence may prune a GitHub seen-state entry.
 - Keep seen-state maintenance bounded and deterministic. Do not add blind TTL expiry or unbounded first-run revalidation; non-GitHub entries stay seen until they have an explicit platform lifecycle policy.
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
+- The target canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
+- The current warning threshold permits state advancement after one to four recognized strategic verification failures. This is a known violation of the complete-coverage requirement, not an allowed exception; fix it in the tracker’s separate Slice 1B without weakening verification or quality gates.
+
+## Migration execution
+
+Follow the tracker in order. Verify actual latest `main`, merged prerequisite PRs, worktree state, and the quality baseline before branching for each slice. Keep configuration initially opt-in and current invocation behavior available until verified cutover. Do not recreate upstream `scout-state` ownership as the final remedy, reset historical state to the empty example, or restore upstream scheduling.
+
+Preserve historical state privately and prove the private instance before retiring upstream production responsibilities. Keep private opportunity contents and scout credentials out of public files and PRs. Complete one focused slice, run the full quality gate, commit, open its PR, and stop at the open-PR boundary; do not merge or start a later slice implicitly.
 
 ## Design rules
 
@@ -53,4 +63,3 @@ Before calling a change complete:
 6. Commit the finalized result together with the logical change where practical.
 
 Avoid mechanical one-file-at-a-time formatter churn or a new commit for each Ruff correction. Legitimate follow-up commits are fine when behavior or substance changes; do not require contributors to rewrite ordinary history solely to satisfy this preference. When using repository/API tooling, batch related finalized file changes into one commit/tree where practical.
-

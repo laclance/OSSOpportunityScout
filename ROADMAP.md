@@ -6,6 +6,7 @@ This file is intentionally forward-looking.
 - `CONTRIBUTING.md` is the human contributor guide.
 - `AGENTS.md` contains AI coding-agent execution rules.
 - `ARCHITECTURE.md` describes the current system and its invariants.
+- [Private deployment migration](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed migration contracts, ordered PR slices, prerequisites, recovery procedure, and progress.
 
 ## Current baseline
 
@@ -13,36 +14,39 @@ OSS Opportunity Scout is a package-owned scanner with:
 
 - a stable `python opportunity_scout.py` entry point
 - typed/versioned transactional seen-state
-- a dedicated `scout-state` persistence branch
+- a legacy workflow contract requiring `scout-state`, absent remotely as verified on 2026-10-04
 - privacy-verified private GitHub report delivery
 - public host-repository reports disabled by default
 - hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
 - strict Ruff, mypy, and 100% statement/branch coverage gates
 
-Production is currently **manual-only via `workflow_dispatch`**.
+The legacy upstream workflow is **manual-only via `workflow_dispatch`**, but cannot restore state while the required remote branch is absent. The coverage-completeness discrepancy documented in the tracker also remains an implementation prerequisite.
 
 Native GitHub `schedule` events are paused while GitHub investigates a reproducible scheduler-delivery failure. The preserved reproduction repository is `laclance/actions-scheduler-probe`.
 
 ## Near term
 
-### Restore native scheduling only when GitHub's scheduler path is proven healthy
+### Separate the public distribution from private scout instances
 
-Keep production manual-only until the external scheduler issue is resolved.
+`laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner version pin. Forks are optional for scanner-code customization, not runtime state ownership.
 
-When native scheduling is reconsidered:
+Implement the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) through its focused PR slices:
 
-- verify the minimal probe receives real `schedule` events
-- restore the production cron in a focused change
-- preserve private-only report delivery and transactional state behavior
-- verify the first automatic production run before treating scheduling as restored
+- raise the minimum runtime/tooling baseline to Python 3.12 and add CI compatibility checks for every stable CPython release >=3.12 available when the slice lands
+- fix coverage completeness in its separate prerequisite PR
+- add immutable, versioned preferences and wire configuration incrementally
+- provide pinned public execution machinery and a generic private-instance template
+- recover historical state and prove the private instance before removing upstream production responsibilities
 
-Do not add an external scheduler unless the deployment strategy is explicitly changed.
+Do not restore upstream scheduling or recreate upstream `scout-state` ownership as the long-term remedy. These are superseded by private instance ownership. Initial private deployment remains manual-only; any future schedule belongs to that private repository. The scheduler probe remains historical evidence, not a reason to restore an upstream scout deployment.
+
+**Immediate next task: Slice 1 only.** Preserve the current Python 3.11+ contract until that coordinated runtime PR; configuration and deployment implementation belong to later slices. Each slice requires merged prerequisites, the full quality gate, and an open-PR stopping boundary.
 
 ### Establish a release baseline
 
 Consider tagging the current project state as the first stable OSS release once the desired public release/versioning convention is chosen.
 
-A release should summarize the private-reporting model, GitHub API contract, and manual-only production status.
+A release should describe its actual migration status, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
 
 ## Product improvements
 
@@ -72,7 +76,7 @@ Do not move scanner discovery onto the private-report credential.
 Consider these only when they produce a concrete maintenance benefit:
 
 - immutable result objects for selected mapping-heavy internal results
-- relocating `seen_bounties.json` if a future deployment model benefits from a different state path
+- remaining application compatibility-wrapper cleanup, separate from this migration
 - lightweight dependency-direction checks if architectural drift becomes recurring
 
 Do not perform broad type/model rewrites or custom architecture tooling merely for stylistic consistency.
@@ -87,4 +91,5 @@ Future work must preserve:
 - incomplete coverage or unsuccessful aggregate delivery does not commit newly reported opportunities
 - GitHub mutations are not blindly retried
 - state maintenance remains bounded and conservative
-- production remains manual-only until scheduling is deliberately restored
+- the canonical public repository remains a distribution/development repository; persistent scout workflows, state, schedules, and delivery configuration belong to private instances
+- private instances start manual-only; schedules are a deliberate instance-owned follow-up
