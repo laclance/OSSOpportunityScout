@@ -43,13 +43,22 @@ to the caller. Scanner policy and local state semantics remain unchanged.
 upstream workflows. The private caller restricts execution to its private default
 branch and owns the full transaction under one shared concurrency group with
 `cancel-in-progress: false` and `queue: max`. Checkout/current-state reading occurs
-inside that lock; the recorded branch head is the persistence base. Persistence
-rejects intervening branch updates and uses a normal non-forced push. Failed
-persistence preserves the exact resulting file in a three-day private recovery
-artifact, then uses narrowly scoped `actions: write` permission to cancel every
-other run waiting in the same `scout-seen-state` group before the failed run
-releases the lock. Recovery remains operator-driven before rerunning; delivery and
-persistence are separate operations without exactly-once guarantees.
+inside that lock; the recorded branch head is the persistence base. Before scanner
+execution, the workflow fails closed if private coordination marker
+`.scout/recovery-required` exists.
+
+Persistence rejects intervening branch updates and uses a normal non-forced push.
+If persistence fails, the workflow preserves the exact resulting state in a
+three-day private recovery artifact, then establishes
+`.scout/recovery-required` from a freshly fetched current remote head in a separate
+temporary worktree. The marker commit touches no seen-state and uses an ordinary
+push, so newer branch history is never overwritten. It then uses narrowly scoped
+`actions: write` permission to cancel other runs waiting in the same
+`scout-seen-state` group as defense in depth before the failed run releases the
+lock. The durable marker is the correctness barrier; queued-run cancellation is
+secondary protection. Recovery is operator-driven and removes the marker only in a
+deliberate recovery commit. Delivery and persistence remain separate operations
+without exactly-once guarantees.
 See the [private instance guide](docs/PRIVATE_INSTANCE.md) for adoption and recovery.
 
 ## Data flow
@@ -261,9 +270,12 @@ compatibility work; the scanner does not automatically track GitHub's newest RES
 
 Upstream development CI grants only `contents: read` and has no scanner deployment
 job or delivery secrets. The inactive private template uses workflow
-`permissions: {}` and job `contents: write` for discovery and same-repository
-persistence, without Issues write. Instances own their permissions and credentials;
-private-report credentials remain separate. Python state code is branch-agnostic.
+`permissions: {}` and job `contents: write` plus `actions: write`. Contents write
+covers discovery, same-repository state persistence, and the failure-only durable
+recovery-marker commit. Actions write is used only for defense-in-depth cancellation
+of queued members in the shared state concurrency group. The job has no Issues
+write. Instances own their permissions and credentials; private-report credentials
+remain separate. Python state code is branch-agnostic.
 
 Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
 `GITHUB_REPOSITORY` alone never enable them; a custom deployment must set
@@ -354,6 +366,7 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
 - `opportunity_scout.state` knows only the local state file, and Python state code contains no Git branch/worktree logic. Git transport belongs to the private instance workflow, which owns its state/history without an upstream state-branch contract.
+- `.scout/recovery-required` is private-instance coordination metadata, not seen-state. A normal run must fetch the current private default branch and reject that marker before scanner execution. Persistence failure must establish it from current remote history without overwriting `seen_bounties.json`; only deliberate operator recovery removes it. Queued-run cancellation remains defense in depth rather than the recovery correctness barrier.
 - GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. Reusable execution machinery must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
