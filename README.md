@@ -116,7 +116,7 @@ make format
 make quality
 ```
 
-Read `CONTRIBUTING.md` before submitting changes and `AGENTS.md` for the implementation rules used by both human and AI contributors.
+Human contributors should read `CONTRIBUTING.md` before submitting changes. AI coding agents should additionally follow `AGENTS.md`. `ARCHITECTURE.md` is the shared technical reference for both.
 
 ## Project history
 

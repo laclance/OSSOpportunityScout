@@ -3,9 +3,10 @@
 This file is intentionally forward-looking.
 
 - `README.md` explains what the project does and how to run it.
+- `CONTRIBUTING.md` is the human contributor guide.
+- `AGENTS.md` contains AI coding-agent execution rules.
 - `ARCHITECTURE.md` describes the current system and its invariants.
 - `PROVENANCE.md` records project history and the standalone boundary.
-- `AGENTS.md` contains implementation rules.
 
 ## Current baseline
 

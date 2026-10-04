@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for improving OSS Opportunity Scout. Small, behavior-preserving changes are preferred over broad rewrites.
+This is the human contributor guide for OSS Opportunity Scout. Small, behavior-preserving changes are preferred over broad rewrites. AI coding agents should use `AGENTS.md` for agent-specific execution rules.
 
 ## Setup
 
@@ -18,7 +18,7 @@ make setup
 
 ## Before changing code
 
-Read `AGENTS.md` and `ARCHITECTURE.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
+Read `ARCHITECTURE.md` and, when the change affects planned direction, `ROADMAP.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
 
 ## Commands
 
