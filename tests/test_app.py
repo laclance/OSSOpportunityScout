@@ -1239,7 +1239,10 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "verify",
-                return_value=(candidate(url=best.get("html_url"), paid=False, career_score=90), None),
+                return_value=(
+                    candidate(url=best.get("html_url"), paid=False, career_score=90),
+                    None,
+                ),
             ),
             patch.object(scout, "STRATEGIC_INSPECT_PER_REPO", 1),
             patch.object(scout, "STRATEGIC_ADAPTIVE_INSPECT_BUDGET", 0),
@@ -1481,7 +1484,9 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(scout, "verify", return_value=(None, "claimed")),
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
-            found, rejected, examples = scout.discover_paid("t", {str(seen.get("html_url"))}, {}, {})
+            found, rejected, examples = scout.discover_paid(
+                "t", {str(seen.get("html_url"))}, {}, {}
+            )
         self.assertEqual(found, [])
         self.assertGreater(rejected["claimed"], 0)
         self.assertEqual(examples[0]["reason"], "claimed")
@@ -1517,7 +1522,9 @@ class DiscoveryTests(unittest.TestCase):
                 scout,
                 "verify",
                 side_effect=lambda item_, *args, **kwargs: (
-                    (None, "reject") if item_ is paid else (candidate(url=item_.get("html_url")), None)
+                    (None, "reject")
+                    if item_ is paid
+                    else (candidate(url=item_.get("html_url")), None)
                 ),
             ),
         ):
