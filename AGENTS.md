@@ -13,7 +13,7 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 ## Project constraints
 
 - Python 3.11+.
-- Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding. Historical `BountyScout` references are allowed only where they identify the predecessor repository/provenance or intentionally test/filter that historical repository.
+- Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
 - Production implementation lives under `opportunity_scout/`; strategic policy lives under `opportunity_scout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
