@@ -108,7 +108,8 @@ class NotificationFormattingTests(unittest.TestCase):
             max_chars=650,
         )
         self.assertLessEqual(len(message), 650)
-        self.assertIn("more ranked candidate(s) in the GitHub report", message)
+        self.assertIn("omitted from this notification", message)
+        self.assertNotIn("GitHub report", message)
 
     def test_notification_message_surfaces_coverage_warning(self) -> None:
         message = reporting.notification_message(
