@@ -118,8 +118,3 @@ make quality
 
 Human contributors should read `CONTRIBUTING.md` before submitting changes. AI coding agents should additionally follow `AGENTS.md`. `ARCHITECTURE.md` is the shared technical reference for both.
 
-## Project history
-
-OSS Opportunity Scout originated from the public `dev-kp-eloper/BountyScout` project and was later established as an independently maintained standalone repository with a clean history boundary.
-
-See `PROVENANCE.md` for the historical relationship and licensing boundary.
