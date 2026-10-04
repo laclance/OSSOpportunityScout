@@ -114,22 +114,23 @@ jobs:
           CURRENT_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          mapfile -t queued_run_ids < <(
+          queued_run_ids="$(
             gh api \
               -H 'Accept: application/vnd.github+json' \
               -H 'X-GitHub-Api-Version: 2026-03-10' \
               "/repos/$GH_REPO/actions/concurrency_groups/scout-seen-state" \
               --jq ".group_members[] | select(.run_id != $CURRENT_RUN_ID) | .run_id" \
               | sort -u
-          )
-          for run_id in "${queued_run_ids[@]}"; do
+          )"
+          while IFS= read -r run_id; do
+            test -n "$run_id" || continue
             gh api \
               --method POST \
               -H 'Accept: application/vnd.github+json' \
               -H 'X-GitHub-Api-Version: 2026-03-10' \
               "/repos/$GH_REPO/actions/runs/$run_id/cancel" \
               >/dev/null
-          done
+          done <<< "$queued_run_ids"
 
       - name: Fail persistence transaction after recovery attempt
         if: ${{ always() && steps.persist.outcome == 'failure' }}
