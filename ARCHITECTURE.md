@@ -9,7 +9,7 @@ OSS Opportunity Scout has two lanes with different risk profiles:
 
 The architecture should make those lanes easy to reason about without forcing contributors or AI tools to load the full scanner into context.
 
-## Target deployment ownership (planned)
+## Deployment ownership and migration boundary
 
 > `laclance/OSSOpportunityScout` is a distribution and development repository, not a persistent scout instance.
 
@@ -19,7 +19,25 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slice 1 establishes Python 3.12 as the minimum runtime and syntax/type/tooling baseline, with compatibility CI on CPython 3.13 and 3.14. Slice 2 (merged in PR #34) supplies immutable preferences and a strict TOML parser. Slice 3A (merged in PR #35) wires explicit config/state paths, repository targets/exclusions, lanes, and strategic global-search control. Slice 3B (merged in PR #36) wires primary repository-language preferences. Slice 3C (merged in PR #37) wires final effort preferences. Slice 3D (merged in PR #38) wires score thresholds and result limits. Slice 4 publishes the [configuration reference](docs/CONFIGURATION.md) and validated generic examples. Deployment migration remains planned; the legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+The [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) owns the agreed configuration contracts, sequencing, recovery procedure, and acceptance gates. Slices 1–4 are merged through PR #39, providing Python support, coverage completeness, explicit immutable configuration and final preferences, and [configuration guidance](docs/CONFIGURATION.md). Slice 5 provides reusable execution and a private template; actual instance migration remains planned. The legacy workflow still expects `scout-state`. Remove upstream deployment responsibilities only after the private instance is proven.
+
+### Public action and private transaction template
+
+Root `action.yml` runs the scanner from its pinned `github.action_path` using
+isolated Python 3.12. It explicitly supplies config/state paths and separate
+discovery/delivery credentials, disables host reporting, and leaves Git transport
+to the caller. No scanner policy, local state semantics, or legacy CLI default changes.
+
+`examples/private-instance/scout.yml` is an inactive distribution template, outside
+upstream workflows. The private caller restricts execution to its private default
+branch and owns the full transaction under one shared concurrency group with
+`cancel-in-progress: false` and `queue: max`. Checkout/current-state reading occurs
+inside that lock; the recorded branch head is the persistence base. Persistence
+rejects intervening branch updates and uses a normal non-forced push. Failed
+persistence preserves the exact resulting file in a three-day private recovery
+artifact before the workflow fails. Recovery is operator-driven before rerunning;
+delivery and persistence are separate operations without exactly-once guarantees.
+See the [private instance guide](docs/PRIVATE_INSTANCE.md) for adoption and recovery.
 
 ## Data flow
 
@@ -76,6 +94,8 @@ The important boundary is between **I/O** and **policy**. Network fetches gather
 | `seen_bounties.json` (or `--state PATH`) | Selected local runtime seen-state file | Version 2 is canonical and the only supported on-disk schema; incompatible existing files fail closed |
 | `.github/workflows/oss-opportunity-scout.yml` | Legacy upstream scanner execution | Manual-only; requires the remote `scout-state` branch, absent as verified on 2026-10-04; retired after private migration is proven |
 | `.github/workflows/python-quality.yml` | Authoritative formatting, lint, recursive compile, strict typing, tests, and coverage on Python 3.12; recursive compile and full-suite compatibility checks on 3.13 and 3.14 | Explicit CI versions define support; later releases require passing CI before support is claimed |
+| `action.yml` | Pinned-source composite scanner execution with explicit config/state and credentials | No instance checkout, Git persistence, or trigger ownership |
+| `examples/private-instance/scout.yml` | Generic manual private caller and serialized scan/state/recovery transaction | Private instance owns the deployed copy and pin; inactive in upstream |
 
 ## Dependency direction
 
@@ -231,9 +251,10 @@ access. The checkout credential also persists `seen_bounties.json` by pushing th
 state snapshot to `scout-state`, so that workflow currently requires `contents: write`. It does
 not grant `issues: write` because host-repository reports are not enabled in that deployment.
 
-This is the existing transport contract, not the target deployment architecture. The private
-instance will own its state/history and persistence permissions; upstream removes its
-deployment-only permissions after migration. Python state code remains branch-agnostic.
+The Slice 5 private template uses workflow `permissions: {}` and job `contents: write`
+for discovery and same-repository persistence, without Issues write. Private report
+credentials remain separate. Upstream removes its legacy deployment-only permissions
+after private migration is proven. Python state code remains branch-agnostic.
 
 Host-repository reports remain a supported explicit opt-in. `GITHUB_TOKEN` and
 `GITHUB_REPOSITORY` alone never enable them; a custom deployment must set

@@ -9,8 +9,9 @@ config/state and source-control wiring implemented by Slice 3A (merged in PR #35
 primary repository-language wiring implemented by Slice 3B (merged in PR #36),
 final effort wiring implemented by Slice 3C (merged in PR #37), and final
 score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
-and configuration guidance/examples published by Slice 4. Deployment features and
-mandatory-config cutover remain planned.
+configuration guidance/examples published by Slice 4 (merged in PR #39), and public
+execution/private template assets supplied by Slice 5. Personal deployment,
+upstream retirement, and mandatory-config cutover remain planned.
 
 ## Repository and workflow ownership
 
@@ -159,6 +160,13 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   all 447 tests, every strict check, and 100% statement and branch coverage.
   The explicit interpreter selects the available development environment.
 
+- Slice 5 starting local and freshly fetched remote `main`:
+  `11303a95cc33d3338fd5c6570f5802f38c924f83`. PR #39 was confirmed merged on
+  2026-10-04 with successful Python Quality and 3.13/3.14 compatibility checks.
+  Local `main` matched remote `main`, the worktree was clean, and the baseline passed
+  `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
+  all 447 tests, every strict gate, and 100% statement and branch coverage.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
@@ -260,8 +268,9 @@ PR #34 with the preference model, parser, example, and regressions. Slice 3A
 merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR #36
 with language preferences. Slice 3C merged in PR #37 with effort preferences.
 Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
-publishes configuration guidance and validated examples and stops at its open PR.
-Slices 5 onward remain **planned**.
+merged in PR #39 with configuration guidance and validated examples. Slice 5 adds
+the public action and private-instance template and stops at its open PR.
+Slices 6 and 7 remain **planned**.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -388,9 +397,9 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 4 open PR.** Slice 2 merged in PR #34;
+**Current stopping boundary: Slice 5 open PR.** Slice 2 merged in PR #34;
 Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37;
-Slice 3D merged in PR #38.
+Slice 3D merged in PR #38; Slice 4 merged in PR #39.
 Explicit `--config PATH` loads and validates preferences before state/network/delivery
 activity; missing or invalid explicit config never selects defaults. No-config
 invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
@@ -507,6 +516,50 @@ changed, so `make format` was unnecessary. Local Slice 4 validation passed
 all 447 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
 statement and branch coverage. This records local validation, not a Slice 4 CI result.
 
-Deployment implementation (Slice 5), historical migration (Slice 6), and upstream
-retirement/mandatory-config cutover (Slice 7) remain deferred. Do not merge this PR
-or start a later slice implicitly.
+Slice 5 adds root [action.yml](../action.yml), executing scanner source from its
+pinned action directory under isolated Python 3.12, with explicit config/state
+paths and separate discovery/private-report credentials. The generic
+[private template](../examples/private-instance/scout.yml) remains outside active
+upstream workflows. The private caller owns triggers, future schedules, concurrency,
+secrets, config/state, Git persistence/history, delivery configuration, and the full
+scanner SHA pin. Forking remains optional. No runtime scanner policy or no-config
+CLI behavior changes; no personal state or credentials are published.
+
+The template is manual-only, rejects public/non-default-branch execution, and
+serializes the entire checkout/read/scan/delivery/persist/recovery transaction with
+one shared `scout-seen-state` group, `cancel-in-progress: false`, and `queue: max`.
+State is deliberately seeded in the instance default branch; current state is read
+after serialization begins. Persistence rejects a changed base SHA and races fail
+the normal non-forced push. Only the state file is committed. Job `contents: write`
+is sufficient for scanner REST access and same-instance persistence; private report
+credentials stay separate, without Issues write on the caller token.
+
+Any remote persistence failure attempts to preserve the exact resulting state in
+a private, three-day recovery artifact before an explicit workflow failure.
+[Private instance guidance](PRIVATE_INSTANCE.md) documents recovery before rerunning,
+stopping queued transactions during recovery, missing-artifact reconstruction,
+incomplete-coverage limitations, and the lack of exactly-once delivery guarantees.
+There is no automatic delivery replay, stale force push, or upstream deployment.
+
+Offline action/template checks parse YAML, validate Bash syntax and workflow
+contracts, execute pinned-source launch with isolated imports and quoted paths,
+and test real local Git state reads/persistence, unchanged state, missing/symlinked
+files, stale heads, fetch/commit/push failures, a race after fetch, and recovery
+success/failure diagnostics. PyYAML and its typing stubs are development-only;
+compatibility CI installs the YAML parser to run these same tests. Scanner runtime
+remains standard-library-only. The action is committed first so the template can
+select a real immutable source SHA without a circular self-reference:
+`fde5e99d10385a14f51140ebde18ed117c084c7a`. Both commits belong to this one focused
+Slice 5 PR. Action dependency pins were verified against public GitHub commits;
+current action-path, pinning, concurrency, and artifact guidance was consulted
+through Context7, with the live GitHub concurrency page confirming `queue: max`.
+
+Local Slice 5 validation ran `make format` once, then passed
+`make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
+all 460 tests, Ruff formatting/lint, recursive compilation, strict mypy, and 100%
+statement and branch coverage. The final real scanner pin was verified locally
+and the quality gate rerun after that YAML change. This records local validation;
+live private instance, delivery, and artifact upload validation remains Slice 6.
+
+Historical migration (Slice 6) and upstream retirement/mandatory-config cutover
+(Slice 7) remain deferred. Do not merge this PR or start a later slice implicitly.
