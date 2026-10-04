@@ -22,7 +22,7 @@ The main boundaries are:
 - `bountyscout/delivery.py` — optional notification/report transports, including privacy-verified private GitHub reports.
 - `bountyscout/state.py` — typed/versioned seen-state parsing and maintenance.
 
-See `ARCHITECTURE.md` for data flow, module boundaries, GitHub API behavior, and invariants. `CODEBASE_MAP.md` is the generated symbol index.
+See `ARCHITECTURE.md` for data flow, module boundaries, GitHub API behavior, and invariants.
 
 ## Candidate selection
 
@@ -107,13 +107,12 @@ Optional Telegram and Discord transports remain supported through:
 
 ## Development quality
 
-Python 3.11+ is required. Ruff formatting/linting, strict mypy, recursive compilation, generated-map validation, and **100% statement + branch coverage** are enforced by the project quality gate.
+Python 3.11+ is required. Ruff formatting/linting, strict mypy, recursive compilation, and **100% statement + branch coverage** are enforced by the project quality gate.
 
 Useful commands:
 
 ```bash
 make format
-make map
 make quality
 ```
 

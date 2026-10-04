@@ -7,8 +7,7 @@ This file is the canonical working agreement for coding agents and human contrib
 1. `README.md` — what the scout does and how to run it.
 2. `ARCHITECTURE.md` — data flow, module boundaries, and invariants.
 3. `ROADMAP.md` — deliberate future improvements and sequencing.
-4. `CODEBASE_MAP.md` — generated structural index of production Python.
-5. Relevant tests under `tests/` — executable behavior and regression cases.
+4. Relevant tests under `tests/` — executable behavior and regression cases.
 
 ## Project constraints
 
@@ -46,12 +45,10 @@ Before calling a change complete:
 
 1. Finish the logical code, test, and documentation edits first.
 2. If Python changed, run `make format` once across the completed worktree.
-3. If production Python symbols or module boundaries changed, run `make map` and include the regenerated `CODEBASE_MAP.md`.
-4. Update `ARCHITECTURE.md` when responsibilities, dependencies, data flow, or invariants change.
-5. Update `README.md` or `CONTRIBUTING.md` when user-facing commands or contributor workflow changes.
-6. Run `make quality`.
-7. Commit the finalized formatted/generated result together with the logical change where practical.
+3. Update `ARCHITECTURE.md` when responsibilities, dependencies, data flow, or invariants change.
+4. Update `README.md` or `CONTRIBUTING.md` when user-facing commands or contributor workflow changes.
+5. Run `make quality`.
+6. Commit the finalized result together with the logical change where practical.
 
 Avoid mechanical one-file-at-a-time formatter churn or a new commit for each Ruff correction. Legitimate follow-up commits are fine when behavior or substance changes; do not require contributors to rewrite ordinary history solely to satisfy this preference. When using repository/API tooling, batch related finalized file changes into one commit/tree where practical.
 
-`CODEBASE_MAP.md` is generated. Do not edit it by hand.

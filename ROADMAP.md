@@ -5,7 +5,6 @@ This file is intentionally forward-looking.
 - `README.md` explains what the project does and how to run it.
 - `ARCHITECTURE.md` describes the current system and its invariants.
 - `PROVENANCE.md` records project history and the standalone boundary.
-- `CODEBASE_MAP.md` is generated symbol navigation.
 - `AGENTS.md` contains implementation rules.
 
 ## Current baseline
@@ -18,7 +17,7 @@ OSS Opportunity Scout is now a standalone, package-owned scanner with:
 - privacy-verified private GitHub report delivery
 - public host-repository reports disabled by default
 - hardened GitHub REST identity, safe-read retry behavior, and evidence-sensitive pagination
-- strict Ruff, mypy, generated-map, and 100% statement/branch coverage gates
+- strict Ruff, mypy, and 100% statement/branch coverage gates
 
 Production is currently **manual-only via `workflow_dispatch`**.
 
