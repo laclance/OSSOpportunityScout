@@ -154,9 +154,9 @@
 - **function** `select_revalidation_batch()` — line 143
 - **function** `apply_revalidation_result()` — line 169
 - **function** `maintain_seen_state()` — line 182
-- **function** `parse_seen_state()` — line 271
-- **function** `load_seen_state()` — line 280
-- **function** `save_seen_state()` — line 297
+- **function** `parse_seen_state()` — line 264
+- **function** `load_seen_state()` — line 271
+- **function** `save_seen_state()` — line 288
 
 ## `bountyscout/strategic/__init__.py`
 
