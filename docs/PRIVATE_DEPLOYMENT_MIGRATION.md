@@ -10,8 +10,10 @@ primary repository-language wiring implemented by Slice 3B (merged in PR #36),
 final effort wiring implemented by Slice 3C (merged in PR #37), and final
 score-threshold/result-limit wiring implemented by Slice 3D (merged in PR #38),
 configuration guidance/examples published by Slice 4 (merged in PR #39), and public
-execution/private template assets supplied by Slice 5. Personal deployment,
-upstream retirement, and mandatory-config cutover remain planned.
+execution/private template assets supplied by Slice 5 (merged in PR #40).
+Slice 6 private migration is in progress; its operational acceptance is not yet
+complete. Upstream retirement and mandatory-config cutover remain planned Slice 7
+work.
 
 ## Repository and workflow ownership
 
@@ -167,6 +169,15 @@ application-level quiet/candidate runs. Slice 1B merged in PR #33 before Slice 2
   `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` on Python 3.12.3:
   all 447 tests, every strict gate, and 100% statement and branch coverage.
 
+- Slice 6 starting local and freshly fetched remote `main`:
+  `301241a6e8c14325fab65ada5c4dcc3a8b7933fb`. PR #40 was confirmed merged on
+  2026-10-04 with successful Python Quality and 3.13/3.14 compatibility checks.
+  The starting worktree was clean and local `main` matched remote `main`.
+  Before branching, `make quality PYTHON=/tmp/oss-scout-docs-venv/bin/python` passed
+  on Python 3.12.3: all 460 tests, every strict gate, and 100% statement and branch
+  coverage. Private recovery provenance and operational evidence stay outside
+  this public tracker.
+
 The missing-state finding is superseded as a long-term remediation: do not recreate
 the upstream `scout-state` architecture as the final solution. Preserve historical
 state for private migration instead. Upstream scheduling restoration is also
@@ -268,9 +279,10 @@ PR #34 with the preference model, parser, example, and regressions. Slice 3A
 merged in PR #35 with explicit paths and source controls. Slice 3B merged in PR #36
 with language preferences. Slice 3C merged in PR #37 with effort preferences.
 Slice 3D merged in PR #38 with final score thresholds and result limits. Slice 4
-merged in PR #39 with configuration guidance and validated examples. Slice 5 adds
-the public action and private-instance template and stops at its open PR.
-Slices 6 and 7 remain **planned**.
+merged in PR #39 with configuration guidance and validated examples. Slice 5 merged
+in PR #40 with the public action and private-instance template. Slice 6 is
+**in progress**, with private operational acceptance still pending. Slice 7 remains
+**planned** and requires that acceptance first.
 Complete them in order through small, independently verified PRs; 3A–3D remain
 separate slices.
 
@@ -350,6 +362,15 @@ Slice 6 is operational work performed privately, after the preceding slices:
 6. Verify serialization and stale-write handling before retiring upstream
    responsibilities. Keep the initial private deployment manual-only.
 
+Keep the acceptance record privately using the
+[Slice 6 evidence checklist](PRIVATE_INSTANCE.md#slice-6-private-acceptance-record).
+Historical recovery and offline workflow checks do not establish live deployment
+success. Resolve instance/report repository names, personal preferences, intended
+delivery channels/destinations, and secure credential provisioning before dependent
+setup or dispatch. Public status may record which gates remain pending, but must
+not publish personal configuration, state contents/counts, opportunity URLs,
+private repository identities, run IDs, recovery hashes, or operational logs.
+
 Preserve fail-closed state parsing, bounded lifecycle maintenance, and transactional
 maintenance/new-URL persistence. Only absent state means first-run empty state;
 only confirmed `closed` lifecycle evidence permits pruning. Newly reported URLs
@@ -397,9 +418,16 @@ Commit the finalized slice, open one focused PR, and stop at the open-PR boundar
 Report the starting SHA, branch, changes, quality result, final commit, and PR URL.
 Do not bundle later phases, merge the PR, or retire upstream deployment early.
 
-**Current stopping boundary: Slice 5 open PR.** Slice 2 merged in PR #34;
+**Current stopping boundary: Slice 6 open documentation PR; private operational
+acceptance remains pending.** Historical recovery checks are complete and recorded
+privately. Instance provisioning awaits resolved personal configuration, delivery
+destinations, and separate report credentials. Live delivery, remote persistence,
+subsequent deduplication, serialization, stale-write rejection, and recovery-artifact
+handling have not yet been verified for the private instance. Keep upstream
+responsibilities and legacy invocation intact; do not begin Slice 7.
+Slice 2 merged in PR #34;
 Slice 3A merged in PR #35; Slice 3B merged in PR #36; Slice 3C merged in PR #37;
-Slice 3D merged in PR #38; Slice 4 merged in PR #39.
+Slice 3D merged in PR #38; Slice 4 merged in PR #39; Slice 5 merged in PR #40.
 Explicit `--config PATH` loads and validates preferences before state/network/delivery
 activity; missing or invalid explicit config never selects defaults. No-config
 invocation still ignores `scout.toml`. All state reads and delivery/quiet-maintenance
@@ -561,5 +589,7 @@ statement and branch coverage. The final real scanner pin was verified locally
 and the quality gate rerun after that YAML change. This records local validation;
 live private instance, delivery, and artifact upload validation remains Slice 6.
 
-Historical migration (Slice 6) and upstream retirement/mandatory-config cutover
-(Slice 7) remain deferred. Do not merge this PR or start a later slice implicitly.
+Slice 5 merged in PR #40. Historical migration (Slice 6) is in progress with the
+private acceptance gates above still pending. Upstream retirement/mandatory-config
+cutover (Slice 7) remains deferred. Do not merge the Slice 6 documentation PR or
+start a later slice implicitly.
