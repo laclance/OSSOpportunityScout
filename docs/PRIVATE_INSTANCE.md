@@ -71,9 +71,12 @@ the separate delivery/persistence/deduplication gates still require real scan
 evidence. Do not add fabricated opportunity entries to the production state for a
 check or treat incomplete coverage as permission to advance it.
 
-If a manual scan delivers but persistence fails, stop dispatches and cancel queued
-writers immediately, then follow [recovery before rerunning](#recover-before-rerunning).
-Do not dispatch the deduplication scan until remote restoration is verified.
+If a manual scan delivers but persistence fails, stop new dispatches immediately.
+The current template attempts to cancel every other member already waiting in the
+shared state concurrency group before the failed run releases that lock. Verify that
+cancellation succeeded, then follow [recovery before rerunning](#recover-before-rerunning).
+If cancellation failed or an older template is still deployed, cancel queued writers
+manually. Do not dispatch the deduplication scan until remote restoration is verified.
 Missing recovery evidence, incomplete coverage, ambiguous delivery, and candidates
 not rechecked remain explicit gaps rather than successful acceptance claims.
 
@@ -103,11 +106,13 @@ seeded state. Local invocations require `scout.toml` by default or explicit
 `--config PATH`. There is no legacy fallback.
 See the [configuration reference](CONFIGURATION.md).
 
-The template sets workflow-level `permissions: {}` and grants only `contents: write`
-to the scan transaction job. Its normal `github.token` handles public scanner REST
-access and same-instance state pushes. It grants no Issues write, Actions write,
-or cross-repository persistence credential. Checkout retains only this instance
-credential for the normal Git push.
+The template sets workflow-level `permissions: {}` and grants the scan transaction
+job only `contents: write` plus `actions: write`. Contents write covers public
+scanner REST access and same-instance state pushes. Actions write is used only on
+the persistence-failure path to inspect the exact shared concurrency group and
+cancel its other queued workflow runs before this run releases the lock. It grants
+no Issues write or cross-repository persistence credential. Checkout retains only
+this instance credential for the normal Git push.
 
 Private reports receive `PRIVATE_GITHUB_REPORTS_REPOSITORY` and
 `PRIVATE_GITHUB_REPORTS_TOKEN` from separately configured instance secrets. Give
@@ -126,10 +131,11 @@ Workflow-level concurrency uses the constant `scout-seen-state` group,
 `cancel-in-progress: false`, and `queue: max`. Every workflow writing this shared
 state must use that same group, across branch and workflow names. The lock covers
 private/default-branch checks, checkout, state reads, discovery/verification,
-delivery, local state save, remote persistence, recovery upload, and final failure.
-Do not move state reads into an earlier job or key concurrency by workflow/ref.
-The queue is bounded at 100 pending runs; queue overflow cancels additional runs.
-Waiting order follows admission to the group rather than dispatch order.
+delivery, local state save, remote persistence, recovery upload, queued-run
+cancellation, and final failure. Do not move state reads into an earlier job or key
+concurrency by workflow/ref. The queue is bounded at 100 pending runs; queue overflow
+cancels additional runs. Waiting order follows admission to the group rather than
+dispatch order.
 [GitHub concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
 
 After serialization begins, checkout selects the current private default branch,
@@ -154,15 +160,27 @@ first attempts to upload the exact resulting `seen_bounties.json` as
 `scout-state-recovery-<run-id>-<run-attempt>`. The upload runs only in the confirmed
 private caller repository, has **three-day retention**, and fails if the file is
 missing. It uploads no checkout, config, report, or secret files. This is a recovery
-artifact, not the primary state backend. After the upload attempt, the workflow
-explicitly fails even when upload succeeded. If upload also fails, its final error
-requires reconstruction rather than treating a rerun as safe.
+artifact, not the primary state backend.
+
+Before releasing the shared concurrency lock, the same failed run queries the
+repository's `scout-seen-state` concurrency group and requests cancellation for
+every other group member. This covers queued writers across workflow names that use
+the required shared group, so a previously queued transaction cannot immediately
+start from stale remote state after the failure. The cancellation path uses the
+job's narrowly scoped Actions permission. If that API step fails, the final
+diagnostic explicitly requires the operator to stop remaining scout runs manually.
+
+After the upload and cancellation attempts, the workflow explicitly fails even when
+both succeeded. If upload also fails, its final error requires reconstruction rather
+than treating a rerun as safe.
 
 Before rerunning a failed scan transaction:
 
-1. Stop further dispatches and cancel pending runs sharing this state; wait until
-   no transaction is active. Concurrency serializes runs but does not block queued
-   runs after a failure. Do not use GitHub's rerun button as recovery.
+1. Stop further dispatches and verify no other run remains pending or active in the
+   shared `scout-seen-state` group. The current template cancels queued group
+   members before releasing the failed run's lock. If that cancellation step failed,
+   or the instance still uses an older template, cancel them manually. Do not use
+   GitHub's rerun button as recovery.
 2. Download the recovery artifact privately before expiration. Record its run ID,
    attempt, action pin, and transaction base SHA from the private run. Keep its
    original bytes as the recovery snapshot; validate it with the canonical state
@@ -195,12 +213,14 @@ make quality
 ```
 
 The tests parse the action/template as YAML, validate execution pins, concurrency,
-permissions, credential wiring, recovery conditions/retention, ordering, and Bash
-syntax. They execute the actual embedded shell snippets against temporary local
-Git repositories, covering current-state reads after queuing, missing/symlinked
-files, unchanged state, byte-exact persistence, stale heads, fetch/commit/push
-failures, and a race after fetch. Action checks prove source/import isolation,
-quoted paths, failure propagation, and invalid config failing before state/network
-activity. Recovery checks prove workflow failure follows the upload attempt and
-both successful/failed recovery outcomes require operator action. They do not
-claim a live private artifact upload or operational delivery was verified.
+permissions, credential wiring, recovery conditions/retention, queued-run
+cancellation, ordering, and Bash syntax. They execute the actual embedded shell
+snippets against temporary local Git repositories, covering current-state reads
+after queuing, missing/symlinked files, unchanged state, byte-exact persistence,
+stale heads, fetch/commit/push failures, a race after fetch, and cancellation calls
+for other shared-group runs. Action checks prove source/import isolation, quoted
+paths, failure propagation, and invalid config failing before state/network
+activity. Recovery checks prove workflow failure follows the upload/cancellation
+attempts and both successful/failed recovery outcomes require operator action. They
+do not claim a live private artifact upload, live queue cancellation, or operational
+delivery was verified.
