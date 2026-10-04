@@ -828,7 +828,7 @@ class RunLifecycleTests(unittest.TestCase):
         self.assertTrue(result.delivery.attempted)
         self.assertTrue(result.delivery.delivered)
 
-    def test_save_failure_is_reported_without_claiming_state_saved(self) -> None:
+    def test_successful_delivery_save_failure_propagates(self) -> None:
         item = candidate()
 
         def paid(
@@ -853,7 +853,6 @@ class RunLifecycleTests(unittest.TestCase):
             send_github_report=false_github,
             issue_lifecycle=open_lifecycle,
         )
-        buf = io.StringIO()
         with (
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(
@@ -861,16 +860,37 @@ class RunLifecycleTests(unittest.TestCase):
                 "save_seen_state",
                 side_effect=state.SeenStateSaveError("save failed"),
             ),
-            redirect_stdout(buf),
         ):
-            result = run.run_combined_scan(
-                run.RunConfig(None, None, "tb", "chat", None),
-                deps,
-                FIXED_TIME,
-            )
+            with self.assertRaisesRegex(state.SeenStateSaveError, "save failed"):
+                run.run_combined_scan(
+                    run.RunConfig(None, None, "tb", "chat", None),
+                    deps,
+                    FIXED_TIME,
+                )
 
-        self.assertFalse(result.state_saved)
-        self.assertIn("Error saving state file: save failed", buf.getvalue())
+    def test_quiet_maintenance_save_failure_propagates(self) -> None:
+        old_url = "https://github.com/example/project/issues/99"
+        with (
+            patch.object(
+                state,
+                "load_seen_state",
+                return_value=state.SeenState.from_urls([old_url]),
+            ),
+            patch.object(
+                state,
+                "save_seen_state",
+                side_effect=state.SeenStateSaveError("maintenance save failed"),
+            ),
+        ):
+            with self.assertRaisesRegex(
+                state.SeenStateSaveError,
+                "maintenance save failed",
+            ):
+                run.run_combined_scan(
+                    run.RunConfig(None, None, None, None, None),
+                    dependencies(),
+                    FIXED_TIME,
+                )
 
 
 if __name__ == "__main__":
