@@ -44,14 +44,14 @@ class PrivateInstanceContractTests(unittest.TestCase):
         )
         self.assertEqual(set(workflow["jobs"]), {"scout"})
         job = workflow["jobs"]["scout"]
-        self.assertEqual(job["permissions"], {"contents": "write"})
+        self.assertEqual(job["permissions"], {"actions": "write", "contents": "write"})
         self.assertEqual(
             job["env"]["INSTANCE_BRANCH"], "${{ github.event.repository.default_branch }}"
         )
         steps = job["steps"]
         self.assertEqual(
             [step.get("id") for step in steps],
-            [None, None, "base", "scan", "persist", "recovery", None],
+            [None, None, "base", "scan", "persist", "recovery", "cancel_queued", None],
         )
         self.assertEqual(steps[1]["with"]["ref"], "${{ github.event.repository.default_branch }}")
         scan = steps[3]
@@ -79,7 +79,21 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertEqual(recovery["with"]["retention-days"], 3)
         self.assertEqual(recovery["with"]["if-no-files-found"], "error")
         self.assertIn("github.run_attempt", recovery["with"]["name"])
-        self.assertEqual(steps[6]["if"], "${{ always() && steps.persist.outcome == 'failure' }}")
+        cancel_queued = steps[6]
+        self.assertEqual(
+            cancel_queued["if"], "${{ always() && steps.persist.outcome == 'failure' }}"
+        )
+        self.assertTrue(cancel_queued["continue-on-error"])
+        self.assertEqual(cancel_queued["env"]["GH_TOKEN"], "${{ github.token }}")
+        self.assertEqual(cancel_queued["env"]["GH_REPO"], "${{ github.repository }}")
+        self.assertEqual(cancel_queued["env"]["CURRENT_RUN_ID"], "${{ github.run_id }}")
+        self.assertIn("/actions/concurrency_groups/scout-seen-state", cancel_queued["run"])
+        self.assertIn("/actions/runs/$run_id/cancel", cancel_queued["run"])
+        self.assertIn("select(.run_id != $CURRENT_RUN_ID)", cancel_queued["run"])
+        self.assertEqual(steps[7]["if"], "${{ always() && steps.persist.outcome == 'failure' }}")
+        self.assertEqual(
+            steps[7]["env"]["QUEUE_CANCEL_OUTCOME"], "${{ steps.cancel_queued.outcome }}"
+        )
         self.assertNotIn("--force", steps[4]["run"])
         for step in steps + document(ACTION)["runs"]["steps"]:
             if "uses" in step:
@@ -108,14 +122,68 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, expected)
 
+    def test_persistence_failure_cancels_queued_group_members(self) -> None:
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            fake_bin = folder / "bin"
+            fake_bin.mkdir()
+            capture = folder / "gh-calls.txt"
+            fake_gh = fake_bin / "gh"
+            fake_gh.write_text(
+                "#!/bin/bash\n"
+                "set -euo pipefail\n"
+                "printf '%s\\n' \"$*\" >> \"$GH_CAPTURE\"\n"
+                "if [[ \"$*\" == *\"actions/concurrency_groups/scout-seen-state\"* ]]; then\n"
+                "  printf '101\\n102\\n'\n"
+                "elif [[ \"$*\" == *\"/actions/runs/101/cancel\"* ]]; then\n"
+                "  exit 0\n"
+                "elif [[ \"$*\" == *\"/actions/runs/102/cancel\"* ]]; then\n"
+                "  exit 0\n"
+                "else\n"
+                "  exit 23\n"
+                "fi\n"
+            )
+            fake_gh.chmod(0o755)
+            result = shell_step(
+                step,
+                ROOT,
+                {
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "GH_CAPTURE": str(capture),
+                    "GH_TOKEN": "fake-actions-token",
+                    "GH_REPO": "owner/private-instance",
+                    "CURRENT_RUN_ID": "999",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = capture.read_text()
+            self.assertIn("/actions/concurrency_groups/scout-seen-state", calls)
+            self.assertIn("/actions/runs/101/cancel", calls)
+            self.assertIn("/actions/runs/102/cancel", calls)
+            self.assertNotIn("/actions/runs/999/cancel", calls)
+
     def test_persistence_failure_always_fails_after_recovery_attempt(self) -> None:
         step = document(TEMPLATE)["jobs"]["scout"]["steps"][-1]
         for outcome in ("success", "failure", "skipped", "cancelled", ""):
             with self.subTest(outcome=outcome):
-                result = shell_step(step, ROOT, {"RECOVERY_OUTCOME": outcome})
+                result = shell_step(
+                    step,
+                    ROOT,
+                    {"RECOVERY_OUTCOME": outcome, "QUEUE_CANCEL_OUTCOME": "success"},
+                )
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("before rerunning", result.stdout)
                 self.assertIn("Restore" if outcome == "success" else "Reconstruct", result.stdout)
+
+        result = shell_step(
+            step,
+            ROOT,
+            {"RECOVERY_OUTCOME": "success", "QUEUE_CANCEL_OUTCOME": "failure"},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("could not be cancelled", result.stdout)
+        self.assertIn("before rerunning", result.stdout)
 
 
 class PinnedActionTests(unittest.TestCase):
