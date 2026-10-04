@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import io
 import unittest
+from dataclasses import replace
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from bountyscout import run, sources, state
+from bountyscout import reporting, run, sources, state
 from bountyscout.types import (
     GitHubIssue,
     IssueLifecycleStatus,
@@ -203,6 +204,128 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(status.discovery_failures, 1)
         self.assertEqual(status.failure_count, 3)
         self.assertIn("3 discovery/source/comment/competition checks failed", status.warning or "")
+
+
+class DeliveryRenderingTests(unittest.TestCase):
+    def test_github_report_body_render_count_by_destination(self) -> None:
+        configs = (
+            (
+                "public",
+                run.RunConfig("tok", "me/repo", None, None, None, github_reports_enabled=True),
+                [("public", "shared report")],
+                False,
+            ),
+            (
+                "private",
+                run.RunConfig(
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    private_github_reports_repository="owner/private-reports",
+                    private_github_reports_token="report-token",
+                ),
+                [("private", "shared report")],
+                True,
+            ),
+            (
+                "both",
+                run.RunConfig(
+                    "tok",
+                    "me/repo",
+                    None,
+                    None,
+                    None,
+                    github_reports_enabled=True,
+                    private_github_reports_repository="owner/private-reports",
+                    private_github_reports_token="report-token",
+                ),
+                [("public", "shared report"), ("private", "shared report")],
+                True,
+            ),
+        )
+
+        for name, config, expected_calls, expected_delivered in configs:
+            with self.subTest(name=name):
+                calls: list[tuple[str, str]] = []
+
+                def public_report(_repo: str, _token: str, _title: str, body: str) -> bool:
+                    calls.append(("public", body))
+                    return False
+
+                def private_report(_repo: str, _token: str, _title: str, body: str) -> bool:
+                    calls.append(("private", body))
+                    return True
+
+                deps = replace(
+                    dependencies(),
+                    send_github_report=public_report,
+                    send_private_github_report=private_report,
+                )
+                with patch.object(
+                    reporting,
+                    "github_report_body",
+                    return_value="shared report",
+                ) as render:
+                    result = run._deliver(
+                        config,
+                        deps,
+                        [candidate()],
+                        "2026-10-02 10:00 UTC",
+                        paid_examples=[],
+                        strategic_examples=[],
+                        strategic_audit=[],
+                        rejects={},
+                        coverage_warning=None,
+                    )
+
+                render.assert_called_once()
+                self.assertEqual(calls, expected_calls)
+                self.assertTrue(result.attempted)
+                self.assertEqual(result.delivered, expected_delivered)
+
+    def test_non_github_delivery_and_missing_private_sender_skip_report_rendering(self) -> None:
+        configs = (
+            ("none", run.RunConfig(None, None, None, None, None), False),
+            (
+                "notifications",
+                run.RunConfig(None, None, "tb", "chat", "hook"),
+                True,
+            ),
+            (
+                "missing-private-sender",
+                run.RunConfig(
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    private_github_reports_repository="owner/private-reports",
+                    private_github_reports_token="report-token",
+                ),
+                True,
+            ),
+        )
+
+        for name, config, expected_attempted in configs:
+            with self.subTest(name=name):
+                with patch.object(reporting, "github_report_body") as render:
+                    result = run._deliver(
+                        config,
+                        dependencies(),
+                        [candidate()],
+                        "2026-10-02 10:00 UTC",
+                        paid_examples=[],
+                        strategic_examples=[],
+                        strategic_audit=[],
+                        rejects={},
+                        coverage_warning=None,
+                    )
+
+                render.assert_not_called()
+                self.assertEqual(result.attempted, expected_attempted)
+                self.assertFalse(result.delivered)
 
 
 class RunLifecycleTests(unittest.TestCase):
@@ -603,6 +726,10 @@ class RunLifecycleTests(unittest.TestCase):
             calls.append("github")
             return False
 
+        def private_report(_repo: str, _token: str, _title: str, _body: str) -> bool:
+            calls.append("private")
+            return True
+
         deps = run.RunDependencies(
             discover_paid=paid,
             discover_strategic=empty_strategic,
@@ -612,6 +739,7 @@ class RunLifecycleTests(unittest.TestCase):
             send_discord=discord,
             send_github_report=github_report,
             issue_lifecycle=open_lifecycle,
+            send_private_github_report=private_report,
         )
         with (
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
@@ -625,12 +753,14 @@ class RunLifecycleTests(unittest.TestCase):
                     "chat",
                     "hook",
                     github_reports_enabled=True,
+                    private_github_reports_repository="owner/private-reports",
+                    private_github_reports_token="report-token",
                 ),
                 deps,
                 FIXED_TIME,
             )
 
-        self.assertEqual(calls, ["telegram", "discord", "github"])
+        self.assertEqual(calls, ["telegram", "discord", "github", "private"])
         self.assertTrue(result.delivery.attempted)
         self.assertTrue(result.delivery.delivered)
 

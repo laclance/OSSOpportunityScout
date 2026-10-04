@@ -230,9 +230,13 @@ def _deliver(
             or delivered
         )
 
-    if config.github_reports_enabled and config.token and config.repo_fullname:
-        attempted = True
-        body = reporting.github_report_body(
+    github_body: str | None = None
+    if (config.github_reports_enabled and config.token and config.repo_fullname) or (
+        config.private_github_reports_repository
+        and config.private_github_reports_token
+        and dependencies.send_private_github_report is not None
+    ):
+        github_body = reporting.github_report_body(
             queue,
             now,
             verification_examples=paid_examples + strategic_examples,
@@ -240,33 +244,30 @@ def _deliver(
             reject_counts=rejects,
             coverage_warning=coverage_warning,
         )
+
+    if config.github_reports_enabled and config.token and config.repo_fullname:
+        attempted = True
+        assert github_body is not None
         delivered = (
             dependencies.send_github_report(
                 config.repo_fullname,
                 config.token,
                 reporting.github_report_title(len(queue)),
-                body,
+                github_body,
             )
             or delivered
         )
 
     if config.private_github_reports_repository and config.private_github_reports_token:
         attempted = True
-        body = reporting.github_report_body(
-            queue,
-            now,
-            verification_examples=paid_examples + strategic_examples,
-            strategic_audit=strategic_audit,
-            reject_counts=rejects,
-            coverage_warning=coverage_warning,
-        )
         if dependencies.send_private_github_report is not None:
+            assert github_body is not None
             delivered = (
                 dependencies.send_private_github_report(
                     config.private_github_reports_repository,
                     config.private_github_reports_token,
                     reporting.github_report_title(len(queue)),
-                    body,
+                    github_body,
                 )
                 or delivered
             )
