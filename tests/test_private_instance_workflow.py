@@ -164,6 +164,27 @@ class PrivateInstanceContractTests(unittest.TestCase):
             self.assertIn("/actions/runs/102/cancel", calls)
             self.assertNotIn("/actions/runs/999/cancel", calls)
 
+    def test_persistence_failure_propagates_queue_lookup_failure(self) -> None:
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            fake_bin = folder / "bin"
+            fake_bin.mkdir()
+            fake_gh = fake_bin / "gh"
+            fake_gh.write_text("#!/bin/bash\nexit 23\n")
+            fake_gh.chmod(0o755)
+            result = shell_step(
+                step,
+                ROOT,
+                {
+                    "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                    "GH_TOKEN": "fake-actions-token",
+                    "GH_REPO": "owner/private-instance",
+                    "CURRENT_RUN_ID": "999",
+                },
+            )
+            self.assertEqual(result.returncode, 23)
+
     def test_persistence_failure_always_fails_after_recovery_attempt(self) -> None:
         step = document(TEMPLATE)["jobs"]["scout"]["steps"][-1]
         for outcome in ("success", "failure", "skipped", "cancelled", ""):
