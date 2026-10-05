@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from opportunity_scout import preferences, state
+from tests.workflow_references import validate_workflow_references
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,18 +46,7 @@ class UpstreamDistributionTests(unittest.TestCase):
             (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
             Loader=yaml.BaseLoader,
         )
-        seen = set()
-        for job in workflow["jobs"].values():
-            for step in job["steps"]:
-                reference = step.get("uses")
-                if reference is None or reference.startswith("./"):
-                    continue
-                action, separator, revision = reference.partition("@")
-                self.assertEqual(separator, "@", reference)
-                self.assertEqual(revision, expected.get(action), reference)
-                self.assertRegex(revision, r"^[0-9a-f]{40}$")
-                seen.add(action)
-        self.assertEqual(seen, set(expected))
+        validate_workflow_references(workflow, approved_actions=expected)
 
     def test_quality_toolchain_uses_known_green_exact_direct_pins(self) -> None:
         expected = {
