@@ -297,12 +297,15 @@ class ScoreOrchestrationTests(unittest.TestCase):
                         state_path=path,
                         preferences=preferences.ScoutPreferences(max_results=maximum),
                     )
+                    strategic_rejects: dict[str, int] = {}
+                    if not complete:
+                        strategic_rejects[SourceFailureReason("source refresh failed")] = 1
                     callbacks = replace(
                         dependencies(),
                         discover_paid=lambda *_: (blocked, {}, []),
                         discover_strategic=lambda *_: (
                             list(reversed(eligible)),
-                            {} if complete else {SourceFailureReason("source refresh failed"): 1},
+                            strategic_rejects,
                             [],
                             [],
                         ),
