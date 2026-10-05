@@ -18,11 +18,13 @@ from opportunity_scout import paid_verification
 from opportunity_scout import state
 from opportunity_scout.strategic import competition as competition_policy
 from opportunity_scout.types import (
+    DiscoveryFailureReason,
     GitHubComment,
     GitHubIssue,
     RejectionRecord,
     RepositoryMetadata,
     SearchBatch,
+    SourceFailureReason,
 )
 from tests.helpers import FakeResponse
 
@@ -702,10 +704,9 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(wrapper, None)),
             patch.object(scout, "issue_from_github_url", return_value=None),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "could not refresh upstream issue from aggregator wrapper",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "could not refresh upstream issue from aggregator wrapper")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -715,10 +716,24 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "upstream source: issue is no longer open",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "upstream source: issue is no longer open")
+        self.assertNotIsInstance(reason, SourceFailureReason)
+
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[
+                    (wrapper, None),
+                    (None, SourceFailureReason("could not refresh source issue")),
+                ],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+        ):
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "upstream source: could not refresh source issue")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -728,10 +743,9 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "could not refresh upstream issue from aggregator wrapper",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "could not refresh upstream issue from aggregator wrapper")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -758,9 +772,9 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "fetch_repo_metadata", return_value={}),
         ):
-            self.assertEqual(
-                scout.verify(fresh, "t", {}, {}, True)[1], "repository metadata unavailable"
-            )
+            reason = scout.verify(fresh, "t", {}, {}, True)[1]
+        self.assertEqual(reason, "repository metadata unavailable")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
@@ -1380,18 +1394,32 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0].get("url"), "https://github.com/issues")
         self.assertIn("global strategic discovery search failed", audit[0]["reason"])
         self.assertIn("coverage incomplete", audit[0]["reason"])
+        self.assertIsInstance(audit[0]["reason"], DiscoveryFailureReason)
 
-    def test_discover_paid_prefetched_failure_skips_without_duplicate_search(self) -> None:
+    def test_discover_paid_failed_search_has_direct_prefetch_parity(self) -> None:
         with (
-            patch.object(github, "search_github") as search,
+            patch.object(scout, "PAID_DISCOVERY_QUERIES", ["paid-q"]),
+            patch.object(github, "search_github", return_value={}) as direct_search,
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
-            found, rejected, examples = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
+            direct = scout.discover_paid("t", set(), {}, {})
 
-        search.assert_not_called()
-        self.assertEqual(found, [])
-        self.assertEqual(rejected, {})
-        self.assertEqual(examples, [])
+        with (
+            patch.object(github, "search_github") as prefetched_search,
+            patch.object(scout, "platform_paid_refs", return_value={}),
+        ):
+            prefetched = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
+
+        direct_search.assert_called_once()
+        prefetched_search.assert_not_called()
+        self.assertEqual(direct[0], [])
+        self.assertEqual(prefetched[0], [])
+        self.assertEqual(direct[1], prefetched[1])
+        self.assertEqual(direct[2], prefetched[2])
+        self.assertEqual(sum(direct[1].values()), 1)
+        reason = next(iter(direct[1]))
+        self.assertIsInstance(reason, DiscoveryFailureReason)
+        self.assertIn("paid discovery search failed for query: paid-q", reason)
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
@@ -1533,7 +1561,8 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([x["url"] for x in found], [good.get("html_url")])
         self.assertEqual(len(audit), 1)
         self.assertEqual(audit[0].get("url"), archived.get("html_url"))
-        self.assertIn("repository metadata", audit[0]["reason"])
+        self.assertIn("repository is archived", audit[0]["reason"])
+        self.assertNotIsInstance(audit[0]["reason"], DiscoveryFailureReason)
         self.assertEqual(rejected["reject"], 1)
         self.assertEqual(examples[0].get("url"), paid.get("html_url"))
 
