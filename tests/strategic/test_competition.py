@@ -349,7 +349,8 @@ class LinkedPullRequestTests(unittest.TestCase):
                 )
             }
         ]
-        for unusable in (None, [], {"state": "unknown"}):
+        unusable_results: tuple[object, ...] = (None, [], {"state": "unknown"})
+        for unusable in unusable_results:
             with self.subTest(unusable=unusable):
                 with patch.object(github, "github_get", return_value=unusable):
                     reason = competition.linked_open_pr_reason(issue(), "t", comments)
