@@ -13,7 +13,7 @@ from typing import Callable
 
 from opportunity_scout import github, paid_verification
 from opportunity_scout.strategic.claims import strategic_claim_text
-from opportunity_scout.types import GitHubComment, GitHubIssue
+from opportunity_scout.types import GitHubComment, GitHubIssue, SourceFailureReason
 
 STRATEGIC_CLAIM_MAX_AGE_DAYS = 365
 
@@ -145,9 +145,14 @@ def linked_open_pr_reason(
             f"https://api.github.com/repos/{repo}/pulls/{pr_number}",
             token,
         )
-        if isinstance(pr, dict) and pr.get("state") == "open":
+        if not isinstance(pr, dict):
+            return SourceFailureReason("could not verify linked implementation PR")
+        state = pr.get("state")
+        if state == "open":
             url = pr.get("html_url") or f"https://github.com/{repo}/pull/{pr_number}"
             return f"existing open implementation PR: {url}"
+        if state != "closed":
+            return SourceFailureReason("could not verify linked implementation PR")
 
     return None
 
