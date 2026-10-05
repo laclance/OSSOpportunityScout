@@ -408,7 +408,14 @@ class ScoreOrchestrationTests(unittest.TestCase):
                             )
                         )
                         platforms = stack.enter_context(
-                            patch.object(app, "platform_paid_refs", return_value=sources.PlatformDiscoveryResult(refs={}, failures=()))
+                            patch.object(
+                                app,
+                                "platform_paid_refs",
+                                return_value=sources.PlatformDiscoveryResult(
+                                    refs={},
+                                    failures=(),
+                                ),
+                            )
                         )
                         refresh = stack.enter_context(
                             patch.object(
