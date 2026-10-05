@@ -15,7 +15,7 @@ The architecture should make those lanes easy to reason about without forcing co
 
 The canonical public upstream remains the source of truth for scanner code and may run development/release CI and publish reusable execution machinery or generic templates. It must not operate persistent scout instances or own user schedules, private configuration, scout secrets, report destinations, scout state, or opportunity history.
 
-The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and the scanner version pin. The repository holding private configuration/state also owns when the scout runs; its workflow invokes pinned public execution machinery. Upstream does not run a workflow that reaches into private state repositories.
+The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and the scanner pin. The repository holding private configuration/state also owns when the scout runs; its workflow invokes pinned public execution machinery. Upstream does not run a workflow that reaches into private state repositories.
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
