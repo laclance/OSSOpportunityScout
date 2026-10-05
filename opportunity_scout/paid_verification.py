@@ -13,7 +13,7 @@ from collections.abc import Callable
 from typing import Any, TypedDict, cast
 
 from opportunity_scout import github, paid
-from opportunity_scout.types import GitHubComment, GitHubIssue
+from opportunity_scout.types import GitHubComment, GitHubIssue, SourceFailureReason
 
 FetchJson = Callable[[str, str | None], Any]
 ExistingPrChecker = Callable[[str, int, str | None], str | None]
@@ -79,7 +79,7 @@ def has_existing_implementation_pr(
         github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
     )
     if not isinstance(timeline, list):
-        return "could not verify open implementation PR timeline"
+        return SourceFailureReason("could not verify open implementation PR timeline")
 
     for raw_event in timeline:
         if not isinstance(raw_event, dict):
@@ -132,7 +132,7 @@ def active_claim_reason(
         github.github_get(url, token) if fetch_json is None else fetch_json(url, token)
     )
     if not isinstance(comments, list):
-        return "could not verify active claim comments"
+        return SourceFailureReason("could not verify active claim comments")
 
     for raw_comment in comments:
         if not isinstance(raw_comment, dict):
