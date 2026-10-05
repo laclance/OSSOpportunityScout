@@ -47,18 +47,26 @@ execution, the workflow fails closed if private coordination marker
 `.scout/recovery-required` exists.
 
 Persistence rejects intervening branch updates and uses a normal non-forced push.
-If persistence fails, the workflow preserves the exact resulting state in a
-three-day private recovery artifact, then establishes
-`.scout/recovery-required` from a freshly fetched current remote head in a separate
-temporary worktree. The marker commit touches no seen-state and uses an ordinary
-push, so newer branch history is never overwritten. The normal scan job has only `contents: write`; the pinned scanner never receives
-Actions write capability. On persistence failure it publishes a small recovery
-handoff to a dependent follow-up job whose token has only `actions: write`. That
-job cancels other runs waiting in the same `scout-seen-state` group as defense in
-depth and emits the terminal failure. Because concurrency is workflow-level, the
-shared lock remains held until the follow-up job completes. The durable marker is
-the correctness barrier; queued-run cancellation is secondary protection. Recovery
-is operator-driven and removes the marker only in a deliberate recovery commit.
+The workflow classifies recovery causally. If the scanner saved the resulting state
+locally and remote Git persistence fails, the exact local bytes are preserved in a
+three-day private recovery artifact. If delivery succeeded but the scanner's local
+state save failed, the pinned action emits an explicit recovery signal and the
+workflow does not claim that the remaining local state file is an exact
+post-delivery snapshot. Both cases establish `.scout/recovery-required` from a
+freshly fetched current remote head in a separate temporary worktree; the local-save
+case requires operator reconstruction from trustworthy private evidence.
+
+The marker commit touches no seen-state and uses an ordinary push, so newer branch
+history is never overwritten. The normal scan job has only `contents: write`; the
+pinned scanner never receives Actions write capability. Recovery-required outcomes
+publish a small handoff to a dependent follow-up job whose token has only
+`actions: write`. That job cancels other runs waiting in the same
+`scout-seen-state` group as defense in depth and emits the terminal failure.
+Because concurrency is workflow-level, the shared lock remains held until the
+follow-up job completes. The durable marker is the correctness barrier; queued-run
+cancellation is secondary protection. Ordinary pre-delivery scanner failures do not
+enter recovery mode without the explicit post-delivery signal. Recovery is
+operator-driven and removes the marker only in a deliberate recovery commit.
 Delivery and persistence remain separate operations without exactly-once guarantees.
 See the [private instance guide](docs/PRIVATE_INSTANCE.md) for adoption and recovery.
 
