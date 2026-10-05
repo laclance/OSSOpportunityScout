@@ -13,7 +13,7 @@ def repository_excluded(repository: str | None, preferences: ScoutPreferences) -
 
 
 def strategic_repositories(defaults: Sequence[str], preferences: ScoutPreferences) -> list[str]:
-    """Add configured targets in order, deduplicating and giving exclusions precedence."""
+    """Add configured strategic sources in order, deduplicating with exclusions first."""
     result: list[str] = []
     seen: set[str] = set()
     for repository in (*defaults, *preferences.repositories):
