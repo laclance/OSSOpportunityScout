@@ -27,7 +27,7 @@ fallback, search for alternate files, or automatic use of `scout.example.toml`.
 quiet-run maintenance write uses this path. Its parent directory must already
 exist; the scout does not create directories. Only absent state means a first run.
 Malformed, unreadable, or unsupported existing state fails closed. Never replace
-historical instance state with the empty public example during migration.
+existing instance state with the empty public example.
 
 ## Version-1 fields
 
@@ -125,12 +125,12 @@ triggers/schedules, concurrency, secrets, delivery configuration, persistence an
 history, and scanner pin. A fork is optional for code customization; default
 instances consume pinned upstream code directly, while customized instances may
 consume a pinned fork. Public workflows must not reach into private repositories
-for state. Upstream has retired its persistent workflow and state-branch/worktree
-transport. Private Slice 6 acceptance is verified; evidence remains private. See the
-[migration tracker](PRIVATE_DEPLOYMENT_MIGRATION.md) for the Slice 7 cutover.
+for state. Upstream has no persistent scout workflow or runtime state-branch/worktree
+transport. See the [completed migration record](PRIVATE_DEPLOYMENT_MIGRATION.md) for
+the historical cutover and acceptance rationale.
 Root `scout.toml` and `seen_bounties.json` are ignored by Git; the
 [empty state example](../examples/seen_bounties.example.json) is only a seed for new
-instances without history, never a replacement for migrated state.
+instances without history, never a replacement for existing state.
 
 ## Offline validation
 

@@ -1,29 +1,29 @@
 # Private instance execution template
 
-Slice 5 provides the public [composite action](../action.yml) and a generic,
-manual-only [private workflow template](../examples/private-instance/scout.yml).
-These are distribution assets; they do not create an instance or migrate history.
-Slice 6 operational acceptance is verified privately. Slice 7 retires the upstream
-production workflow and requires configuration for local scans: `scout.toml` in the
-working directory or explicit `--config PATH`. See the
-[migration tracker](PRIVATE_DEPLOYMENT_MIGRATION.md).
+The public [composite action](../action.yml) and generic, manual-only
+[private workflow template](../examples/private-instance/scout.yml) are distribution
+assets for independent private instances; they do not create an instance or migrate
+history. Local scans require `scout.toml` in the working directory or explicit
+`--config PATH`. See the
+[completed migration record](PRIVATE_DEPLOYMENT_MIGRATION.md) for historical
+implementation and acceptance details.
 
 ## Ownership and pins
 
 An independent **private** instance repository owns its `.github/workflows/scout.yml`,
 triggers, any future schedules, concurrency, secrets, `scout.toml`,
 `seen_bounties.json`, Git state/history, delivery configuration, and scanner pin.
-Upstream owns scanner code, development CI, reusable execution, and generic examples.
+Upstream owns scanner code, development/release CI, documentation, reusable execution, and generic examples.
 Forking is optional for scanner-code customization; use a deliberate full SHA from
 upstream or a customized fork. Never run an upstream persistent workflow that reads
 private instance state remotely.
 
 The template pins checkout, Python setup, artifact upload, and scanner execution
-to full commit SHAs. Its scanner SHA selects the initial Slice 5 action implementation
-commit. Before adopting or upgrading it, review that commit and its checks. Since
-PR #40 is merged, an operator may deliberately replace it with the reviewed merge
-commit's full SHA. A release can identify a SHA, but branches and moving tags must
-not silently upgrade the scanner. Changing the pin is an instance-owned change.
+to full commit SHAs. The distributed template contains a deliberately reviewed full
+scanner SHA. Before adopting or upgrading it, review the selected upstream commit
+and its checks. Branches and moving tags must not silently upgrade the scanner.
+Changing the scanner pin is an instance-owned deployment change; a release may
+identify a candidate SHA, but the instance owner decides whether to adopt it.
 
 The action executes `opportunity_scout.py` and its package from `github.action_path`,
 using isolated Python 3.12 with that source directory explicitly inserted into the
@@ -40,24 +40,24 @@ seeded version-2 state at `seen_bounties.json` on the private default branch. A 
 instance with no history may deliberately copy the
 [empty state example](../examples/seen_bounties.example.json) to `seen_bounties.json`.
 An existing instance must preserve its trustworthy history; never substitute this
-empty example for migration state. The template rejects missing files and symlinks;
+empty example for existing state. The template rejects missing files and symlinks;
 the scanner validates config and existing state before discovery or delivery.
-No setup or personal migration is performed by Slice 5.
+The distribution assets do not perform instance setup or state migration.
 
-## Slice 6 private acceptance record
+## Private instance acceptance checklist
 
-PR #40 merged the Slice 5 distribution assets. Slice 6 must establish the personal
-instance independently; recovery or offline checks alone do not complete it.
+The original migrated instance completed these gates with operational evidence kept
+private. Every new independent instance should establish equivalent evidence for
+itself; recovery or offline checks alone do not complete operational acceptance.
 Resolve the instance repository, personal preferences, delivery destinations, and
 secure provisioning of the separate report credential before dependent actions.
-Continue independent historical recovery checks while these details are pending.
 Keep the following evidence in private storage or the confirmed private instance:
 
 | Gate | Private evidence required |
 | --- | --- |
-| Historical recovery | Newer sources checked, selected source/commit/path, original snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust |
+| State seed or recovery | New instance: deliberate empty seed verified. Existing/migrated instance: trustworthy recovered source/commit/path, snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust. |
 | Instance ownership | GitHub metadata explicitly confirming repository privacy and independence; default branch owns personal config, seeded state, manual-only workflow, full scanner SHA, and persistence/history |
-| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the recovered snapshot |
+| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the intended initial snapshot |
 | Credentials and delivery | Explicit intended channels/destinations; scanner/persistence credential separate from report credential; report-repository metadata verified private with the report credential; host reporting disabled |
 | First manual scan | Run/attempt, scanner pin, transaction base, coverage result, intended delivery evidence, and resulting state; delivery and persistence outcomes recorded separately |
 | Remote persistence | Private remote state retrieved after the run, canonically parsed, and compared with the exact resulting snapshot and delivered entries; normal state-only commit or justified unchanged-state result |
@@ -93,8 +93,9 @@ claims.
 Public tracker/PR updates contain only non-sensitive status and public source/check
 identifiers. Keep personal repository identities, preferences, secrets, state
 contents/counts, opportunity URLs, run IDs, recovery hashes, and operational logs
-private. These gates are verified for the migrated instance and PR #41 is merged;
-operational evidence remains private. Future instances must prove their own gates.
+private. The original migrated instance completed these gates; operational evidence
+remains private. Every new independent instance must prove equivalent gates for
+itself.
 
 ## Action inputs and credentials
 
