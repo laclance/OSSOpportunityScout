@@ -22,41 +22,39 @@ OSS Opportunity Scout is a package-owned scanner with:
 - Python 3.12 as the minimum runtime and authoritative quality baseline, with compile/test compatibility CI on CPython 3.13 and 3.14
 - immutable non-secret preferences, a strict version-1 TOML parser, and a generic example
 - mandatory default `scout.toml` or explicit `--config PATH`, independent `--state PATH`, and repository/lane/strategic global-search controls
-- primary repository-language preferences across both lanes with cached metadata (Slice 3B)
+- primary repository-language preferences across both lanes with cached metadata
 - configured strategic repositories expand discovery sources without extending the built-in target-repository scoring bonus
-- exact final-effort preferences across both lanes, applied before selection limits (Slice 3C)
-- inclusive final-classification score thresholds and a 1–8 result limit (Slice 3D)
-- a [configuration reference](docs/CONFIGURATION.md) with generic examples and offline validation (Slice 4)
-- a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, and private recovery artifacts (Slice 5)
+- exact final-effort preferences across both lanes, applied before selection limits
+- inclusive final-classification score thresholds and a 1–8 result limit
+- a [configuration reference](docs/CONFIGURATION.md) with generic examples and offline validation
+- a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, private recovery artifacts, and a durable recovery barrier
 
-Slice 1B enforces coverage completeness independently of warning thresholds,
-including quiet-run maintenance. Slices 1–7 are complete through PR #42; Slice 6
-private acceptance remains satisfied with evidence kept private. PR #43 added the
-durable failed-persistence recovery barrier, and PR #44 moved direct-source language
-filtering ahead of bounded adaptive inspection. Historical state remains private;
-public examples never replace that history.
+Coverage completeness is independent of warning thresholds, including quiet-run
+maintenance. Failed persistence is guarded by a durable private recovery marker, and
+authoritative direct-source language filtering occurs before bounded adaptive
+inspection. Historical state remains private; public examples never replace that
+history.
 
-## Completed migration baseline
+## Deployment baseline
 
 ### Public distribution and private scout instances
 
 `laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner version pin. Forks are optional for scanner-code customization, not runtime state ownership.
 
-The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) records
-Slices 1–7 through merged PR #42 and the separately numbered post-migration
-correctness follow-ups #43 and #44. This ownership model is the current baseline,
-not an active migration phase. No private scanner-pin upgrade is implicit.
+The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves
+the implementation, acceptance, and recovery history behind this ownership model.
+No private scanner-pin upgrade is implicit.
 
 Do not restore upstream scheduling or `scout-state` ownership. Any future schedule
 belongs to the private instance and requires a deliberate operational decision.
 Forks remain optional for code customization; instances consume reviewed immutable
-upstream or fork SHAs. Remaining compatibility-wrapper cleanup is separate work.
+upstream or fork SHAs.
 
 ### Establish a release baseline
 
 Consider tagging the current project state as the first stable OSS release once the desired public release/versioning convention is chosen.
 
-A release should describe its actual migration status, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
+A release should describe the current ownership model, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
 
 ## Product improvements
 
@@ -86,7 +84,7 @@ Do not move scanner discovery onto the private-report credential.
 Consider these only when they produce a concrete maintenance benefit:
 
 - immutable result objects for selected mapping-heavy internal results
-- remaining application compatibility-wrapper cleanup, separate from this migration
+- remaining application compatibility-wrapper cleanup
 - lightweight dependency-direction checks if architectural drift becomes recurring
 
 Do not perform broad type/model rewrites or custom architecture tooling merely for stylistic consistency.
