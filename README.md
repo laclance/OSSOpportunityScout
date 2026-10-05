@@ -9,7 +9,12 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 ## Deployment ownership
 
-`laclance/OSSOpportunityScout` is the canonical public source of truth for scanner code. It is a distribution and development repository, not a persistent scout instance: upstream owns scanner code, development/release CI, documentation, and reusable distribution assets, while an independent private instance owns the actual scout workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, recovery, and scanner pin.
+`laclance/OSSOpportunityScout` is the canonical public source of truth for scanner
+code. It is a distribution and development repository, not a persistent scout instance:
+upstream owns scanner code, development/release CI, documentation, and reusable
+distribution assets, while an independent private instance owns the actual scout
+workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery
+configuration, persistence/history, recovery, and scanner pin.
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
