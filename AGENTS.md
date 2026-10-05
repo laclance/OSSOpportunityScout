@@ -12,6 +12,13 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 
 For deployment/configuration/state-ownership work, additionally read [docs/PRIVATE_INSTANCE.md](docs/PRIVATE_INSTANCE.md) for current operations. Consult the [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) only when historical provenance, recovery history, or rationale matters.
 
+## Branch ownership
+
+- Ordinary work starts from the latest `dev`, uses a focused topic branch, and targets `dev`.
+- Never open a topic-branch pull request directly to `main`.
+- A `dev → main` promotion pull request is the only normal path to `main`, and agents may open one only when explicitly requested.
+- Do not merge any pull request without explicit human authorization.
+
 ## Project constraints
 
 - Python 3.12 is the minimum supported runtime and the syntax/type/tooling baseline for the authoritative strict gate. CI also runs recursive compile/test compatibility checks on CPython 3.13 and 3.14. Later releases are not supported until added to CI and their checks pass. Do not use syntax newer than 3.12 or reopen/renumber the completed migration slices.
