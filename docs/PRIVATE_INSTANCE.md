@@ -13,7 +13,7 @@ implementation and acceptance details.
 An independent **private** instance repository owns its `.github/workflows/scout.yml`,
 triggers, any future schedules, concurrency, secrets, `scout.toml`,
 `seen_bounties.json`, Git state/history, delivery configuration, and scanner pin.
-Upstream owns scanner code, development CI, reusable execution, and generic examples.
+Upstream owns scanner code, development/release CI, documentation, reusable execution, and generic examples.
 Forking is optional for scanner-code customization; use a deliberate full SHA from
 upstream or a customized fork. Never run an upstream persistent workflow that reads
 private instance state remotely.
@@ -55,9 +55,9 @@ Keep the following evidence in private storage or the confirmed private instance
 
 | Gate | Private evidence required |
 | --- | --- |
-| Historical recovery | Newer sources checked, selected source/commit/path, original snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust |
+| State seed or recovery | New instance: deliberate empty seed verified. Existing/migrated instance: trustworthy recovered source/commit/path, snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust. |
 | Instance ownership | GitHub metadata explicitly confirming repository privacy and independence; default branch owns personal config, seeded state, manual-only workflow, full scanner SHA, and persistence/history |
-| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the recovered snapshot |
+| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the intended initial snapshot |
 | Credentials and delivery | Explicit intended channels/destinations; scanner/persistence credential separate from report credential; report-repository metadata verified private with the report credential; host reporting disabled |
 | First manual scan | Run/attempt, scanner pin, transaction base, coverage result, intended delivery evidence, and resulting state; delivery and persistence outcomes recorded separately |
 | Remote persistence | Private remote state retrieved after the run, canonically parsed, and compared with the exact resulting snapshot and delivered entries; normal state-only commit or justified unchanged-state result |
