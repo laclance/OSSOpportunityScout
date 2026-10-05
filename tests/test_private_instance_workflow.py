@@ -96,7 +96,9 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn(".scout/recovery-required", recovery_gate["run"])
         self.assertTrue(steps[5]["continue-on-error"])
         self.assertNotIn("continue-on-error", scan)
-        self.assertNotIn("if", steps[5])  # Default success() still skips Git persistence on scan failure.
+        self.assertNotIn(
+            "if", steps[5]
+        )  # Default success() still skips Git persistence on scan failure.
         self.assertEqual(steps[5]["env"]["SCOUT_BASE_SHA"], "${{ steps.base.outputs.sha }}")
         transaction = steps[6]
         self.assertEqual(transaction["if"], "${{ always() }}")
