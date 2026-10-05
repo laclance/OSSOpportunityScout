@@ -767,6 +767,72 @@ class RunLifecycleTests(unittest.TestCase):
         self.assertIn("Opportunity discovery/verification coverage is incomplete", reports[0])
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
+    def test_platform_discovery_failure_can_deliver_but_never_advances_state(
+        self,
+    ) -> None:
+        messages: list[str] = []
+        item = candidate()
+        failure = DiscoveryFailureReason(
+            "official bounty-platform discovery failed for Opire; scan coverage incomplete"
+        )
+
+        def paid(
+            _token: str | None,
+            _seen: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.PaidDiscoveryResult:
+            return (
+                [item],
+                {failure: 1},
+                [
+                    {
+                        "url": "https://github.com/issues",
+                        "title": "Official bounty-platform discovery",
+                        "reason": failure,
+                    }
+                ],
+            )
+
+        def telegram(_token: str, _chat_id: str, message: str) -> bool:
+            messages.append(message)
+            return True
+
+        deps = replace(
+            dependencies(),
+            discover_paid=paid,
+            send_telegram=telegram,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "maintain_seen_state") as maintain,
+            patch.object(state, "save_seen_state") as save,
+            redirect_stdout(output),
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig(None, None, "tb", "chat", None),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertTrue(result.delivery.delivered)
+        self.assertEqual(result.queue, (item,))
+        self.assertEqual(result.coverage.discovery_failures, 1)
+        self.assertFalse(result.coverage.complete)
+        self.assertFalse(result.state_saved)
+        maintain.assert_not_called()
+        save.assert_not_called()
+        self.assertIn(
+            "Opportunity discovery/verification coverage is incomplete",
+            messages[0],
+        )
+        self.assertIn(
+            "Verification coverage incomplete; state was not updated.",
+            output.getvalue(),
+        )
+
     def test_paid_claim_verification_failure_can_deliver_but_never_advances_state(self) -> None:
         reports: list[str] = []
 
