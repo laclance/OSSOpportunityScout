@@ -59,6 +59,17 @@ class UpstreamDistributionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reusable workflow"):
             validate_workflow_references(workflow)
 
+    def test_expression_reusable_workflow_is_rejected(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": "${{ inputs.workflow_reference }}",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "reusable workflow"):
+            validate_workflow_references(workflow)
+
     def test_external_reusable_workflow_full_sha_is_accepted(self) -> None:
         workflow = {
             "jobs": {
