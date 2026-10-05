@@ -658,11 +658,14 @@ class SelectedStateTests(unittest.TestCase):
                     state_path=selected_path,
                     preferences=preferences.ScoutPreferences(paid=False, global_search=False),
                 )
+                strategic_rejects: dict[str, int] = {}
+                if incomplete:
+                    strategic_rejects[SourceFailureReason("source refresh failed")] = 1
                 callbacks = replace(
                     dependencies(),
                     discover_strategic=lambda *_args: (
                         [candidate()],
-                        {SourceFailureReason("source refresh failed"): 1} if incomplete else {},
+                        strategic_rejects,
                         [],
                         [],
                     ),
