@@ -58,34 +58,33 @@ runs:
         PYTHONSAFEPATH: '1'
       run: |
         set -uo pipefail
-        signal_file="$(mktemp)"
-        trap 'rm -f "$signal_file"' EXIT
+        # Internal reserved status: the scanner has no intentional status 86;
+        # ordinary Python exceptions use 1 and argparse usage errors use 2.
+        readonly post_delivery_save_status=86
         status=0
         # Absolute script path imports the package beside this pinned action,
         # rather than any scanner code in the private caller's checkout.
         # -I also excludes caller PYTHONPATH and user site packages; insert only
         # this action's source root before invoking its stable executable shim.
-        SCOUT_TRANSACTION_SIGNAL="$signal_file" python -I -c '
-        import os
+        python -I -c '
         import runpy
         import sys
-        from pathlib import Path
+        import traceback
 
         source = sys.argv.pop(1)
+        post_delivery_save_status = int(sys.argv.pop(1))
         sys.path.insert(0, source)
+        from opportunity_scout.run import PostDeliveryStateSaveError
+
         try:
             runpy.run_path(source + "/opportunity_scout.py", run_name="__main__")
-        except Exception as error:
-            from opportunity_scout.run import PostDeliveryStateSaveError
-
-            if isinstance(error, PostDeliveryStateSaveError):
-                Path(os.environ["SCOUT_TRANSACTION_SIGNAL"]).write_text(
-                    "reconstruct\\n", encoding="utf-8"
-                )
-            raise
-        ' "$SCANNER_SOURCE" --config "$SCOUT_CONFIG" --state "$SCOUT_STATE" || status=$?
+        except PostDeliveryStateSaveError:
+            traceback.print_exc()
+            raise SystemExit(post_delivery_save_status)
+        ' "$SCANNER_SOURCE" "$post_delivery_save_status" \
+          --config "$SCOUT_CONFIG" --state "$SCOUT_STATE" || status=$?
         set -e
-        if test -s "$signal_file"; then
+        if test "$status" -eq "$post_delivery_save_status"; then
           printf 'recovery-required=true\\n' >> "$GITHUB_OUTPUT"
           printf 'recovery-mode=reconstruct\\n' >> "$GITHUB_OUTPUT"
         else
