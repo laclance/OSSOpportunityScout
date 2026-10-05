@@ -348,20 +348,32 @@ class HttpAndPlatformTests(unittest.TestCase):
             patch.object(
                 sources,
                 "issuehunt_platform_refs",
-                return_value={"u": "issuehunt"},
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={"u": "issuehunt"},
+                    failures=(),
+                ),
             ),
             patch.object(
                 sources,
                 "opire_platform_refs",
-                return_value={"v": "opire"},
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={"v": "opire"},
+                    failures=(),
+                ),
             ),
             patch.object(
                 sources,
                 "bountyhub_platform_refs",
-                return_value={"u": "bountyhub"},
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={"u": "bountyhub"},
+                    failures=(),
+                ),
             ),
         ):
-            self.assertEqual(scout.platform_paid_refs(), {"u": "bountyhub", "v": "opire"})
+            result = scout.platform_paid_refs()
+
+        self.assertEqual(result.refs, {"u": "bountyhub", "v": "opire"})
+        self.assertEqual(result.failures, ())
 
     def test_contribution_guide_found_and_missing(self) -> None:
         def getter(url: str, token: str | None) -> Any:
@@ -1433,16 +1445,17 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsInstance(audit[0]["reason"], DiscoveryFailureReason)
 
     def test_discover_paid_failed_search_has_direct_prefetch_parity(self) -> None:
+        empty_platforms = sources.PlatformDiscoveryResult(refs={}, failures=())
         with (
             patch.object(scout, "PAID_DISCOVERY_QUERIES", ["paid-q"]),
             patch.object(github, "search_github", return_value={}) as direct_search,
-            patch.object(scout, "platform_paid_refs", return_value={}),
+            patch.object(scout, "platform_paid_refs", return_value=empty_platforms),
         ):
             direct = scout.discover_paid("t", set(), {}, {})
 
         with (
             patch.object(github, "search_github") as prefetched_search,
-            patch.object(scout, "platform_paid_refs", return_value={}),
+            patch.object(scout, "platform_paid_refs", return_value=empty_platforms),
         ):
             prefetched = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
 
@@ -1456,6 +1469,36 @@ class DiscoveryTests(unittest.TestCase):
         reason = next(iter(direct[1]))
         self.assertIsInstance(reason, DiscoveryFailureReason)
         self.assertIn("paid discovery search failed for query: paid-q", reason)
+
+    def test_discover_paid_platform_failure_is_semantic_and_keeps_good_refs(self) -> None:
+        platform = issue(html_url="https://github.com/p/p/issues/3")
+        failure = DiscoveryFailureReason(
+            "official bounty-platform discovery failed for Opire; scan coverage incomplete"
+        )
+        with (
+            patch.object(github, "search_github", return_value={"items": []}),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={str(platform.get("html_url")): "sig"},
+                    failures=(failure,),
+                ),
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=platform),
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
+            patch.object(
+                scout,
+                "verify",
+                return_value=(candidate(url=platform.get("html_url")), None),
+            ),
+        ):
+            found, rejected, examples = scout.discover_paid("t", set(), {}, {})
+
+        self.assertEqual({item["url"] for item in found}, {platform.get("html_url")})
+        self.assertEqual(rejected[failure], 1)
+        self.assertIsInstance(next(iter(rejected)), DiscoveryFailureReason)
+        self.assertEqual(examples[0]["reason"], failure)
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
@@ -1486,11 +1529,14 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "platform_paid_refs",
-                return_value={
-                    platform.get("html_url"): "sig",
-                    platform_dirty.get("html_url"): "sig",
-                    platform_bad: "sig",
-                },
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={
+                        str(platform.get("html_url")): "sig",
+                        str(platform_dirty.get("html_url")): "sig",
+                        platform_bad: "sig",
+                    },
+                    failures=(),
+                ),
             ),
             patch.object(
                 scout,
@@ -1525,9 +1571,14 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(
                 scout,
                 "platform_paid_refs",
-                return_value={
-                    platform.get("html_url"): "confirmed bounty platform feed (IssueHunt): $2"
-                },
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={
+                        str(
+                            platform.get("html_url")
+                        ): "confirmed bounty platform feed (IssueHunt): $2"
+                    },
+                    failures=(),
+                ),
             ),
             patch.object(scout, "issue_from_github_url", return_value=platform),
         ):
@@ -1547,7 +1598,11 @@ class DiscoveryTests(unittest.TestCase):
             patch.object(github, "search_github", return_value={"items": [seen, bad]}),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
-            patch.object(scout, "platform_paid_refs", return_value={}),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(refs={}, failures=()),
+            ),
         ):
             found, rejected, examples = scout.discover_paid(
                 "t", {str(seen.get("html_url"))}, {}, {}
@@ -2290,7 +2345,10 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(
                 scout,
                 "platform_paid_refs",
-                return_value={source_seen: "sig", source_reject: "sig"},
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={source_seen: "sig", source_reject: "sig"},
+                    failures=(),
+                ),
             ),
             patch.object(scout, "issue_from_github_url", return_value=item_reject),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
