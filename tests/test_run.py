@@ -721,7 +721,7 @@ class RunLifecycleTests(unittest.TestCase):
         ) -> run.StrategicDiscoveryResult:
             return (
                 [candidate(paid=False)],
-                {"could not refresh source issue": 5},
+                {SourceFailureReason("source refresh failed"): 5},
                 [],
                 [],
             )
@@ -777,7 +777,7 @@ class RunLifecycleTests(unittest.TestCase):
             _guide_cache: dict[str, str | None],
             _search_results: list[SearchBatch] | None,
         ) -> run.PaidDiscoveryResult:
-            return [], {"could not verify active claim comments": 1}, []
+            return [], {SourceFailureReason("paid claim evidence failed"): 1}, []
 
         def github_report(_repo: str, _token: str, _title: str, body: str) -> bool:
             reports.append(body)
