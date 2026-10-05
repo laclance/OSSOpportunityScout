@@ -434,9 +434,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
             any("global strategic discovery search failed" in reason for reason in failures)
         )
         archived = next(
-            item["reason"]
-            for item in selection.audit
-            if "repository is archived" in item["reason"]
+            item["reason"] for item in selection.audit if "repository is archived" in item["reason"]
         )
         self.assertNotIsInstance(archived, DiscoveryFailureReason)
 
