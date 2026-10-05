@@ -401,6 +401,11 @@ class PinnedActionTests(unittest.TestCase):
         for name in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "DISCORD_WEBHOOK_URL"):
             self.assertIn("inputs.", env[name])
 
+        run_script = action["runs"]["steps"][1]["run"]
+        self.assertIn("post_delivery_save_status=86", run_script)
+        for obsolete_signal in ("mktemp", "SCOUT_TRANSACTION_SIGNAL", "signal_file"):
+            self.assertNotIn(obsolete_signal, run_script)
+
     def test_executes_action_source_with_quoted_paths_and_propagates_failure(self) -> None:
         step = document(ACTION)["runs"]["steps"][1]
         with tempfile.TemporaryDirectory() as temporary:
@@ -456,8 +461,10 @@ class PinnedActionTests(unittest.TestCase):
             source = folder / "pinned source"
             caller = folder / "caller"
             package = source / "opportunity_scout"
+            fake_bin = folder / "fake-bin"
             package.mkdir(parents=True)
             caller.mkdir()
+            fake_bin.mkdir()
             (package / "__init__.py").write_text("", encoding="utf-8")
             (package / "run.py").write_text(
                 "class PostDeliveryStateSaveError(Exception):\n    pass\n",
@@ -465,25 +472,45 @@ class PinnedActionTests(unittest.TestCase):
             )
             (source / "opportunity_scout.py").write_text(
                 "from opportunity_scout.run import PostDeliveryStateSaveError\n"
-                "raise PostDeliveryStateSaveError('save failed after delivery')\n",
+                "try:\n"
+                "    raise RuntimeError('root save cause')\n"
+                "except RuntimeError as error:\n"
+                "    raise PostDeliveryStateSaveError('save failed after delivery') from error\n",
                 encoding="utf-8",
             )
+
+            mktemp_capture = folder / "mktemp-called"
+            fake_mktemp = fake_bin / "mktemp"
+            fake_mktemp.write_text(
+                "#!/bin/bash\nprintf invoked > \"$MKTEMP_CAPTURE\"\nexit 99\n",
+                encoding="utf-8",
+            )
+            fake_mktemp.chmod(0o755)
+            unusable_temp = folder / "unusable-temp"
+            unusable_temp.write_text("not a directory\n", encoding="utf-8")
+
             output = caller / "action-output"
             result = shell_step(
                 step,
                 caller,
                 {
-                    "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}",
+                    "PATH": (
+                        f"{fake_bin}:{Path(sys.executable).parent}:{os.environ['PATH']}"
+                    ),
                     "SCANNER_SOURCE": str(source),
                     "SCOUT_CONFIG": "scout.toml",
                     "SCOUT_STATE": "seen.json",
                     "GITHUB_TOKEN": "",
                     "PRIVATE_GITHUB_REPORTS_TOKEN": "",
                     "GITHUB_OUTPUT": str(output),
+                    "MKTEMP_CAPTURE": str(mktemp_capture),
+                    "TMPDIR": str(unusable_temp),
                 },
             )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("PostDeliveryStateSaveError", result.stderr)
+            self.assertEqual(result.returncode, 86)
+            self.assertFalse(mktemp_capture.exists())
+            self.assertIn("RuntimeError: root save cause", result.stderr)
+            self.assertIn("PostDeliveryStateSaveError: save failed after delivery", result.stderr)
             outputs = output.read_text(encoding="utf-8")
             self.assertIn("recovery-required=true", outputs)
             self.assertIn("recovery-mode=reconstruct", outputs)
