@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from opportunity_scout import sources
 from opportunity_scout import github
-from opportunity_scout.types import GitHubIssue
+from opportunity_scout.types import DiscoveryFailureReason, GitHubIssue
 from tests.helpers import FakeResponse, candidate
 
 
