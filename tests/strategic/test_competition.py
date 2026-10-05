@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from opportunity_scout import github, paid_verification
 from opportunity_scout.strategic import competition
-from opportunity_scout.types import GitHubComment
+from opportunity_scout.types import GitHubComment, SourceFailureReason
 from tests.helpers import comment, issue
 
 
@@ -340,7 +340,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             )
             self.assertEqual(getter.call_count, 2)
 
-    def test_linked_pr_uses_same_repo_urls_and_ignores_non_pr_api_results(self) -> None:
+    def test_linked_pr_uses_same_repo_urls_and_fails_closed_on_unusable_results(self) -> None:
         comments: list[GitHubComment] = [
             {
                 "body": (
@@ -349,8 +349,12 @@ class LinkedPullRequestTests(unittest.TestCase):
                 )
             }
         ]
-        with patch.object(github, "github_get", return_value=[]):
-            self.assertIsNone(competition.linked_open_pr_reason(issue(), "t", comments))
+        for unusable in (None, [], {"state": "unknown"}):
+            with self.subTest(unusable=unusable):
+                with patch.object(github, "github_get", return_value=unusable):
+                    reason = competition.linked_open_pr_reason(issue(), "t", comments)
+                self.assertEqual(reason, "could not verify linked implementation PR")
+                self.assertIsInstance(reason, SourceFailureReason)
 
         same_repo: list[GitHubComment] = [
             {
