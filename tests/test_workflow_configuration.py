@@ -48,6 +48,38 @@ class UpstreamDistributionTests(unittest.TestCase):
         )
         validate_workflow_references(workflow, approved_actions=expected)
 
+    def test_mutable_external_reusable_workflow_is_rejected(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": "example/example/.github/workflows/ci.yml@v1",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "reusable workflow"):
+            validate_workflow_references(workflow)
+
+    def test_external_reusable_workflow_full_sha_is_accepted(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": (
+                        "example/example/.github/workflows/ci.yml@"
+                        "0123456789abcdef0123456789abcdef01234567"
+                    ),
+                }
+            }
+        }
+        validate_workflow_references(workflow)
+
+    def test_same_repository_reusable_workflows_are_accepted(self) -> None:
+        for reference in (
+            "./.github/workflows/local.yml",
+            "$/.github/workflows/local.yml",
+        ):
+            with self.subTest(reference=reference):
+                validate_workflow_references({"jobs": {"reusable": {"uses": reference}}})
+
     def test_quality_toolchain_uses_known_green_exact_direct_pins(self) -> None:
         expected = {
             "coverage": "7.16.2",
