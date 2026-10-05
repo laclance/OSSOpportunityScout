@@ -83,7 +83,9 @@ class NotificationFormattingTests(unittest.TestCase):
         self.assertLessEqual(len(lines[0]), 160)
         self.assertIn("priority: 93/100", "\n".join(lines))
 
-    def test_notification_preserves_markdown_sensitive_external_text_as_plain_text(self) -> None:
+    def test_notification_preserves_markdown_sensitive_external_text_as_plain_text(
+        self,
+    ) -> None:
         title = "Fix parser_[edge] for `foo*bar`"
         item = candidate(repo="owner/repo_name", issue_number=42, title=title)
 
