@@ -455,7 +455,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
             network_workers=1,
             target_repo_pool=lambda *_: ([strong], None),
             basic_candidate=lambda _: True,
-            fetch_repo_metadata=lambda *_: {},
+            fetch_repo_metadata=lambda *_: RepositoryMetadata(),
             payment_signal=lambda _: None,
             build_candidate=lambda *_: self.fail("missing metadata must not build candidate"),
             cache_locks=github.KeyedLockPool(),
