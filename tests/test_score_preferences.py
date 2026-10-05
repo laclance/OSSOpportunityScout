@@ -20,7 +20,7 @@ from opportunity_scout import (
     state,
 )
 from opportunity_scout.strategic import discovery, verification
-from opportunity_scout.types import Candidate, IssueRow, RepositoryMetadata
+from opportunity_scout.types import Candidate, IssueRow, RepositoryMetadata, SourceFailureReason
 from tests.helpers import candidate, issue
 from tests.test_run import FIXED_TIME, dependencies
 
@@ -302,7 +302,7 @@ class ScoreOrchestrationTests(unittest.TestCase):
                         discover_paid=lambda *_: (blocked, {}, []),
                         discover_strategic=lambda *_: (
                             list(reversed(eligible)),
-                            {} if complete else {"could not refresh source issue": 1},
+                            {} if complete else {SourceFailureReason("source refresh failed"): 1},
                             [],
                             [],
                         ),
