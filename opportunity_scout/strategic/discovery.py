@@ -24,6 +24,7 @@ from opportunity_scout.strategic.readiness import (
 from opportunity_scout.types import (
     Candidate,
     CandidateLane,
+    DiscoveryFailureReason,
     GitHubIssue,
     GitHubSearchResult,
     RejectionRecord,
@@ -268,7 +269,7 @@ def select_strategic_candidates(
                         html_url=f"https://github.com/{target_repo}/issues",
                         title=target_repo,
                     ),
-                    source_error,
+                    DiscoveryFailureReason(source_error),
                     limit=audit_limit,
                 )
             source_batches.append(items)
@@ -282,8 +283,10 @@ def select_strategic_candidates(
                     html_url="https://github.com/issues",
                     title=f"Global GitHub Search: {query}",
                 ),
-                f"global strategic discovery search failed for query: {query}; "
-                "scan coverage incomplete",
+                DiscoveryFailureReason(
+                    f"global strategic discovery search failed for query: {query}; "
+                    "scan coverage incomplete"
+                ),
                 limit=audit_limit,
             )
             continue
