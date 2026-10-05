@@ -17,6 +17,7 @@ from opportunity_scout import (
     preferences,
     run,
     selection,
+    sources,
     state,
 )
 from opportunity_scout.strategic import discovery, verification
@@ -92,7 +93,11 @@ class RefreshedScoreTests(unittest.TestCase):
                 config = preferences.ScoutPreferences(min_cash_score=80, min_career_score=80)
                 with (
                     self.subTest(paid=is_paid, score=score),
-                    patch.object(app, "platform_paid_refs", return_value={}),
+                    patch.object(
+                        app,
+                        "platform_paid_refs",
+                        return_value=sources.PlatformDiscoveryResult(refs={}, failures=()),
+                    ),
                     patch.object(
                         discovery,
                         "select_strategic_candidates",
@@ -138,7 +143,11 @@ class RefreshedScoreTests(unittest.TestCase):
                 for minimum in (final["cash_score"], final["cash_score"] + 1):
                     with (
                         self.subTest(source=source["body"], wrapped=wrapped, minimum=minimum),
-                        patch.object(app, "platform_paid_refs", return_value={}),
+                        patch.object(
+                            app,
+                            "platform_paid_refs",
+                            return_value=sources.PlatformDiscoveryResult(refs={}, failures=()),
+                        ),
                         patch.object(
                             app,
                             "refresh_issue",
@@ -399,7 +408,14 @@ class ScoreOrchestrationTests(unittest.TestCase):
                             )
                         )
                         platforms = stack.enter_context(
-                            patch.object(app, "platform_paid_refs", return_value={})
+                            patch.object(
+                                app,
+                                "platform_paid_refs",
+                                return_value=sources.PlatformDiscoveryResult(
+                                    refs={},
+                                    failures=(),
+                                ),
+                            )
                         )
                         refresh = stack.enter_context(
                             patch.object(

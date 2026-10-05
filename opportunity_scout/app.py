@@ -321,19 +321,28 @@ def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     return github.issue_from_github_url(url, token)
 
 
-def platform_paid_refs() -> dict[str, str]:
-    """Merge official bounty-platform source discoveries."""
+def platform_paid_refs() -> sources.PlatformDiscoveryResult:
+    """Merge official bounty-platform source discoveries and failures."""
     return sources.platform_paid_refs(
         (
-            lambda: sources.issuehunt_platform_refs(pages=ISSUEHUNT_PAGES),
-            lambda: sources.opire_platform_refs(
-                fetch_limit=PLATFORM_FETCH_LIMIT,
-                network_workers=NETWORK_WORKERS,
+            (
+                "IssueHunt",
+                lambda: sources.issuehunt_platform_refs(pages=ISSUEHUNT_PAGES),
             ),
-            lambda: sources.bountyhub_platform_refs(
-                EXTENDED_AMOUNT_RE,
-                fetch_limit=PLATFORM_FETCH_LIMIT,
-                network_workers=NETWORK_WORKERS,
+            (
+                "Opire",
+                lambda: sources.opire_platform_refs(
+                    fetch_limit=PLATFORM_FETCH_LIMIT,
+                    network_workers=NETWORK_WORKERS,
+                ),
+            ),
+            (
+                "BountyHub",
+                lambda: sources.bountyhub_platform_refs(
+                    EXTENDED_AMOUNT_RE,
+                    fetch_limit=PLATFORM_FETCH_LIMIT,
+                    network_workers=NETWORK_WORKERS,
+                ),
             ),
         ),
         network_workers=NETWORK_WORKERS,
@@ -754,8 +763,20 @@ def discover_paid(
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Fetch their source issues concurrently, then
     # apply the same source-authoritative verification as direct discoveries.
+    platform_result = platform_paid_refs()
+    for failure in platform_result.failures:
+        add_reject(
+            rejected,
+            examples,
+            GitHubIssue(
+                html_url="https://github.com/issues",
+                title="Official bounty-platform discovery",
+            ),
+            failure,
+        )
+
     platform_sources: list[tuple[str, str]] = []
-    for source_url, platform_signal in platform_paid_refs().items():
+    for source_url, platform_signal in platform_result.refs.items():
         if source_url in seen or source_url in touched:
             continue
         source_repo, _ = github.issue_repo_and_number(GitHubIssue(html_url=source_url))
