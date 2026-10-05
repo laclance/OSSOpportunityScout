@@ -114,7 +114,7 @@ def notification_candidate(candidate: Candidate, idx: int) -> list[str]:
     title = str(candidate["title"] or "")
     if len(title) > 100:
         title = title[:97] + "..."
-    lines = [f"{idx}. *{candidate['repo']} #{candidate['issue_number']}* — {title}"]
+    lines = [f"{idx}. {candidate['repo']} #{candidate['issue_number']} — {title}"]
     if candidate["paid"]:
         lines.append(
             f"   • paid bounty | reward: {candidate['reward'] or 'unknown'} | "
@@ -142,7 +142,7 @@ def notification_message(
     max_chars: int = 1900,
 ) -> str:
     """Render a notification that stays within the stricter Discord text budget."""
-    header = f"🎯 *OSS Opportunity Queue* ({now})\n\n"
+    header = f"🎯 OSS Opportunity Queue ({now})\n\n"
     if warning:
         header += f"⚠️ {warning}\n\n"
     parts: list[str] = []

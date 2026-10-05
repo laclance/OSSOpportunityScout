@@ -31,15 +31,16 @@ class DeliveryTests(unittest.TestCase):
         req = cast(urllib.request.Request, opened.call_args.args[0])
         self.assertEqual(req.full_url, "https://api.telegram.org/botbot/sendMessage")
         self.assertEqual(req.method, "POST")
+        payload = request_json(req)
         self.assertEqual(
-            request_json(req),
+            payload,
             {
                 "chat_id": "chat",
                 "text": "hello",
-                "parse_mode": "Markdown",
                 "disable_web_page_preview": False,
             },
         )
+        self.assertNotIn("parse_mode", payload)
         self.assertEqual(req.get_header("Content-type"), "application/json")
         self.assertEqual(opened.call_args.kwargs["timeout"], 10)
 
