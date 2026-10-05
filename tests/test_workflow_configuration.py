@@ -28,7 +28,16 @@ class UpstreamDistributionTests(unittest.TestCase):
         self.assertEqual(len(branch_flow["steps"]), 1)
         branch_flow_step = branch_flow["steps"][0]
         self.assertNotIn("uses", branch_flow_step)
-        self.assertEqual(set(branch_flow_step["env"]), {"EVENT_NAME", "BASE_REF", "HEAD_REF"})
+        self.assertEqual(
+            set(branch_flow_step["env"]),
+            {
+                "EVENT_NAME",
+                "BASE_REF",
+                "HEAD_REF",
+                "HEAD_REPOSITORY",
+                "CURRENT_REPOSITORY",
+            },
+        )
         for job_name in ("quality", "compatibility"):
             job = workflow["jobs"][job_name]
             self.assertNotIn("permissions", job)
@@ -71,7 +80,13 @@ class UpstreamDistributionTests(unittest.TestCase):
         )
 
     def _run_branch_flow(
-        self, *, event_name: str, base_ref: str, head_ref: str
+        self,
+        *,
+        event_name: str,
+        base_ref: str,
+        head_ref: str,
+        head_repository: str = "laclance/OSSOpportunityScout",
+        current_repository: str = "laclance/OSSOpportunityScout",
     ) -> subprocess.CompletedProcess[str]:
         workflow = yaml.load(
             (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
@@ -86,6 +101,8 @@ class UpstreamDistributionTests(unittest.TestCase):
                 "EVENT_NAME": event_name,
                 "BASE_REF": base_ref,
                 "HEAD_REF": head_ref,
+                "HEAD_REPOSITORY": head_repository,
+                "CURRENT_REPOSITORY": current_repository,
             },
             capture_output=True,
             text=True,
@@ -108,6 +125,19 @@ class UpstreamDistributionTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_branch_flow_rejects_fork_dev_promotion_to_main(self) -> None:
+        result = self._run_branch_flow(
+            event_name="pull_request",
+            base_ref="main",
+            head_ref="dev",
+            head_repository="someone/fork",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "Pull requests to main must come from this repository's dev branch.",
+            result.stdout + result.stderr,
+        )
+
     def test_branch_flow_rejects_topic_pull_requests_to_main(self) -> None:
         for head_ref in ("feature/example", "fix/example", "dev/example"):
             with self.subTest(head_ref=head_ref):
@@ -118,7 +148,7 @@ class UpstreamDistributionTests(unittest.TestCase):
                 )
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn(
-                    "Pull requests to main must come from dev.",
+                    "Pull requests to main must come from this repository's dev branch.",
                     result.stdout + result.stderr,
                 )
 
@@ -127,6 +157,7 @@ class UpstreamDistributionTests(unittest.TestCase):
             event_name="push",
             base_ref="",
             head_ref="",
+            head_repository="",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
