@@ -203,6 +203,7 @@ def coverage_status(
         warning=warning,
     )
 
+
 def _save_state(next_state: state.SeenState, path: str | Path) -> bool:
     state.save_seen_state(next_state, path)
     return True
