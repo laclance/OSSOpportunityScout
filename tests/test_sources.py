@@ -102,9 +102,14 @@ class GenericSourceTests(unittest.TestCase):
 
     def test_public_text_fetch_success_and_failure(self) -> None:
         with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
-            self.assertEqual(sources.fetch_text("https://example.test"), "hello")
+            success = sources.fetch_text("https://example.test")
+        self.assertEqual(success.text, "hello")
+        self.assertIsNone(success.failure)
+
         with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
-            self.assertEqual(sources.fetch_text("https://example.test"), "")
+            failure = sources.fetch_text("https://example.test")
+        self.assertEqual(failure.text, "")
+        self.assertEqual(failure.failure, "boom")
 
     def test_issuehunt_fetch_failure_records_discovery_failure(self) -> None:
         with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
@@ -150,16 +155,40 @@ class PlatformAdapterTests(unittest.TestCase):
                 '<a href="/r/acme/widget/issues/9">x</a><span>funded</span>'
             ),
         }
-        refs = sources.issuehunt_platform_refs(lambda url: pages.get(url, ""), pages=2)
+        result = sources.issuehunt_platform_refs(
+            lambda url: sources.TextFetchResult(pages.get(url, "")),
+            pages=2,
+        )
         self.assertEqual(
-            refs["https://github.com/apache/superset/issues/3821"],
+            result.refs["https://github.com/apache/superset/issues/3821"],
             "confirmed bounty platform feed (IssueHunt): $17.00",
         )
         self.assertEqual(
-            refs["https://github.com/acme/widget/issues/9"],
+            result.refs["https://github.com/acme/widget/issues/9"],
             "confirmed bounty platform feed (IssueHunt)",
         )
-        self.assertEqual(sources.issuehunt_platform_refs(lambda _: "", pages=2), {})
+        self.assertEqual(result.failures, ())
+
+        empty = sources.issuehunt_platform_refs(
+            lambda _: sources.TextFetchResult(""),
+            pages=2,
+        )
+        self.assertEqual(empty.refs, {})
+        self.assertEqual(empty.failures, ())
+
+    def test_issuehunt_retains_good_page_when_later_page_fetch_fails(self) -> None:
+        def fetcher(url: str) -> sources.TextFetchResult:
+            if url.endswith("?page=2"):
+                return sources.TextFetchResult("", failure="boom")
+            return sources.TextFetchResult(
+                '<a href="/r/acme/widget/issues/9">x</a><span>$50</span>'
+            )
+
+        result = sources.issuehunt_platform_refs(fetcher, pages=2)
+
+        self.assertIn("https://github.com/acme/widget/issues/9", result.refs)
+        self.assertEqual(len(result.failures), 1)
+        self.assertIsInstance(result.failures[0], DiscoveryFailureReason)
 
     def test_opire_direct_and_detail_sources(self) -> None:
         pages = {
@@ -175,24 +204,66 @@ class PlatformAdapterTests(unittest.TestCase):
             "https://app.opire.dev/issues/C": ("funded https://github.com/acme/widget/issues/3"),
             "https://app.opire.dev/issues/D": "no github source here",
         }
-        refs = sources.opire_platform_refs(
-            lambda url: pages.get(url, ""),
+        result = sources.opire_platform_refs(
+            lambda url: sources.TextFetchResult(pages.get(url, "")),
             fetch_limit=20,
             network_workers=2,
         )
-        self.assertIn("https://github.com/direct/repo/issues/1", refs)
+        self.assertIn("https://github.com/direct/repo/issues/1", result.refs)
         self.assertEqual(
-            refs["https://github.com/acme/widget/issues/2"],
+            result.refs["https://github.com/acme/widget/issues/2"],
             "confirmed bounty platform feed (Opire): $50",
         )
         self.assertEqual(
-            refs["https://github.com/acme/widget/issues/3"],
+            result.refs["https://github.com/acme/widget/issues/3"],
             "confirmed bounty platform feed (Opire)",
         )
-        self.assertEqual(
-            sources.opire_platform_refs(lambda _: "", fetch_limit=20, network_workers=2),
-            {},
+        self.assertEqual(result.failures, ())
+
+        empty = sources.opire_platform_refs(
+            lambda _: sources.TextFetchResult(""),
+            fetch_limit=20,
+            network_workers=2,
         )
+        self.assertEqual(empty.refs, {})
+        self.assertEqual(empty.failures, ())
+
+    def test_opire_listing_and_detail_failures_are_semantic(self) -> None:
+        listing_failure = sources.opire_platform_refs(
+            lambda _: sources.TextFetchResult("", failure="listing failed"),
+            fetch_limit=20,
+            network_workers=2,
+        )
+        self.assertEqual(listing_failure.refs, {})
+        self.assertEqual(len(listing_failure.failures), 1)
+
+        pages = {
+            "https://app.opire.dev/home": (
+                r"https:\/\/github.com\/direct\/repo\/issues\/1 "
+                '<a href="/issues/A">a</a><a href="/issues/B">b</a>'
+            ),
+            "https://app.opire.dev/issues/A": "https://github.com/acme/widget/issues/2",
+        }
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            if url.endswith("/issues/B"):
+                return sources.TextFetchResult("", failure="detail failed")
+            return sources.TextFetchResult(pages.get(url, ""))
+
+        partial = sources.opire_platform_refs(
+            fetcher,
+            fetch_limit=20,
+            network_workers=2,
+        )
+        self.assertEqual(
+            set(partial.refs),
+            {
+                "https://github.com/direct/repo/issues/1",
+                "https://github.com/acme/widget/issues/2",
+            },
+        )
+        self.assertEqual(len(partial.failures), 1)
+        self.assertIsInstance(partial.failures[0], DiscoveryFailureReason)
 
     def test_bountyhub_direct_detail_and_amount(self) -> None:
         pages = {
@@ -211,57 +282,136 @@ class PlatformAdapterTests(unittest.TestCase):
             "https://www.bountyhub.dev/en/bounty/view/D": "no github source here",
         }
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
-        refs = sources.bountyhub_platform_refs(
+        result = sources.bountyhub_platform_refs(
             amount_pattern,
-            lambda url: pages.get(url, ""),
+            lambda url: sources.TextFetchResult(pages.get(url, "")),
             fetch_limit=20,
             network_workers=2,
         )
-        self.assertIn("https://github.com/direct/repo/issues/1", refs)
+        self.assertIn("https://github.com/direct/repo/issues/1", result.refs)
         self.assertEqual(
-            refs["https://github.com/acme/widget/issues/2"],
+            result.refs["https://github.com/acme/widget/issues/2"],
             "confirmed bounty platform feed (BountyHub): $125",
         )
         self.assertEqual(
-            refs["https://github.com/acme/widget/issues/3"],
+            result.refs["https://github.com/acme/widget/issues/3"],
             "confirmed bounty platform feed (BountyHub)",
         )
-        self.assertEqual(
-            sources.bountyhub_platform_refs(
-                amount_pattern,
-                lambda _: "",
-                fetch_limit=20,
-                network_workers=2,
-            ),
-            {},
+        self.assertEqual(result.failures, ())
+
+        empty = sources.bountyhub_platform_refs(
+            amount_pattern,
+            lambda _: sources.TextFetchResult(""),
+            fetch_limit=20,
+            network_workers=2,
         )
+        self.assertEqual(empty.refs, {})
+        self.assertEqual(empty.failures, ())
+
+    def test_bountyhub_listing_and_detail_failures_are_semantic(self) -> None:
+        amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
+        listing_failure = sources.bountyhub_platform_refs(
+            amount_pattern,
+            lambda _: sources.TextFetchResult("", failure="listing failed"),
+            fetch_limit=20,
+            network_workers=2,
+        )
+        self.assertEqual(listing_failure.refs, {})
+        self.assertEqual(len(listing_failure.failures), 1)
+
+        pages = {
+            "https://www.bountyhub.dev/en/bounties": (
+                r"https:\/\/github.com\/direct\/repo\/issues\/1 "
+                '<a href="/en/bounty/view/A">a</a><a href="/en/bounty/view/B">b</a>'
+            ),
+            "https://www.bountyhub.dev/en/bounty/view/A": (
+                "Reward $125 https://github.com/acme/widget/issues/2"
+            ),
+        }
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            if url.endswith("/en/bounty/view/B"):
+                return sources.TextFetchResult("", failure="detail failed")
+            return sources.TextFetchResult(pages.get(url, ""))
+
+        partial = sources.bountyhub_platform_refs(
+            amount_pattern,
+            fetcher,
+            fetch_limit=20,
+            network_workers=2,
+        )
+        self.assertEqual(
+            set(partial.refs),
+            {
+                "https://github.com/direct/repo/issues/1",
+                "https://github.com/acme/widget/issues/2",
+            },
+        )
+        self.assertEqual(len(partial.failures), 1)
+        self.assertIsInstance(partial.failures[0], DiscoveryFailureReason)
 
     def test_platform_merge_isolates_one_loader_failure(self) -> None:
-        def broken() -> dict[str, str]:
+        def broken() -> sources.PlatformDiscoveryResult:
             raise RuntimeError("parser broke")
 
-        refs = sources.platform_paid_refs(
+        result = sources.platform_paid_refs(
             (
-                lambda: {"a": "issuehunt"},
-                broken,
-                lambda: {"b": "bountyhub"},
+                (
+                    "IssueHunt",
+                    lambda: sources.PlatformDiscoveryResult(
+                        refs={"a": "issuehunt"},
+                        failures=(),
+                    ),
+                ),
+                ("Opire", broken),
+                (
+                    "BountyHub",
+                    lambda: sources.PlatformDiscoveryResult(
+                        refs={"b": "bountyhub"},
+                        failures=(),
+                    ),
+                ),
             ),
             network_workers=3,
         )
-        self.assertEqual(refs, {"a": "issuehunt", "b": "bountyhub"})
+        self.assertEqual(result.refs, {"a": "issuehunt", "b": "bountyhub"})
+        self.assertEqual(len(result.failures), 1)
+        self.assertIsInstance(result.failures[0], DiscoveryFailureReason)
+        self.assertIn("Opire", result.failures[0])
 
     def test_platform_merge_is_deduplicated_with_later_loader_precedence(self) -> None:
-        refs = sources.platform_paid_refs(
+        result = sources.platform_paid_refs(
             (
-                lambda: {"u": "issuehunt"},
-                lambda: {"v": "opire"},
-                lambda: {"u": "bountyhub"},
+                (
+                    "IssueHunt",
+                    lambda: sources.PlatformDiscoveryResult(
+                        refs={"u": "issuehunt"},
+                        failures=(),
+                    ),
+                ),
+                (
+                    "Opire",
+                    lambda: sources.PlatformDiscoveryResult(
+                        refs={"v": "opire"},
+                        failures=(),
+                    ),
+                ),
+                (
+                    "BountyHub",
+                    lambda: sources.PlatformDiscoveryResult(
+                        refs={"u": "bountyhub"},
+                        failures=(),
+                    ),
+                ),
             ),
             network_workers=3,
         )
-        self.assertEqual(refs, {"u": "bountyhub", "v": "opire"})
-        self.assertEqual(sources.platform_paid_refs((), network_workers=3), {})
-
+        self.assertEqual(result.refs, {"u": "bountyhub", "v": "opire"})
+        self.assertEqual(result.failures, ())
+        self.assertEqual(
+            sources.platform_paid_refs((), network_workers=3),
+            sources.PlatformDiscoveryResult(refs={}, failures=()),
+        )
 
 class AdaptiveInspectionTests(unittest.TestCase):
     def test_keeps_base_rows_and_spends_global_budget_on_strong_overflow(self) -> None:
