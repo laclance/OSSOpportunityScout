@@ -36,6 +36,28 @@ class UpstreamDistributionTests(unittest.TestCase):
                         self.assertNotIn(forbidden, step["run"])
         self.assertNotIn("oss-opportunity-scout.yml", str(workflow))
 
+    def test_active_workflow_external_actions_use_approved_immutable_shas(self) -> None:
+        expected = {
+            "actions/checkout": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "actions/setup-python": "5fda3b95a4ea91299a34e894583c3862153e4b97",
+        }
+        workflow = yaml.load(
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+        seen = set()
+        for job in workflow["jobs"].values():
+            for step in job["steps"]:
+                reference = step.get("uses")
+                if reference is None or reference.startswith("./"):
+                    continue
+                action, separator, revision = reference.partition("@")
+                self.assertEqual(separator, "@", reference)
+                self.assertEqual(revision, expected.get(action), reference)
+                self.assertRegex(revision, r"^[0-9a-f]{40}$")
+                seen.add(action)
+        self.assertEqual(seen, set(expected))
+
     def test_quality_toolchain_uses_known_green_exact_direct_pins(self) -> None:
         expected = {
             "coverage": "7.16.2",
