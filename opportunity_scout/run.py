@@ -174,11 +174,7 @@ def coverage_status(
         count
         for reason, count in paid_rejects.items()
         if isinstance(reason, DiscoveryFailureReason)
-    ) + sum(
-        1
-        for item in strategic_audit
-        if isinstance(item.get("reason"), DiscoveryFailureReason)
-    )
+    ) + sum(1 for item in strategic_audit if isinstance(item.get("reason"), DiscoveryFailureReason))
     failure_count = verification_failures + discovery_failures
 
     warning = None
