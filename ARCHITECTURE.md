@@ -22,8 +22,7 @@ Forking is optional for code customization. Default instances consume pinned ups
 The public/private ownership migration is complete. The
 [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves its
 implementation, recovery, and acceptance history. Only development/release CI and
-reusable distribution assets remain upstream; no historical Git objects or private
-state were removed.
+reusable distribution assets remain upstream.
 
 Application assembly loads `scout.toml` from the working directory by default,
 or exactly the explicit `--config PATH`, before constructing runtime configuration,
