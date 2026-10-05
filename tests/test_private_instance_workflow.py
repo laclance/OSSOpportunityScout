@@ -11,6 +11,8 @@ from typing import Any
 
 import yaml
 
+from tests.workflow_references import validate_workflow_references
+
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
 ACTION = ROOT / "action.yml"
@@ -36,6 +38,7 @@ def shell_step(
 class PrivateInstanceContractTests(unittest.TestCase):
     def test_parsed_workflow_ownership_permissions_serialization_and_pins(self) -> None:
         workflow = document(TEMPLATE)
+        validate_workflow_references(workflow)
         self.assertEqual(workflow["on"], {"workflow_dispatch": None})
         self.assertEqual(workflow["permissions"], {})
         self.assertEqual(
