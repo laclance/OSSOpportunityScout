@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from opportunity_scout import preferences, state
+from tests.workflow_references import validate_workflow_references
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -45,18 +46,50 @@ class UpstreamDistributionTests(unittest.TestCase):
             (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
             Loader=yaml.BaseLoader,
         )
-        seen = set()
-        for job in workflow["jobs"].values():
-            for step in job["steps"]:
-                reference = step.get("uses")
-                if reference is None or reference.startswith("./"):
-                    continue
-                action, separator, revision = reference.partition("@")
-                self.assertEqual(separator, "@", reference)
-                self.assertEqual(revision, expected.get(action), reference)
-                self.assertRegex(revision, r"^[0-9a-f]{40}$")
-                seen.add(action)
-        self.assertEqual(seen, set(expected))
+        validate_workflow_references(workflow, approved_actions=expected)
+
+    def test_mutable_external_reusable_workflow_is_rejected(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": "example/example/.github/workflows/ci.yml@v1",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "reusable workflow"):
+            validate_workflow_references(workflow)
+
+    def test_expression_reusable_workflow_is_rejected(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": "${{ inputs.workflow_reference }}",
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "reusable workflow"):
+            validate_workflow_references(workflow)
+
+    def test_external_reusable_workflow_full_sha_is_accepted(self) -> None:
+        workflow = {
+            "jobs": {
+                "reusable": {
+                    "uses": (
+                        "example/example/.github/workflows/ci.yml@"
+                        "0123456789abcdef0123456789abcdef01234567"
+                    ),
+                }
+            }
+        }
+        validate_workflow_references(workflow)
+
+    def test_same_repository_reusable_workflows_are_accepted(self) -> None:
+        for reference in (
+            "./.github/workflows/local.yml",
+            "$/.github/workflows/local.yml",
+        ):
+            with self.subTest(reference=reference):
+                validate_workflow_references({"jobs": {"reusable": {"uses": reference}}})
 
     def test_quality_toolchain_uses_known_green_exact_direct_pins(self) -> None:
         expected = {
