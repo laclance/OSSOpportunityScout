@@ -403,13 +403,13 @@ class ResolvedPreferenceTests(unittest.TestCase):
         blocked, allowed = issue(), issue(html_url="https://github.com/example/project/issues/43")
         with (
             patch.object(
-                                    app,
-                                    "platform_paid_refs",
-                                    return_value=sources.PlatformDiscoveryResult(
-                                        refs={},
-                                        failures=(),
-                                    ),
-                                ),
+                app,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={},
+                    failures=(),
+                ),
+            ),
             patch.object(
                 app,
                 "verify",
