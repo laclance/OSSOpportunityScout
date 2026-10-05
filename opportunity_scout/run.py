@@ -167,9 +167,7 @@ def coverage_status(
         if isinstance(reason, SourceFailureReason)
     )
     paid_verification_failures = sum(
-        count
-        for reason, count in paid_rejects.items()
-        if isinstance(reason, SourceFailureReason)
+        count for reason, count in paid_rejects.items() if isinstance(reason, SourceFailureReason)
     )
     verification_failures = strategic_verification_failures + paid_verification_failures
     discovery_failures = sum(
