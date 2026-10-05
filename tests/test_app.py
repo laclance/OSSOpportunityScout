@@ -1788,7 +1788,12 @@ class FormattingAndMainTests(unittest.TestCase):
                         patch.object(
                             scout,
                             "discover_strategic",
-                            return_value=([], {SourceFailureReason("source refresh failed"): count}, [], []),
+                            return_value=(
+                                [],
+                                {SourceFailureReason("source refresh failed"): count},
+                                [],
+                                [],
+                            ),
                         ),
                         patch.object(
                             delivery, "send_telegram_notification", return_value=True
