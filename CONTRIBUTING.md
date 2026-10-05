@@ -18,6 +18,18 @@ make setup
 
 `requirements-dev.txt` records the exact known-green versions of the direct validation toolchain. Tool upgrades are deliberate repository changes: update the relevant pin, run the full Python 3.12 quality gate, and verify Python 3.13/3.14 compatibility.
 
+## Branch workflow
+
+`main` remains the stable, release-ready default branch. `dev` is the normal integration branch for development.
+
+1. Start ordinary work from the latest `dev`.
+2. Create a focused topic branch.
+3. Open the pull request against `dev`.
+4. Require green CI and resolved review threads.
+5. Squash-merge the focused pull request into `dev`.
+6. Promote accumulated reviewed work from `dev` to `main` through a dedicated `dev → main` pull request using a merge commit.
+7. Do not use `main` as an ordinary feature-branch target.
+
 ## Before changing code
 
 Read `ARCHITECTURE.md` and, when the change affects planned direction, `ROADMAP.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
