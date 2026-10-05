@@ -107,7 +107,7 @@ class SourceControlTests(unittest.TestCase):
                             host_report.assert_not_called()
                             private_report.assert_not_called()
 
-    def test_repository_targets_are_additive_case_insensitive_and_exclusions_win(self) -> None:
+    def test_repository_sources_are_additive_case_insensitive_and_exclusions_win(self) -> None:
         config = preferences.ScoutPreferences(
             repositories=("EXAMPLE/PROJECT", "extra/repo", "extra/repo", "blocked/repo"),
             exclude_repositories=("BLOCKED/REPO",),
@@ -130,6 +130,38 @@ class SourceControlTests(unittest.TestCase):
                 ),
                 "final candidate lane disabled by configuration",
             )
+
+    def test_configured_repository_source_does_not_extend_scoring_targets(self) -> None:
+        configured = preferences.ScoutPreferences(repositories=("extra/repo",))
+        self.assertEqual(
+            selection.strategic_repositories(["base/repo"], configured),
+            ["base/repo", "extra/repo"],
+        )
+        metadata = RepositoryMetadata(stargazers_count=0, pushed_at=None, language="Rust")
+        with patch.object(app, "TARGET_REPOS", ["base/repo"]):
+            configured_candidate = app.build_candidate(
+                issue(html_url="https://github.com/extra/repo/issues/42", comments=0),
+                "strategic",
+                None,
+                metadata,
+                None,
+                [],
+            )
+            target_candidate = app.build_candidate(
+                issue(html_url="https://github.com/base/repo/issues/42", comments=0),
+                "strategic",
+                None,
+                metadata,
+                None,
+                [],
+            )
+
+        self.assertNotIn("target repo bonus", configured_candidate["career_reasons"])
+        self.assertIn("target repo bonus", target_candidate["career_reasons"])
+        self.assertEqual(
+            target_candidate["career_score"],
+            configured_candidate["career_score"] + 14,
+        )
 
     def test_global_control_discards_prefetched_results_and_does_not_search(self) -> None:
         blocked = issue(html_url="https://github.com/blocked/repo/issues/1")
@@ -230,6 +262,57 @@ class ResolvedPreferenceTests(unittest.TestCase):
                 meta.assert_not_called()
                 guide.assert_not_called()
                 payment.assert_not_called()
+
+    def test_resolved_repository_identity_controls_target_bonus(self) -> None:
+        metadata = RepositoryMetadata(stargazers_count=0, pushed_at=None, language="Rust")
+        cases = (
+            ("ordinary/repo", ("aggregator/jobs",), False),
+            ("base/repo", (), True),
+        )
+        for upstream_repo, configured_repositories, expected_bonus in cases:
+            wrapper = issue(
+                html_url="https://github.com/aggregator/jobs/issues/4",
+                title="[READY FOR ENGINEERING] upstream task",
+                body=(
+                    f"TARGET_REPOSITORY: {upstream_repo}\n"
+                    f"ORIGINAL_ISSUE_URL: https://github.com/{upstream_repo}/issues/42"
+                ),
+                comments=0,
+            )
+            upstream = issue(
+                html_url=f"https://github.com/{upstream_repo}/issues/42",
+                comments=0,
+            )
+            with (
+                self.subTest(upstream_repo=upstream_repo),
+                patch.object(app, "TARGET_REPOS", ["base/repo"]),
+                patch.object(app, "refresh_issue", side_effect=[(wrapper, None), (upstream, None)]),
+                patch.object(app, "issue_from_github_url", return_value=upstream),
+                patch.object(app, "strategic_basic_candidate", return_value=True),
+                patch.object(paid, "payment_signal", return_value=None),
+                patch.object(app, "supplemental_payment_signal", return_value=None),
+                patch.object(github, "issue_comments_checked", return_value=([], None)),
+                patch.object(app, "strategic_rejection", return_value=None),
+                patch.object(app, "fetch_repo_metadata", return_value=metadata),
+                patch.object(app, "contribution_guide", return_value=None),
+            ):
+                resolved, reason = app.verify(
+                    wrapper,
+                    None,
+                    {},
+                    {},
+                    scout_preferences=preferences.ScoutPreferences(
+                        repositories=configured_repositories
+                    ),
+                )
+
+            self.assertIsNone(reason)
+            self.assertIsNotNone(resolved)
+            assert resolved is not None
+            self.assertEqual(
+                "target repo bonus" in resolved["career_reasons"],
+                expected_bonus,
+            )
 
     def test_final_lane_uses_refreshed_payment_evidence(self) -> None:
         for final_paid in (False, True):
