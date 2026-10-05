@@ -609,14 +609,11 @@ def verify(
     issue_signal = paid.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
-        if require_paid:
-            comment_signal = comment_payment_signal(fresh, token)
-        else:
-            if comments is None:
-                comments, comments_reason = github.issue_comments_checked(fresh, token)
-                if comments_reason:
-                    return None, comments_reason
-            comment_signal = comment_payment_signal(fresh, token, comments)
+        if comments is None:
+            comments, comments_reason = github.issue_comments_checked(fresh, token)
+            if comments_reason:
+                return None, comments_reason
+        comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
     lane: CandidateLane
