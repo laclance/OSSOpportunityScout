@@ -10,12 +10,12 @@ This file contains execution rules for AI coding agents working on OSS Opportuni
 4. `CONTRIBUTING.md` — shared setup, quality, and pull-request expectations.
 5. Relevant tests under `tests/` — executable behavior and regression cases.
 
-For deployment/configuration/state-ownership work, additionally read [docs/PRIVATE_DEPLOYMENT_MIGRATION.md](docs/PRIVATE_DEPLOYMENT_MIGRATION.md), the authoritative completed migration/acceptance record for contracts, PR provenance, historical recovery, and final ownership.
+For deployment/configuration/state-ownership work, additionally read [docs/PRIVATE_INSTANCE.md](docs/PRIVATE_INSTANCE.md) for current operations. Consult the [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) only when historical provenance, recovery history, or rationale matters.
 
 ## Project constraints
 
 - Python 3.12 is the minimum supported runtime and the syntax/type/tooling baseline for the authoritative strict gate. CI also runs recursive compile/test compatibility checks on CPython 3.13 and 3.14. Later releases are not supported until added to CI and their checks pass. Do not use syntax newer than 3.12 or reopen/renumber the completed migration slices.
-- Canonical current package identity is `opportunity_scout`. Do not reintroduce `bountyscout` package/import/report-marker branding.
+- Canonical current package identity is `opportunity_scout`; preserve it across package paths, imports, and report markers.
 - Prefer the standard library unless a dependency has a clear maintenance payoff.
 - Ruff is the formatter/linter, mypy runs in strict mode, and coverage requires 100% statement and branch coverage.
 - Production implementation lives under `opportunity_scout/`; strategic policy lives under `opportunity_scout/strategic/`. Root `opportunity_scout.py` is only the stable executable shim.
@@ -29,21 +29,21 @@ For deployment/configuration/state-ownership work, additionally read [docs/PRIVA
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
 - The canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
 - Coverage completeness is independent of warning thresholds: any recognized discovery/verification failure prevents both newly reported seen-state advancement and quiet-run maintenance persistence. Warning thresholds control diagnostics only.
+- Preserve immutable workflow references: external actions and external reusable workflows use reviewed full commit SHAs; same-repository reusable workflows may use GitHub's same-commit local reference syntax.
 
-## Migration history and follow-ups
+## Deployment invariants
 
-Slices 1–7 are complete through merged PR #42. Private Slice 6 acceptance remains
-verified with operational evidence kept private. PR #43 and PR #44 are separate
-post-migration correctness follow-ups, not additional slices.
+The public upstream owns scanner code, development/release CI, documentation, and
+reusable distribution assets. Independent private instances own workflows,
+configuration/state, triggers/schedules, concurrency, secrets, delivery,
+persistence/history, recovery, and scanner pins. Default `scout.toml` or explicit
+`--config PATH` is mandatory before state/network/delivery activity.
 
-Preserve the final contracts: default `scout.toml` or explicit `--config PATH`
-is mandatory before state/network/delivery activity; private instances own workflow,
-configuration/state, triggers/schedules, concurrency, secrets, delivery, persistence,
-recovery, and scanner pins; upstream owns code, development/release CI, documentation,
-and reusable execution machinery. Do not recreate upstream `scout-state` ownership,
-restore upstream persistent scheduling, expose private evidence, or claim exactly-once
-delivery. New work after the migration should use ordinary focused PRs and should not
-reuse the completed slice numbering.
+Do not recreate upstream `scout-state` ownership, restore upstream persistent
+scheduling, expose private evidence, or claim exactly-once delivery. Do not reopen
+or renumber completed migration slices; use ordinary focused PRs. Historical
+provenance and acceptance evidence live in the
+[completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md).
 
 ## Design rules
 
