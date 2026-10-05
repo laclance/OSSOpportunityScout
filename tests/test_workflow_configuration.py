@@ -52,9 +52,7 @@ class UpstreamDistributionTests(unittest.TestCase):
         self.assertEqual(requirements, expected)
 
         workflow = yaml.load(
-            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(
-                encoding="utf-8"
-            ),
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
             Loader=yaml.BaseLoader,
         )
         install_step = next(
