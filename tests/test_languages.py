@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from opportunity_scout import (, sources
+from opportunity_scout import (
     app,
     delivery,
     github,
@@ -17,6 +17,7 @@ from opportunity_scout import (, sources
     preferences,
     run,
     selection,
+    sources,
     state,
 )
 from opportunity_scout.strategic import discovery
