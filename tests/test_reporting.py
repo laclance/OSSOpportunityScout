@@ -83,6 +83,20 @@ class NotificationFormattingTests(unittest.TestCase):
         self.assertLessEqual(len(lines[0]), 160)
         self.assertIn("priority: 93/100", "\n".join(lines))
 
+    def test_notification_preserves_markdown_sensitive_external_text_as_plain_text(self) -> None:
+        title = "Fix parser_[edge] for `foo*bar`"
+        item = candidate(repo="owner/repo_name", issue_number=42, title=title)
+
+        lines = reporting.notification_candidate(item, 1)
+        self.assertEqual(lines[0], f"1. owner/repo_name #42 — {title}")
+        self.assertNotIn("\\", lines[0])
+
+        message = reporting.notification_message([item], "now")
+        self.assertIn("🎯 OSS Opportunity Queue (now)", message)
+        self.assertNotIn("🎯 *OSS Opportunity Queue*", message)
+        self.assertIn(f"1. owner/repo_name #42 — {title}", message)
+        self.assertNotIn("*owner/repo_name #42*", message)
+
     def test_paid_notification_stays_cash_focused(self) -> None:
         lines = reporting.notification_candidate(
             candidate(paid=True, reward="$50", cash_score=88),
