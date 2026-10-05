@@ -16,6 +16,8 @@ Or:
 make setup
 ```
 
+`requirements-dev.txt` records the exact known-green versions of the direct validation toolchain. Tool upgrades are deliberate repository changes: update the relevant pin, run the full Python 3.12 quality gate, and verify Python 3.13/3.14 compatibility.
+
 ## Before changing code
 
 Read `ARCHITECTURE.md` and, when the change affects planned direction, `ROADMAP.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.

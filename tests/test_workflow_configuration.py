@@ -36,6 +36,35 @@ class UpstreamDistributionTests(unittest.TestCase):
                         self.assertNotIn(forbidden, step["run"])
         self.assertNotIn("oss-opportunity-scout.yml", str(workflow))
 
+    def test_quality_toolchain_uses_known_green_exact_direct_pins(self) -> None:
+        expected = {
+            "coverage": "7.16.2",
+            "mypy": "2.4.0",
+            "ruff": "0.16.9",
+            "PyYAML": "6.0.3",
+            "types-PyYAML": "6.0.12.20260906",
+        }
+        requirements = {}
+        for line in (ROOT / "requirements-dev.txt").read_text(encoding="utf-8").splitlines():
+            name, separator, version = line.partition("==")
+            self.assertEqual(separator, "==", line)
+            requirements[name] = version
+        self.assertEqual(requirements, expected)
+
+        workflow = yaml.load(
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        )
+        install_step = next(
+            step
+            for step in workflow["jobs"]["compatibility"]["steps"]
+            if step["name"] == "Install offline workflow validation dependency"
+        )
+        self.assertEqual(
+            install_step["run"],
+            f"python -m pip install PyYAML=={requirements['PyYAML']}",
+        )
+
     def test_instance_files_are_untracked_and_ignored_while_examples_remain_generic(self) -> None:
         tracked = subprocess.run(
             ["git", "ls-files", "--", "scout.toml", "seen_bounties.json"],
