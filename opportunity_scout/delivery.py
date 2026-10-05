@@ -63,7 +63,6 @@ def send_telegram_notification(token: str, chat_id: str, message: str) -> bool:
         {
             "chat_id": chat_id,
             "text": message,
-            "parse_mode": "Markdown",
             "disable_web_page_preview": False,
         },
     )
