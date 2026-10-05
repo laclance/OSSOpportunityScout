@@ -447,8 +447,6 @@ class StrategicDiscoveryTests(unittest.TestCase):
             labels=[{"name": "help wanted"}, {"name": "bug"}],
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
-        seed: list[RejectionRecord] = [{"reason": "seed audit"}]
-
         selection = discovery.select_strategic_candidates(
             "tok",
             set(),
