@@ -10,13 +10,43 @@ import re
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import Any, Callable, Sequence, cast
 
 from opportunity_scout import github
-from opportunity_scout.types import Candidate, GitHubIssue, IssueRow as IssueRow
+from opportunity_scout.types import (
+    Candidate,
+    DiscoveryFailureReason,
+    GitHubIssue,
+    IssueRow as IssueRow,
+)
 
-FetchText = Callable[[str], str]
+
+@dataclass(frozen=True)
+class TextFetchResult:
+    """Result of an attempted official-platform text fetch."""
+
+    text: str
+    failure: str | None = None
+
+
+@dataclass(frozen=True)
+class PlatformDiscoveryResult:
+    """Official-platform references plus semantic discovery failures."""
+
+    refs: dict[str, str]
+    failures: tuple[DiscoveryFailureReason, ...]
+
+
+FetchText = Callable[[str], TextFetchResult]
+PlatformLoader = tuple[str, Callable[[], PlatformDiscoveryResult]]
 IssuePredicate = Callable[[GitHubIssue], bool]
+
+
+def _platform_failure(platform: str) -> DiscoveryFailureReason:
+    return DiscoveryFailureReason(
+        f"official bounty-platform discovery failed for {platform}; scan coverage incomplete"
+    )
 
 
 def target_repo_issue_pool(
@@ -66,16 +96,17 @@ def github_get_optional(url: str, token: str | None) -> Any:
     return github.github_get(url, token, timeout=10, log_errors=False)
 
 
-def fetch_text(url: str, timeout: int = 12) -> str:
-    """Fetch public HTML for official bounty-platform discovery pages."""
+def fetch_text(url: str, timeout: int = 12) -> TextFetchResult:
+    """Fetch public HTML while preserving transport-failure identity."""
     headers = {"User-Agent": "OSSOpportunityScout"}
     try:
         request = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return cast(bytes, response.read()).decode("utf-8", errors="replace")
+            text = cast(bytes, response.read()).decode("utf-8", errors="replace")
+            return TextFetchResult(text=text)
     except Exception as exc:
         print(f"Platform fetch failed for {url}: {exc}")
-        return ""
+        return TextFetchResult(text="", failure=str(exc))
 
 
 def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
@@ -87,16 +118,19 @@ def issuehunt_platform_refs(
     fetcher: FetchText = fetch_text,
     *,
     pages: int = 2,
-) -> dict[str, str]:
+) -> PlatformDiscoveryResult:
     """Read the official IssueHunt funded-issues pages."""
     refs: dict[str, str] = {}
+    failed = False
     for page in range(1, pages + 1):
         url = "https://oss.issuehunt.io/issues"
         if page > 1:
             url += f"?page={page}"
-        page_html = fetcher(url)
-        if not page_html:
+        fetched = fetcher(url)
+        if fetched.failure is not None:
+            failed = True
             continue
+        page_html = fetched.text
 
         pattern = re.compile(
             r'href=["\'](/r/([^/"\']+)/([^/"\']+)/issues/(\d+))["\']',
@@ -111,7 +145,9 @@ def issuehunt_platform_refs(
             if amount:
                 signal += f": {amount.group(0).strip()}"
             refs[source_url] = signal
-    return refs
+
+    failures = (_platform_failure("IssueHunt"),) if failed else ()
+    return PlatformDiscoveryResult(refs=refs, failures=failures)
 
 
 def opire_platform_refs(
@@ -119,14 +155,17 @@ def opire_platform_refs(
     *,
     fetch_limit: int = 20,
     network_workers: int = 6,
-) -> dict[str, str]:
+) -> PlatformDiscoveryResult:
     """Read visible Opire bounty cards and map them back to GitHub issues."""
     refs: dict[str, str] = {}
     home = fetcher("https://app.opire.dev/home")
-    if not home:
-        return refs
+    if home.failure is not None:
+        return PlatformDiscoveryResult(
+            refs=refs,
+            failures=(_platform_failure("Opire"),),
+        )
 
-    normalized = home.replace("\\/", "/")
+    normalized = home.text.replace("\\/", "/")
     direct = re.findall(
         r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
         normalized,
@@ -143,6 +182,7 @@ def opire_platform_refs(
         )
     )[:fetch_limit]
 
+    detail_failed = False
     with ThreadPoolExecutor(
         max_workers=min(network_workers, max(1, len(detail_paths)))
     ) as executor:
@@ -150,10 +190,11 @@ def opire_platform_refs(
             lambda path: fetcher("https://app.opire.dev" + path),
             detail_paths,
         )
-        for detail in details:
-            if not detail:
+        for fetched in details:
+            if fetched.failure is not None:
+                detail_failed = True
                 continue
-            detail = detail.replace("\\/", "/")
+            detail = fetched.text.replace("\\/", "/")
             source = re.search(
                 r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
                 detail,
@@ -170,7 +211,8 @@ def opire_platform_refs(
                 signal += f": {amount.group(0).split()[0]}"
             refs[source.group(0)] = signal
 
-    return refs
+    failures = (_platform_failure("Opire"),) if detail_failed else ()
+    return PlatformDiscoveryResult(refs=refs, failures=failures)
 
 
 def bountyhub_platform_refs(
@@ -179,14 +221,17 @@ def bountyhub_platform_refs(
     *,
     fetch_limit: int = 20,
     network_workers: int = 6,
-) -> dict[str, str]:
+) -> PlatformDiscoveryResult:
     """Read public BountyHub listings when the site exposes them in HTML."""
     refs: dict[str, str] = {}
     listing = fetcher("https://www.bountyhub.dev/en/bounties")
-    if not listing:
-        return refs
+    if listing.failure is not None:
+        return PlatformDiscoveryResult(
+            refs=refs,
+            failures=(_platform_failure("BountyHub"),),
+        )
 
-    normalized = listing.replace("\\/", "/")
+    normalized = listing.text.replace("\\/", "/")
     direct = re.findall(
         r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
         normalized,
@@ -203,6 +248,7 @@ def bountyhub_platform_refs(
         )
     )[:fetch_limit]
 
+    detail_failed = False
     with ThreadPoolExecutor(
         max_workers=min(network_workers, max(1, len(detail_paths)))
     ) as executor:
@@ -210,10 +256,11 @@ def bountyhub_platform_refs(
             lambda path: fetcher("https://www.bountyhub.dev" + path),
             detail_paths,
         )
-        for detail in details:
-            if not detail:
+        for fetched in details:
+            if fetched.failure is not None:
+                detail_failed = True
                 continue
-            detail = detail.replace("\\/", "/")
+            detail = fetched.text.replace("\\/", "/")
             source = re.search(
                 r"https://github\.com/[^/\s\"'<>]+/[^/\s\"'<>]+/issues/\d+",
                 detail,
@@ -226,30 +273,38 @@ def bountyhub_platform_refs(
                 signal += f": {amount.group(0).strip()}"
             refs[source.group(0)] = signal
 
-    return refs
+    failures = (_platform_failure("BountyHub"),) if detail_failed else ()
+    return PlatformDiscoveryResult(refs=refs, failures=failures)
 
 
 def platform_paid_refs(
-    loaders: Sequence[Callable[[], dict[str, str]]],
+    loaders: Sequence[PlatformLoader],
     *,
     network_workers: int = 6,
-) -> dict[str, str]:
-    """Collect official-platform discoveries, deduped by source GitHub issue URL."""
+) -> PlatformDiscoveryResult:
+    """Collect official-platform discoveries while retaining failure evidence."""
     refs: dict[str, str] = {}
+    failures: list[DiscoveryFailureReason] = []
     if not loaders:
-        return refs
+        return PlatformDiscoveryResult(refs=refs, failures=())
 
-    def load_source(loader: Callable[[], dict[str, str]]) -> dict[str, str]:
+    def load_source(row: PlatformLoader) -> PlatformDiscoveryResult:
+        name, loader = row
         try:
             return loader()
         except Exception as exc:
-            print(f"Platform source loader failed: {exc}")
-            return {}
+            print(f"Platform source loader failed for {name}: {exc}")
+            return PlatformDiscoveryResult(
+                refs={},
+                failures=(_platform_failure(name),),
+            )
 
     with ThreadPoolExecutor(max_workers=min(network_workers, len(loaders))) as executor:
         for source in executor.map(load_source, loaders):
-            refs.update(source)
-    return refs
+            refs.update(source.refs)
+            failures.extend(source.failures)
+
+    return PlatformDiscoveryResult(refs=refs, failures=tuple(failures))
 
 
 def contribution_guide(
