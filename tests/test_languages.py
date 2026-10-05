@@ -354,7 +354,11 @@ class LanguageOrchestrationTests(unittest.TestCase):
                                 "items": paid_items if query == "paid-q" else strategic_items
                             },
                         ) as search,
-                        patch.object(app, "platform_paid_refs", return_value=sources.PlatformDiscoveryResult(refs={}, failures=())),
+                        patch.object(
+                            app,
+                            "platform_paid_refs",
+                            return_value=sources.PlatformDiscoveryResult(refs={}, failures=()),
+                        ),
                         patch.object(
                             app, "refresh_issue", side_effect=lambda source, _token: (source, None)
                         ) as refresh,
