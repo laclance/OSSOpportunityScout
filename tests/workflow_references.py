@@ -4,9 +4,7 @@ import re
 from typing import Any
 
 FULL_SHA = re.compile(r"^[0-9a-f]{40}$")
-EXTERNAL_REUSABLE_WORKFLOW = re.compile(
-    r"^[^/@]+/[^/@]+/\.github/workflows/[^@]+@[0-9a-f]{40}$"
-)
+EXTERNAL_REUSABLE_WORKFLOW = re.compile(r"^[^/@]+/[^/@]+/\.github/workflows/[^@]+@[0-9a-f]{40}$")
 LOCAL_REUSABLE_WORKFLOW = re.compile(r"^(?:\./|\$/)\.github/workflows/[^@]+$")
 
 
