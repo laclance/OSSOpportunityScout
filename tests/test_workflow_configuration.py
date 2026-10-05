@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import unittest
 from pathlib import Path
@@ -20,8 +21,20 @@ class UpstreamDistributionTests(unittest.TestCase):
         workflow = yaml.load(workflows[0].read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
         self.assertEqual(set(workflow["on"]), {"pull_request", "push"})
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(set(workflow["jobs"]), {"quality", "compatibility"})
-        for job in workflow["jobs"].values():
+        self.assertEqual(
+            set(workflow["jobs"]), {"branch-flow", "quality", "compatibility"}
+        )
+        branch_flow = workflow["jobs"]["branch-flow"]
+        self.assertEqual(branch_flow["name"], "branch-flow")
+        self.assertNotIn("permissions", branch_flow)
+        self.assertEqual(len(branch_flow["steps"]), 1)
+        branch_flow_step = branch_flow["steps"][0]
+        self.assertNotIn("uses", branch_flow_step)
+        self.assertEqual(
+            set(branch_flow_step["env"]), {"EVENT_NAME", "BASE_REF", "HEAD_REF"}
+        )
+        for job_name in ("quality", "compatibility"):
+            job = workflow["jobs"][job_name]
             self.assertNotIn("permissions", job)
             for step in job["steps"]:
                 self.assertNotIn("env", step)
@@ -36,6 +49,94 @@ class UpstreamDistributionTests(unittest.TestCase):
                     ):
                         self.assertNotIn(forbidden, step["run"])
         self.assertNotIn("oss-opportunity-scout.yml", str(workflow))
+
+    def test_quality_workflow_runs_on_main_and_dev_pushes(self) -> None:
+        workflow = yaml.load(
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(
+                encoding="utf-8"
+            ),
+            Loader=yaml.BaseLoader,
+        )
+        push = workflow["on"]["push"]
+        self.assertEqual(push["branches"], ["main", "dev"])
+        self.assertEqual(
+            push["paths"],
+            [
+                "**/*.py",
+                ".coveragerc",
+                "mypy.ini",
+                "ruff.toml",
+                "requirements-dev.txt",
+                "Makefile",
+                ".github/workflows/python-quality.yml",
+                "action.yml",
+                "examples/**",
+                "scout.example.toml",
+                ".gitignore",
+            ],
+        )
+
+    def _run_branch_flow(
+        self, *, event_name: str, base_ref: str, head_ref: str
+    ) -> subprocess.CompletedProcess[str]:
+        workflow = yaml.load(
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(
+                encoding="utf-8"
+            ),
+            Loader=yaml.BaseLoader,
+        )
+        script = workflow["jobs"]["branch-flow"]["steps"][0]["run"]
+        return subprocess.run(
+            ["bash", "-eu", "-o", "pipefail", "-c", script],
+            cwd=ROOT,
+            env={
+                **os.environ,
+                "EVENT_NAME": event_name,
+                "BASE_REF": base_ref,
+                "HEAD_REF": head_ref,
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_branch_flow_accepts_topic_pull_request_to_dev(self) -> None:
+        result = self._run_branch_flow(
+            event_name="pull_request",
+            base_ref="dev",
+            head_ref="feature/example",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_branch_flow_accepts_dev_promotion_to_main(self) -> None:
+        result = self._run_branch_flow(
+            event_name="pull_request",
+            base_ref="main",
+            head_ref="dev",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_branch_flow_rejects_topic_pull_requests_to_main(self) -> None:
+        for head_ref in ("feature/example", "fix/example", "dev/example"):
+            with self.subTest(head_ref=head_ref):
+                result = self._run_branch_flow(
+                    event_name="pull_request",
+                    base_ref="main",
+                    head_ref=head_ref,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(
+                    "Pull requests to main must come from dev.",
+                    result.stdout + result.stderr,
+                )
+
+    def test_branch_flow_succeeds_on_non_pull_request_events(self) -> None:
+        result = self._run_branch_flow(
+            event_name="push",
+            base_ref="",
+            head_ref="",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_active_workflow_external_actions_use_approved_immutable_shas(self) -> None:
         expected = {
