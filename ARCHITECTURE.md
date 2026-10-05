@@ -19,11 +19,11 @@ The independent private instance repository owns `scout.toml`, `seen_bounties.js
 
 Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
 
-The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves the
-configuration contracts, implementation sequence, recovery history, and acceptance
-gates. Slices 1–7 are complete through merged PR #42. PRs #43 and #44 are separate
-post-migration correctness follow-ups. Only development CI and reusable distribution
-assets remain upstream; no historical Git objects or private state were removed.
+The public/private ownership migration is complete. The
+[completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves its
+implementation, recovery, and acceptance history. Only development/release CI and
+reusable distribution assets remain upstream; no historical Git objects or private
+state were removed.
 
 Application assembly loads `scout.toml` from the working directory by default,
 or exactly the explicit `--config PATH`, before constructing runtime configuration,
@@ -195,8 +195,8 @@ unknown keys, malformed types, unsupported versions, and invalid values fail clo
 The public [example](scout.example.toml) lists the runtime defaults with optional
 `name` commented out; `name` currently has no runtime effect. The
 [configuration reference](docs/CONFIGURATION.md) documents fields, bounds, examples,
-and current CLI behavior; the [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
-records the contracts and completed cutover sequence.
+and current CLI behavior. Historical configuration/cutover rationale remains in the
+[completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md).
 Parsing does not perform discovery, filtering, scoring, delivery, or persistence.
 Application assembly always loads preferences from default `scout.toml` in the
 working directory or exactly explicit `--config PATH`, before loading state or
@@ -205,7 +205,7 @@ performing network/delivery activity. Missing or invalid configuration raises
 defaults to `seen_bounties.json`; `RunConfig.state_path` reaches every state read and
 both delivery and quiet-maintenance saves. State code remains branch-agnostic.
 
-Slice 3A binds immutable preferences into narrow discovery callbacks. Combined-run
+Immutable preferences are bound into narrow discovery callbacks. Combined-run
 orchestration skips disabled lanes; paced prefetch requests include only enabled
 paid Search and enabled strategic global Search. Disabling global Search preserves
 curated strategic and paid sources. Disabled sources produce no coverage failures.
@@ -222,8 +222,8 @@ lane acceptance before strategic repository-slot settlement, and queue assembly
 filters again before deduplication and truncation. Preference rejection does not
 weaken payment, readiness, competition, privacy, or coverage evidence requirements.
 
-Slice 3B matches configured languages case-insensitively against primary repository
-language from the existing shared per-run metadata cache. Strategic discovery uses
+Language preferences match configured values case-insensitively against primary
+repository language from the existing shared per-run metadata cache. Strategic discovery uses
 already-fetched metadata to exclude direct-source candidates before bounded base and
 adaptive inspection when the source repository identity is authoritative. Recognized
 wrapper/aggregator candidates are not rejected by wrapper language because their
@@ -238,8 +238,8 @@ Language policy adds neither metadata requests nor Search queries; inspection bu
 constants and coverage accounting remain unchanged, while ineligible direct-source
 candidates can avoid later deep verification work.
 
-Slice 3C adds pure `effort_accepted(EffortBucket, Sequence[EffortBucket])` policy
-to the existing final-candidate acceptance guard. Exact membership uses the
+Effort preferences use pure `effort_accepted(EffortBucket, Sequence[EffortBucket])`
+policy in the final-candidate acceptance guard. Exact membership uses the
 unchanged estimator output; an empty effort list accepts nothing. Both discovery
 lane adapters apply it after final candidate construction, before strategic
 repository-slot settlement. Combined-run assembly repeats the guard before URL
@@ -249,7 +249,7 @@ fetched strategic discussion may change the estimate. Existing preflight, rankin
 bounds, source-failure breaker, adaptive inspection and verification budgets remain
 in effect; effort preferences add no network work or scoring policy.
 
-Slice 3D adds pure `score_rejection()` to the final-candidate guard: paid candidates
+Score thresholds use pure `score_rejection()` in the final-candidate guard: paid candidates
 use the inclusive cash threshold, unpaid candidates the inclusive career threshold,
 regardless of discovery source. Both adapters and queue assembly apply eligibility
 before repository-slot settlement, URL deduplication, and truncation. Strategic
@@ -264,8 +264,7 @@ deep checks within that same bounded pool.
 Combined-run queue assembly caps output at `preferences.max_results` (1–8), also
 respecting any narrower injected `report_limit`; it does not shrink discovery or
 verification budgets. Defaults remain 55 for each score threshold and eight results.
-Name remains display metadata without current runtime use. Configuration guidance
-and deployment ownership/workflows remain in their later slices.
+Name remains display metadata without current runtime use. Configuration guidance and deployment ownership/workflows are documented separately.
 
 ## GitHub integration contract
 
