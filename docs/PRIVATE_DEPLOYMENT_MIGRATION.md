@@ -399,7 +399,7 @@ Slice 6 was operational work performed privately. Its acceptance record required
    responsibilities were retired; the initial private deployment remained manual-only.
 
 Keep the acceptance record privately using the
-[Slice 6 evidence checklist](PRIVATE_INSTANCE.md#slice-6-private-acceptance-record).
+[private instance acceptance checklist](PRIVATE_INSTANCE.md#private-instance-acceptance-checklist).
 Historical recovery and offline workflow checks do not establish live deployment
 success. Resolve instance/report repository names, personal preferences, intended
 delivery channels/destinations, and secure credential provisioning before dependent
