@@ -981,12 +981,14 @@ class RunLifecycleTests(unittest.TestCase):
                 side_effect=state.SeenStateSaveError("save failed"),
             ),
         ):
-            with self.assertRaisesRegex(state.SeenStateSaveError, "save failed"):
+            with self.assertRaisesRegex(run.PostDeliveryStateSaveError, "save failed") as error:
                 run.run_combined_scan(
                     run.RunConfig(None, None, "tb", "chat", None),
                     deps,
                     FIXED_TIME,
                 )
+
+        self.assertIsInstance(error.exception, state.SeenStateSaveError)
 
     def test_quiet_maintenance_save_failure_propagates(self) -> None:
         old_url = "https://github.com/example/project/issues/99"
@@ -1005,12 +1007,14 @@ class RunLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 state.SeenStateSaveError,
                 "maintenance save failed",
-            ):
+            ) as error:
                 run.run_combined_scan(
                     run.RunConfig(None, None, None, None, None),
                     dependencies(),
                     FIXED_TIME,
                 )
+
+        self.assertNotIsInstance(error.exception, run.PostDeliveryStateSaveError)
 
 
 if __name__ == "__main__":

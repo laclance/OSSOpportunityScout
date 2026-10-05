@@ -367,6 +367,13 @@ exists. Queue cancellation runs separately with only Actions write permission an
 remains defense in depth. Only deliberate operator recovery removes the marker.
 Delivery and persistence remain separate operations with no exactly-once claim.
 
+A later post-migration correctness follow-up extends that same durable barrier to
+scanner-classified local state-save failure after successful delivery. That failure
+does not prove the local `seen_bounties.json` is the resulting post-delivery
+snapshot, so no exact-state artifact is claimed; operator recovery must reconstruct
+state from trustworthy private evidence. Ordinary scanner failures before delivery
+do not enter recovery mode unless the explicit post-delivery signal is present.
+
 PR #44 moved language eligibility for authoritative direct-source repositories to
 immediately after the already-required cached repository-metadata lookup and before
 bounded base/adaptive inspection. Recognized wrapper/aggregator sources defer

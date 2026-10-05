@@ -132,6 +132,10 @@ class CombinedRunResult:
     state_saved: bool
 
 
+class PostDeliveryStateSaveError(state.SeenStateSaveError):
+    """Raised when delivery succeeded but local seen-state persistence did not."""
+
+
 def assemble_queue(
     paid: list[Candidate],
     strategic: list[Candidate],
@@ -445,7 +449,10 @@ def run_combined_scan(
             (candidate["url"] for candidate in queue),
             reported_at=scan_time.isoformat().replace("+00:00", "Z"),
         )
-        state_saved = _save_state(next_state, config.state_path)
+        try:
+            state_saved = _save_state(next_state, config.state_path)
+        except state.SeenStateSaveError as error:
+            raise PostDeliveryStateSaveError(str(error)) from error
     elif delivery.attempted and delivery.delivered:
         print("Verification coverage incomplete; state was not updated.")
     else:
