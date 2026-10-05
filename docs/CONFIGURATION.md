@@ -130,7 +130,7 @@ transport. See the [completed migration record](PRIVATE_DEPLOYMENT_MIGRATION.md)
 the historical cutover and acceptance rationale.
 Root `scout.toml` and `seen_bounties.json` are ignored by Git; the
 [empty state example](../examples/seen_bounties.example.json) is only a seed for new
-instances without history, never a replacement for migrated state.
+instances without history, never a replacement for existing state.
 
 ## Offline validation
 
