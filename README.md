@@ -13,13 +13,12 @@ The scout ranks new opportunities and delivers them only through configured chan
 
 Forking is optional and intended for scanner-code customization. The default private instance consumes pinned upstream code directly; a customized instance may consume a pinned fork instead. Upstream must not run a persistent scout workflow that reaches into another private repository for state.
 
-The migration is implemented through Slice 7: upstream retains development CI,
-scanner code, generic examples, and the [reusable action/private-instance template](docs/PRIVATE_INSTANCE.md).
-The persistent upstream workflow and state-branch/worktree transport are retired.
-Slice 6 acceptance is verified privately; its operational evidence stays private.
-Every scan now requires valid configuration, defaulting to `scout.toml`.
-See the [migration tracker](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) for contracts,
-acceptance status, and historical state recovery.
+Upstream owns scanner code, development/release CI, documentation, and reusable
+distribution assets. Independent private instances own workflows, configuration/state,
+triggers/schedules, concurrency, secrets, delivery configuration, persistence/history,
+recovery, and scanner pins. Every scan requires valid configuration, defaulting to
+`scout.toml`. See the [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
+for the history and rationale behind this ownership model.
 
 ## How it works
 
