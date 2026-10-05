@@ -21,6 +21,7 @@ from opportunity_scout import (
     preferences,
     run,
     selection,
+    sources,
     state,
 )
 from opportunity_scout.strategic import discovery
@@ -76,7 +77,12 @@ class SourceControlTests(unittest.TestCase):
                                     app, "target_repo_issue_pool", return_value=([], None)
                                 ) as pools,
                                 patch.object(
-                                    app, "platform_paid_refs", return_value={}
+                                    app,
+                                    "platform_paid_refs",
+                                    return_value=sources.PlatformDiscoveryResult(
+                                        refs={},
+                                        failures=(),
+                                    ),
                                 ) as platforms,
                                 patch.object(app, "sleep") as sleeper,
                                 patch.object(delivery, "send_telegram_notification") as telegram,
@@ -202,7 +208,10 @@ class SourceControlTests(unittest.TestCase):
             patch.object(
                 app,
                 "platform_paid_refs",
-                return_value={"https://github.com/blocked/repo/issues/2": "paid"},
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={"https://github.com/blocked/repo/issues/2": "paid"},
+                    failures=(),
+                ),
             ),
             patch.object(app, "issue_from_github_url") as platform_issue,
             patch.object(app, "verify") as verify,
@@ -393,7 +402,14 @@ class ResolvedPreferenceTests(unittest.TestCase):
     def test_paid_resolved_exclusion_and_configured_cash_threshold(self) -> None:
         blocked, allowed = issue(), issue(html_url="https://github.com/example/project/issues/43")
         with (
-            patch.object(app, "platform_paid_refs", return_value={}),
+            patch.object(
+                                    app,
+                                    "platform_paid_refs",
+                                    return_value=sources.PlatformDiscoveryResult(
+                                        refs={},
+                                        failures=(),
+                                    ),
+                                ),
             patch.object(
                 app,
                 "verify",
