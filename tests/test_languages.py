@@ -424,12 +424,15 @@ class LanguageOrchestrationTests(unittest.TestCase):
                     state_path=state_path,
                     preferences=preferences.ScoutPreferences(languages=("GO",)),
                 )
+                strategic_rejects: dict[str, int] = {}
+                if not complete:
+                    strategic_rejects[SourceFailureReason("source refresh failed")] = 1
                 callbacks = replace(
                     dependencies(),
                     discover_paid=lambda *_args: ([blocked], {}, []),
                     discover_strategic=lambda *_args: (
                         [unknown, allowed],
-                        {} if complete else {SourceFailureReason("source refresh failed"): 1},
+                        strategic_rejects,
                         [],
                         [],
                     ),
