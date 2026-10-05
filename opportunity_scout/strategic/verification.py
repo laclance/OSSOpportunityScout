@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from opportunity_scout import selection as selection_policy
 from opportunity_scout import sources
 from opportunity_scout.strategic import discovery as strategic_discovery
-from opportunity_scout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord, SourceFailureReason
+from opportunity_scout.types import (
+    Candidate,
+    GitHubIssue,
+    IssueRow,
+    RejectionRecord,
+    SourceFailureReason,
+)
 
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
