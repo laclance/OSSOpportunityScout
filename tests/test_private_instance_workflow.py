@@ -482,7 +482,7 @@ class PinnedActionTests(unittest.TestCase):
             mktemp_capture = folder / "mktemp-called"
             fake_mktemp = fake_bin / "mktemp"
             fake_mktemp.write_text(
-                "#!/bin/bash\nprintf invoked > \"$MKTEMP_CAPTURE\"\nexit 99\n",
+                '#!/bin/bash\nprintf invoked > "$MKTEMP_CAPTURE"\nexit 99\n',
                 encoding="utf-8",
             )
             fake_mktemp.chmod(0o755)
@@ -494,9 +494,7 @@ class PinnedActionTests(unittest.TestCase):
                 step,
                 caller,
                 {
-                    "PATH": (
-                        f"{fake_bin}:{Path(sys.executable).parent}:{os.environ['PATH']}"
-                    ),
+                    "PATH": (f"{fake_bin}:{Path(sys.executable).parent}:{os.environ['PATH']}"),
                     "SCANNER_SOURCE": str(source),
                     "SCOUT_CONFIG": "scout.toml",
                     "SCOUT_STATE": "seen.json",
