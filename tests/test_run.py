@@ -918,7 +918,11 @@ class RunLifecycleTests(unittest.TestCase):
             issue_lifecycle=open_lifecycle,
         )
         with (
-            patch.object(scout, "platform_paid_refs", return_value=sources.PlatformDiscoveryResult(refs={}, failures=())),
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(refs={}, failures=()),
+            ),
             patch.object(github, "search_github") as search,
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(state, "save_seen_state") as save,
