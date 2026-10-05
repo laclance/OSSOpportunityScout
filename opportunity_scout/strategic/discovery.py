@@ -187,7 +187,7 @@ def add_audit(
     limit: int = STRATEGIC_AUDIT_LIMIT,
 ) -> None:
     """Append one bounded discovery audit record."""
-    if len(audit) >= limit:
+    if len(audit) >= limit and not isinstance(reason, DiscoveryFailureReason):
         return
     audit.append(
         {
@@ -318,13 +318,23 @@ def select_strategic_candidates(
                 cache_locks,
                 namespace="repo",
             )
-            if not meta or meta.get("archived"):
+            if not meta:
+                add_audit(
+                    audit,
+                    item,
+                    DiscoveryFailureReason(
+                        "repository metadata unavailable during strategic discovery; "
+                        "scan coverage incomplete"
+                    ),
+                    limit=audit_limit,
+                )
+                continue
+            if meta.get("archived"):
                 if possible_miss_signal(item):
                     add_audit(
                         audit,
                         item,
-                        "strong-looking result skipped because repository metadata is "
-                        "unavailable or archived",
+                        "strong-looking result skipped because repository is archived",
                         limit=audit_limit,
                     )
                 continue
