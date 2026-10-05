@@ -21,18 +21,14 @@ class UpstreamDistributionTests(unittest.TestCase):
         workflow = yaml.load(workflows[0].read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
         self.assertEqual(set(workflow["on"]), {"pull_request", "push"})
         self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(
-            set(workflow["jobs"]), {"branch-flow", "quality", "compatibility"}
-        )
+        self.assertEqual(set(workflow["jobs"]), {"branch-flow", "quality", "compatibility"})
         branch_flow = workflow["jobs"]["branch-flow"]
         self.assertEqual(branch_flow["name"], "branch-flow")
         self.assertNotIn("permissions", branch_flow)
         self.assertEqual(len(branch_flow["steps"]), 1)
         branch_flow_step = branch_flow["steps"][0]
         self.assertNotIn("uses", branch_flow_step)
-        self.assertEqual(
-            set(branch_flow_step["env"]), {"EVENT_NAME", "BASE_REF", "HEAD_REF"}
-        )
+        self.assertEqual(set(branch_flow_step["env"]), {"EVENT_NAME", "BASE_REF", "HEAD_REF"})
         for job_name in ("quality", "compatibility"):
             job = workflow["jobs"][job_name]
             self.assertNotIn("permissions", job)
@@ -52,9 +48,7 @@ class UpstreamDistributionTests(unittest.TestCase):
 
     def test_quality_workflow_runs_on_main_and_dev_pushes(self) -> None:
         workflow = yaml.load(
-            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(
-                encoding="utf-8"
-            ),
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
             Loader=yaml.BaseLoader,
         )
         push = workflow["on"]["push"]
@@ -80,9 +74,7 @@ class UpstreamDistributionTests(unittest.TestCase):
         self, *, event_name: str, base_ref: str, head_ref: str
     ) -> subprocess.CompletedProcess[str]:
         workflow = yaml.load(
-            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(
-                encoding="utf-8"
-            ),
+            (ROOT / ".github" / "workflows" / "python-quality.yml").read_text(encoding="utf-8"),
             Loader=yaml.BaseLoader,
         )
         script = workflow["jobs"]["branch-flow"]["steps"][0]["run"]
