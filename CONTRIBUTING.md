@@ -23,10 +23,10 @@ make setup
 Read `ARCHITECTURE.md` and, when the change affects planned direction, `ROADMAP.md`. Search the relevant tests and source before changing scanner policy; many rules exist because of a real false positive or false negative.
 
 For changes that touch deployment, configuration, state ownership, or recovery,
-consult the [completed private deployment migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
-for the rationale, historical acceptance gates, and final contracts. Slices 1–7 are
-complete; do not reuse their numbering for new work. Verify current `main`, repository
-state, and the quality baseline before branching for any focused follow-up.
+read `ARCHITECTURE.md` and the [private instance guide](docs/PRIVATE_INSTANCE.md)
+for the current contract. Use the [completed private deployment migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md)
+only when historical rationale, acceptance gates, or provenance are relevant. Verify
+current `main`, repository state, and the quality baseline before branching.
 
 ## Commands
 
@@ -72,13 +72,15 @@ For action/template changes, follow the [offline deployment checks](docs/PRIVATE
 They parse YAML and execute Bash against local temporary Git repositories; do not
 create a live private instance or trigger delivery to validate distribution assets.
 Keep pins immutable, state reads inside serialization, and recovery uploads private.
+External actions and external reusable workflows must use reviewed full 40-character
+commit SHAs; same-repository reusable workflows may use GitHub's same-commit local
+reference syntax (`./.github/workflows/...` or `$/.github/workflows/...`).
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
 
-The migration is complete. New deployment/configuration follow-ups should be
-independent focused PRs rather than new migration slices. Include the starting SHA
-and precise validation result in the handoff, and do not mix unrelated follow-up
-decisions into the same PR.
+Keep deployment/configuration follow-ups as independent focused PRs. Include the
+starting SHA and precise validation result in the handoff, and do not mix unrelated
+follow-up decisions into the same PR.
 
 Describe:
 
