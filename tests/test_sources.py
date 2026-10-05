@@ -413,6 +413,7 @@ class PlatformAdapterTests(unittest.TestCase):
             sources.PlatformDiscoveryResult(refs={}, failures=()),
         )
 
+
 class AdaptiveInspectionTests(unittest.TestCase):
     def test_keeps_base_rows_and_spends_global_budget_on_strong_overflow(self) -> None:
         provisional: list[sources.IssueRow] = []
