@@ -186,7 +186,7 @@ def add_audit(
     *,
     limit: int = STRATEGIC_AUDIT_LIMIT,
 ) -> None:
-    """Append one bounded discovery audit record."""
+    """Append an audit record; semantic coverage failures bypass the tuning-only limit."""
     if len(audit) >= limit and not isinstance(reason, DiscoveryFailureReason):
         return
     audit.append(
