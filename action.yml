@@ -25,6 +25,13 @@ inputs:
   discord-webhook-url:
     description: Optional Discord delivery webhook
     default: ''
+outputs:
+  recovery-required:
+    description: Whether scanner delivery succeeded but local state saving failed
+    value: ${{ steps.scanner.outputs.recovery-required }}
+  recovery-mode:
+    description: Recovery evidence mode for the classified scanner failure
+    value: ${{ steps.scanner.outputs.recovery-mode }}
 runs:
   using: composite
   steps:
@@ -33,6 +40,7 @@ runs:
       with:
         python-version: '3.12'
     - name: Run pinned scanner
+      id: scanner
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
@@ -49,10 +57,39 @@ runs:
         PYTHONPATH: ''
         PYTHONSAFEPATH: '1'
       run: |
-        set -euo pipefail
+        set -uo pipefail
+        signal_file="$(mktemp)"
+        trap 'rm -f "$signal_file"' EXIT
+        status=0
         # Absolute script path imports the package beside this pinned action,
         # rather than any scanner code in the private caller's checkout.
         # -I also excludes caller PYTHONPATH and user site packages; insert only
         # this action's source root before invoking its stable executable shim.
-        python -I -c 'import runpy, sys; source = sys.argv.pop(1); sys.path.insert(0, source); runpy.run_path(source + "/opportunity_scout.py", run_name="__main__")' \
-          "$SCANNER_SOURCE" --config "$SCOUT_CONFIG" --state "$SCOUT_STATE"
+        SCOUT_TRANSACTION_SIGNAL="$signal_file" python -I -c '
+        import os
+        import runpy
+        import sys
+        from pathlib import Path
+
+        source = sys.argv.pop(1)
+        sys.path.insert(0, source)
+        try:
+            runpy.run_path(source + "/opportunity_scout.py", run_name="__main__")
+        except Exception as error:
+            from opportunity_scout.run import PostDeliveryStateSaveError
+
+            if isinstance(error, PostDeliveryStateSaveError):
+                Path(os.environ["SCOUT_TRANSACTION_SIGNAL"]).write_text(
+                    "reconstruct\\n", encoding="utf-8"
+                )
+            raise
+        ' "$SCANNER_SOURCE" --config "$SCOUT_CONFIG" --state "$SCOUT_STATE" || status=$?
+        set -e
+        if test -s "$signal_file"; then
+          printf 'recovery-required=true\\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-mode=reconstruct\\n' >> "$GITHUB_OUTPUT"
+        else
+          printf 'recovery-required=false\\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-mode=none\\n' >> "$GITHUB_OUTPUT"
+        fi
+        exit "$status"
