@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
 ACTION = ROOT / "action.yml"
 
+APPROVED_DISTRIBUTED_SCANNER_SHA = "dec9ea3ffd347160aa06d22d3be1e7e2991eadbe"
+
 
 def document(path: Path) -> dict[str, Any]:
     return dict(yaml.safe_load(path.read_text(encoding="utf-8")))
@@ -84,6 +86,10 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertEqual(steps[1]["with"]["ref"], "${{ github.event.repository.default_branch }}")
         recovery_gate = steps[3]
         scan = steps[4]
+        self.assertEqual(
+            scan["uses"],
+            "laclance/OSSOpportunityScout@" + APPROVED_DISTRIBUTED_SCANNER_SHA,
+        )
         self.assertEqual(scan["with"]["config-path"], "scout.toml")
         self.assertEqual(scan["with"]["state-path"], "seen_bounties.json")
         self.assertEqual(scan["with"]["github-token"], "${{ github.token }}")
