@@ -253,12 +253,15 @@ class EffortOrchestrationTests(unittest.TestCase):
                     state_path=state_path,
                     preferences=preferences.ScoutPreferences(effort=("1–3h",)),
                 )
+                strategic_rejects: dict[str, int] = {}
+                if not complete:
+                    strategic_rejects[SourceFailureReason("source refresh failed")] = 1
                 callbacks = replace(
                     dependencies(),
                     discover_paid=lambda *_args: ([blocked], {}, []),
                     discover_strategic=lambda *_args: (
                         [allowed, lower],
-                        {} if complete else {SourceFailureReason("source refresh failed"): 1},
+                        strategic_rejects,
                         [],
                         [],
                     ),
