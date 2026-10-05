@@ -51,6 +51,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
             scout["outputs"],
             {
                 "recovery_required": "${{ steps.recovery_handoff.outputs.required }}",
+                "recovery_mode": "${{ steps.recovery_handoff.outputs.recovery_mode }}",
                 "recovery_outcome": "${{ steps.recovery_handoff.outputs.recovery_outcome }}",
                 "recovery_barrier_outcome": (
                     "${{ steps.recovery_handoff.outputs.recovery_barrier_outcome }}"
@@ -71,6 +72,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 "recovery_gate",
                 "scan",
                 "persist",
+                "transaction",
                 "recovery",
                 "recovery_barrier",
                 "recovery_handoff",
@@ -94,20 +96,31 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn(".scout/recovery-required", recovery_gate["run"])
         self.assertTrue(steps[5]["continue-on-error"])
         self.assertNotIn("continue-on-error", scan)
-        self.assertNotIn("if", steps[5])  # Default success() skips persistence after scan failure.
+        self.assertNotIn("if", steps[5])  # Default success() still skips Git persistence on scan failure.
         self.assertEqual(steps[5]["env"]["SCOUT_BASE_SHA"], "${{ steps.base.outputs.sha }}")
-        recovery = steps[6]
+        transaction = steps[6]
+        self.assertEqual(transaction["if"], "${{ always() }}")
+        self.assertEqual(transaction["env"]["SCAN_OUTCOME"], "${{ steps.scan.outcome }}")
+        self.assertEqual(
+            transaction["env"]["SCAN_RECOVERY_REQUIRED"],
+            "${{ steps.scan.outputs.recovery-required }}",
+        )
+        self.assertEqual(transaction["env"]["PERSIST_OUTCOME"], "${{ steps.persist.outcome }}")
+        self.assertIn("mode=exact-state", transaction["run"])
+        self.assertIn("mode=reconstruct", transaction["run"])
+        recovery = steps[7]
         self.assertEqual(
             recovery["if"],
-            "${{ always() && steps.persist.outcome == 'failure' && github.event.repository.private == true }}",
+            "${{ always() && steps.transaction.outputs.mode == 'exact-state' && github.event.repository.private == true }}",
         )
         self.assertEqual(recovery["with"]["path"], "seen_bounties.json")
         self.assertEqual(recovery["with"]["retention-days"], 3)
         self.assertEqual(recovery["with"]["if-no-files-found"], "error")
         self.assertIn("github.run_attempt", recovery["with"]["name"])
-        recovery_barrier = steps[7]
+        recovery_barrier = steps[8]
         self.assertEqual(
-            recovery_barrier["if"], "${{ always() && steps.persist.outcome == 'failure' }}"
+            recovery_barrier["if"],
+            "${{ always() && steps.transaction.outputs.required == 'true' }}",
         )
         self.assertTrue(recovery_barrier["continue-on-error"])
         self.assertIn("git fetch --no-tags origin", recovery_barrier["run"])
@@ -115,9 +128,13 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn(".scout/recovery-required", recovery_barrier["run"])
         self.assertIn("push origin", recovery_barrier["run"])
         self.assertNotIn("push --force", recovery_barrier["run"])
-        recovery_handoff = steps[8]
+        recovery_handoff = steps[9]
         self.assertEqual(
-            recovery_handoff["if"], "${{ always() && steps.persist.outcome == 'failure' }}"
+            recovery_handoff["if"],
+            "${{ always() && steps.transaction.outputs.required == 'true' }}",
+        )
+        self.assertEqual(
+            recovery_handoff["env"]["RECOVERY_MODE"], "${{ steps.transaction.outputs.mode }}"
         )
         self.assertEqual(
             recovery_handoff["env"]["RECOVERY_OUTCOME"], "${{ steps.recovery.outcome }}"
@@ -127,6 +144,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
             "${{ steps.recovery_barrier.outcome }}",
         )
         self.assertIn("required=true", recovery_handoff["run"])
+        self.assertIn("recovery_mode=", recovery_handoff["run"])
         self.assertNotIn("--force", steps[5]["run"])
 
         cancel_job = workflow["jobs"]["cancel_queued"]
@@ -150,6 +168,10 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn("select(.run_id != $CURRENT_RUN_ID)", cancel_queued["run"])
         final_failure = cancel_steps[1]
         self.assertEqual(final_failure["if"], "${{ always() }}")
+        self.assertEqual(
+            final_failure["env"]["RECOVERY_MODE"],
+            "${{ needs.scout.outputs.recovery_mode }}",
+        )
         self.assertEqual(
             final_failure["env"]["RECOVERY_OUTCOME"],
             "${{ needs.scout.outputs.recovery_outcome }}",
@@ -188,6 +210,40 @@ class PrivateInstanceContractTests(unittest.TestCase):
                     {"INSTANCE_PRIVATE": private, "GITHUB_REF": ref, "INSTANCE_BRANCH": "main"},
                 )
                 self.assertEqual(result.returncode, expected)
+
+    def test_transaction_recovery_classification_is_causal(self) -> None:
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        cases = (
+            ("success", "false", "success", {"required": "false", "mode": "none"}),
+            ("success", "false", "failure", {"required": "true", "mode": "exact-state"}),
+            ("failure", "true", "skipped", {"required": "true", "mode": "reconstruct"}),
+            ("failure", "false", "skipped", {"required": "false", "mode": "none"}),
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            for scan_outcome, scan_recovery, persist_outcome, expected in cases:
+                with self.subTest(
+                    scan_outcome=scan_outcome,
+                    scan_recovery=scan_recovery,
+                    persist_outcome=persist_outcome,
+                ):
+                    output.unlink(missing_ok=True)
+                    result = shell_step(
+                        step,
+                        ROOT,
+                        {
+                            "GITHUB_OUTPUT": str(output),
+                            "SCAN_OUTCOME": scan_outcome,
+                            "SCAN_RECOVERY_REQUIRED": scan_recovery,
+                            "PERSIST_OUTCOME": persist_outcome,
+                        },
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    values = dict(
+                        line.split("=", 1)
+                        for line in output.read_text(encoding="utf-8").splitlines()
+                    )
+                    self.assertEqual(values, expected)
 
     def test_persistence_failure_cancels_queued_group_members(self) -> None:
         step = document(TEMPLATE)["jobs"]["cancel_queued"]["steps"][0]
@@ -252,7 +308,7 @@ fi
             )
             self.assertEqual(result.returncode, 23)
 
-    def test_persistence_failure_always_fails_after_recovery_attempt(self) -> None:
+    def test_recovery_failure_always_fails_after_recovery_attempt(self) -> None:
         step = document(TEMPLATE)["jobs"]["cancel_queued"]["steps"][-1]
         for outcome in ("success", "failure", "skipped", "cancelled", ""):
             with self.subTest(outcome=outcome):
@@ -260,6 +316,7 @@ fi
                     step,
                     ROOT,
                     {
+                        "RECOVERY_MODE": "exact-state",
                         "RECOVERY_OUTCOME": outcome,
                         "RECOVERY_BARRIER_OUTCOME": "success",
                         "QUEUE_CANCEL_OUTCOME": "success",
@@ -273,6 +330,22 @@ fi
             step,
             ROOT,
             {
+                "RECOVERY_MODE": "reconstruct",
+                "RECOVERY_OUTCOME": "skipped",
+                "RECOVERY_BARRIER_OUTCOME": "success",
+                "QUEUE_CANCEL_OUTCOME": "success",
+            },
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("local state saving failed", result.stdout)
+        self.assertIn("Reconstruct post-delivery state", result.stdout)
+        self.assertNotIn("recovery artifact", result.stdout)
+
+        result = shell_step(
+            step,
+            ROOT,
+            {
+                "RECOVERY_MODE": "exact-state",
                 "RECOVERY_OUTCOME": "success",
                 "RECOVERY_BARRIER_OUTCOME": "success",
                 "QUEUE_CANCEL_OUTCOME": "failure",
@@ -286,7 +359,8 @@ fi
             step,
             ROOT,
             {
-                "RECOVERY_OUTCOME": "success",
+                "RECOVERY_MODE": "reconstruct",
+                "RECOVERY_OUTCOME": "skipped",
                 "RECOVERY_BARRIER_OUTCOME": "failure",
                 "QUEUE_CANCEL_OUTCOME": "success",
             },
@@ -300,6 +374,20 @@ class PinnedActionTests(unittest.TestCase):
     def test_explicit_paths_and_separate_credentials(self) -> None:
         action = document(ACTION)
         self.assertEqual(action["runs"]["using"], "composite")
+        self.assertEqual(
+            action["outputs"],
+            {
+                "recovery-required": {
+                    "description": "Whether scanner delivery succeeded but local state saving failed",
+                    "value": "${{ steps.scanner.outputs.recovery-required }}",
+                },
+                "recovery-mode": {
+                    "description": "Recovery evidence mode for the classified scanner failure",
+                    "value": "${{ steps.scanner.outputs.recovery-mode }}",
+                },
+            },
+        )
+        self.assertEqual(action["runs"]["steps"][1]["id"], "scanner")
         for name in ("config-path", "state-path", "github-token"):
             self.assertTrue(action["inputs"][name]["required"])
         env = action["runs"]["steps"][1]["env"]
@@ -337,8 +425,10 @@ class PinnedActionTests(unittest.TestCase):
                 "GITHUB_TOKEN": "fake-discovery",
                 "PRIVATE_GITHUB_REPORTS_TOKEN": "fake-report",
                 "PYTHONPATH": str(caller),
+                "GITHUB_OUTPUT": str(caller / "action-output"),
             }
             for code in (0, 23):
+                (caller / "action-output").unlink(missing_ok=True)
                 result = shell_step(step, caller, {**environment, "SCANNER_EXIT": str(code)})
                 self.assertEqual(result.returncode, code, result.stderr)
                 capture = json.loads((caller / "capture.json").read_text())
@@ -353,6 +443,48 @@ class PinnedActionTests(unittest.TestCase):
                 )
                 self.assertEqual(capture["source"], str(source / "opportunity_scout.py"))
                 self.assertEqual(capture["tokens"], ["fake-discovery", "fake-report"])
+                outputs = (caller / "action-output").read_text(encoding="utf-8")
+                self.assertIn("recovery-required=false", outputs)
+                self.assertIn("recovery-mode=none", outputs)
+
+    def test_post_delivery_save_failure_emits_reconstruction_signal(self) -> None:
+        step = document(ACTION)["runs"]["steps"][1]
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            source = folder / "pinned source"
+            caller = folder / "caller"
+            package = source / "opportunity_scout"
+            package.mkdir(parents=True)
+            caller.mkdir()
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            (package / "run.py").write_text(
+                "class PostDeliveryStateSaveError(Exception):\n    pass\n",
+                encoding="utf-8",
+            )
+            (source / "opportunity_scout.py").write_text(
+                "from opportunity_scout.run import PostDeliveryStateSaveError\n"
+                "raise PostDeliveryStateSaveError('save failed after delivery')\n",
+                encoding="utf-8",
+            )
+            output = caller / "action-output"
+            result = shell_step(
+                step,
+                caller,
+                {
+                    "PATH": f"{Path(sys.executable).parent}:{os.environ['PATH']}",
+                    "SCANNER_SOURCE": str(source),
+                    "SCOUT_CONFIG": "scout.toml",
+                    "SCOUT_STATE": "seen.json",
+                    "GITHUB_TOKEN": "",
+                    "PRIVATE_GITHUB_REPORTS_TOKEN": "",
+                    "GITHUB_OUTPUT": str(output),
+                },
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("PostDeliveryStateSaveError", result.stderr)
+            outputs = output.read_text(encoding="utf-8")
+            self.assertIn("recovery-required=true", outputs)
+            self.assertIn("recovery-mode=reconstruct", outputs)
 
     def test_real_action_invalid_config_fails_before_state_or_network(self) -> None:
         step = document(ACTION)["runs"]["steps"][1]
@@ -370,6 +502,7 @@ class PinnedActionTests(unittest.TestCase):
                     "SCOUT_CONFIG": "bad.toml",
                     "SCOUT_STATE": "seen.json",
                     "PYTHONPATH": str(caller),
+                    "GITHUB_OUTPUT": str(caller / "action-output"),
                 },
             )
             self.assertNotEqual(result.returncode, 0)
@@ -391,6 +524,7 @@ class PinnedActionTests(unittest.TestCase):
                 "GITHUB_TOKEN": "",
                 "PRIVATE_GITHUB_REPORTS_TOKEN": "",
                 "GITHUB_REPORTS_ENABLED": "false",
+                "GITHUB_OUTPUT": str(caller / "action-output"),
             }
             for snapshot, expected in (
                 (b'{"version":2,"seen":{}}\n', 0),
@@ -438,7 +572,8 @@ class StateTransactionTests(unittest.TestCase):
         self.restore = steps[2]
         self.recovery_gate = steps[3]
         self.persist = steps[5]
-        self.recovery_barrier = steps[7]
+        self.transaction = steps[6]
+        self.recovery_barrier = steps[8]
         self.cancel_queued = workflow["jobs"]["cancel_queued"]["steps"][0]
         self.output = self.folder / "output"
         self.environment["GITHUB_OUTPUT"] = str(self.output)
@@ -462,6 +597,29 @@ class StateTransactionTests(unittest.TestCase):
         self.assertRegex(base, r"^[0-9a-f]{40}$")
         self.environment["SCOUT_BASE_SHA"] = base
         return base
+
+    def classify_transaction(
+        self,
+        *,
+        scan_outcome: str,
+        scan_recovery_required: str,
+        persist_outcome: str,
+    ) -> dict[str, str]:
+        self.output.unlink(missing_ok=True)
+        result = shell_step(
+            self.transaction,
+            self.repo,
+            {
+                **self.environment,
+                "SCAN_OUTCOME": scan_outcome,
+                "SCAN_RECOVERY_REQUIRED": scan_recovery_required,
+                "PERSIST_OUTCOME": persist_outcome,
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return dict(
+            line.split("=", 1) for line in self.output.read_text(encoding="utf-8").splitlines()
+        )
 
     def advance_other_writer(self) -> str:
         (self.other / "unrelated.txt").write_text("intervening private instance update\n")
@@ -575,6 +733,33 @@ class StateTransactionTests(unittest.TestCase):
                     self.repo / ".git" / "hooks" / "pre-commit",
                 ):
                     hook.unlink(missing_ok=True)
+
+    def test_local_save_failure_after_delivery_establishes_reconstruction_barrier(self) -> None:
+        base = self.read_base()
+        original_state = (self.repo / "seen_bounties.json").read_bytes()
+        classification = self.classify_transaction(
+            scan_outcome="failure",
+            scan_recovery_required="true",
+            persist_outcome="skipped",
+        )
+        self.assertEqual(classification, {"required": "true", "mode": "reconstruct"})
+
+        result = shell_step(self.recovery_barrier, self.repo, self.environment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        barrier_head = self.git(self.remote, "rev-parse", "main")
+        self.assertEqual(self.git(self.remote, "rev-parse", "main^"), base)
+        remote_state = subprocess.run(
+            ["git", "show", "main:seen_bounties.json"],
+            cwd=self.remote,
+            capture_output=True,
+            check=True,
+        ).stdout
+        self.assertEqual(remote_state, original_state)
+
+        self.assertEqual(self.read_base(), barrier_head)
+        result = shell_step(self.recovery_gate, self.repo, self.environment)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(".scout/recovery-required", result.stdout)
 
     def test_persistence_failure_barrier_uses_current_remote_head_without_state_overwrite(
         self,
