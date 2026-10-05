@@ -21,6 +21,7 @@ jobs:
       contents: write
     outputs:
       recovery_required: ${{ steps.recovery_handoff.outputs.required }}
+      recovery_mode: ${{ steps.recovery_handoff.outputs.recovery_mode }}
       recovery_outcome: ${{ steps.recovery_handoff.outputs.recovery_outcome }}
       recovery_barrier_outcome: ${{ steps.recovery_handoff.outputs.recovery_barrier_outcome }}
     env:
@@ -70,7 +71,7 @@ jobs:
 
       - name: Run pinned scanner source
         id: scan
-        uses: laclance/OSSOpportunityScout@fde5e99d10385a14f51140ebde18ed117c084c7a # Slice 5 action source
+        uses: laclance/OSSOpportunityScout@956e1f1fbed63a92772e8f6e48b9def5a748c50c # Post-delivery recovery signal
         timeout-minutes: 25
         with:
           config-path: scout.toml
@@ -107,9 +108,31 @@ jobs:
           # A race after fetch is rejected by the ordinary non-forced push.
           git push origin "HEAD:refs/heads/$INSTANCE_BRANCH"
 
+      - name: Classify transaction recovery requirement
+        id: transaction
+        if: ${{ always() }}
+        shell: bash
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+          SCAN_RECOVERY_REQUIRED: ${{ steps.scan.outputs.recovery-required }}
+          PERSIST_OUTCOME: ${{ steps.persist.outcome }}
+        run: |
+          set -euo pipefail
+          required=false
+          mode=none
+          if test "$PERSIST_OUTCOME" = failure; then
+            required=true
+            mode=exact-state
+          elif test "$SCAN_OUTCOME" = failure && test "$SCAN_RECOVERY_REQUIRED" = true; then
+            required=true
+            mode=reconstruct
+          fi
+          printf 'required=%s\n' "$required" >> "$GITHUB_OUTPUT"
+          printf 'mode=%s\n' "$mode" >> "$GITHUB_OUTPUT"
+
       - name: Preserve exact state for private recovery
         id: recovery
-        if: ${{ always() && steps.persist.outcome == 'failure' && github.event.repository.private == true }}
+        if: ${{ always() && steps.transaction.outputs.mode == 'exact-state' && github.event.repository.private == true }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: scout-state-recovery-${{ github.run_id }}-${{ github.run_attempt }}
@@ -119,7 +142,7 @@ jobs:
 
       - name: Establish durable recovery barrier
         id: recovery_barrier
-        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        if: ${{ always() && steps.transaction.outputs.required == 'true' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -147,16 +170,18 @@ jobs:
           # Ordinary push preserves any newer remote history by failing on a race.
           git -C "$barrier_worktree" push origin "HEAD:refs/heads/$INSTANCE_BRANCH"
 
-      - name: Publish persistence-failure recovery handoff
+      - name: Publish recovery handoff
         id: recovery_handoff
-        if: ${{ always() && steps.persist.outcome == 'failure' }}
+        if: ${{ always() && steps.transaction.outputs.required == 'true' }}
         shell: bash
         env:
+          RECOVERY_MODE: ${{ steps.transaction.outputs.mode }}
           RECOVERY_OUTCOME: ${{ steps.recovery.outcome }}
           RECOVERY_BARRIER_OUTCOME: ${{ steps.recovery_barrier.outcome }}
         run: |
           set -euo pipefail
           printf 'required=true\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery_mode=%s\n' "$RECOVERY_MODE" >> "$GITHUB_OUTPUT"
           printf 'recovery_outcome=%s\n' "$RECOVERY_OUTCOME" >> "$GITHUB_OUTPUT"
           printf 'recovery_barrier_outcome=%s\n' "$RECOVERY_BARRIER_OUTCOME" >> "$GITHUB_OUTPUT"
 
@@ -196,22 +221,30 @@ jobs:
               >/dev/null
           done <<< "$queued_run_ids"
 
-      - name: Fail persistence transaction after recovery attempt
+      - name: Fail scanner transaction after recovery attempt
         if: ${{ always() }}
         shell: bash
         env:
+          RECOVERY_MODE: ${{ needs.scout.outputs.recovery_mode }}
           RECOVERY_OUTCOME: ${{ needs.scout.outputs.recovery_outcome }}
           RECOVERY_BARRIER_OUTCOME: ${{ needs.scout.outputs.recovery_barrier_outcome }}
           QUEUE_CANCEL_OUTCOME: ${{ steps.cancel_queued.outcome }}
         run: |
           set -euo pipefail
           if test "$RECOVERY_BARRIER_OUTCOME" != success; then
-            echo '::error::State persistence failed and the durable recovery barrier could not be established. Stop all scout runs and establish recovery protection before any rerun.'
+            echo '::error::Post-delivery recovery is required and the durable recovery barrier could not be established. Stop all scout runs and establish recovery protection before any rerun.'
+          elif test "$RECOVERY_MODE" = reconstruct; then
+            if test "$QUEUE_CANCEL_OUTCOME" != success; then
+              echo '::error::Delivery succeeded but local state saving failed. The durable recovery marker blocks later scans even though queued-run cancellation failed. Reconstruct post-delivery state from trustworthy private evidence before removing the marker.'
+            else
+              echo '::error::Delivery succeeded but local state saving failed. The durable recovery marker is set and queued state transactions were cancelled. Reconstruct post-delivery state from trustworthy private evidence before removing the marker.'
+            fi
           elif test "$RECOVERY_OUTCOME" != success; then
-            echo '::error::State persistence and recovery preservation failed. The durable recovery marker blocks later scans. Reconstruct post-delivery state before removing it.'
+            echo '::error::Remote state persistence and exact-state recovery preservation failed. The durable recovery marker blocks later scans. Reconstruct post-delivery state before removing it.'
           elif test "$QUEUE_CANCEL_OUTCOME" != success; then
-            echo '::error::State persistence failed. The durable recovery marker blocks later scans even though queued-run cancellation failed. Restore the private recovery artifact before removing the marker.'
+            echo '::error::Remote state persistence failed. The durable recovery marker blocks later scans even though queued-run cancellation failed. Restore the private recovery artifact before removing the marker.'
           else
-            echo '::error::State persistence failed. The durable recovery marker is set and queued state transactions were cancelled. Restore the private recovery artifact before removing the marker.'
+            echo '::error::Remote state persistence failed. The durable recovery marker is set and queued state transactions were cancelled. Restore the private recovery artifact before removing the marker.'
           fi
           exit 1
+
