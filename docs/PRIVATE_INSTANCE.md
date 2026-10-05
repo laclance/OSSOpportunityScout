@@ -71,17 +71,24 @@ the separate delivery/persistence/deduplication gates still require real scan
 evidence. Do not add fabricated opportunity entries to the production state for a
 check or treat incomplete coverage as permission to advance it.
 
-If a manual scan delivers but persistence fails, stop new dispatches immediately.
-The current template first preserves the exact resulting state, then establishes the
-private branch marker `.scout/recovery-required` while the failed run still owns the
-shared concurrency group. That durable marker is the correctness barrier: every
-later run reads the current branch and fails before scanner execution while it
-exists. Queued-run cancellation remains defense in depth and operator convenience;
-its failure does not remove the marker barrier. Follow
-[recovery before rerunning](#recover-before-rerunning) and do not dispatch the
-deduplication scan until remote restoration and marker removal are verified.
-Missing recovery evidence, incomplete coverage, ambiguous delivery, and candidates
-not rechecked remain explicit gaps rather than successful acceptance claims.
+If a manual scan delivers but state persistence does not complete, stop new
+dispatches immediately. The current template distinguishes two recovery modes. When
+the scanner saved the resulting state locally but remote Git persistence fails, the
+workflow preserves those exact bytes in the private short-retention recovery
+artifact before establishing `.scout/recovery-required`. When delivery succeeded
+but the scanner's local state save fails, the action emits a narrow recovery signal;
+the workflow establishes the same durable marker but does **not** treat the local
+file as an exact post-delivery snapshot. That case requires reconstruction from
+trustworthy private evidence.
+
+The marker remains the correctness barrier: every later run reads the current branch
+and fails before scanner execution while it exists. Queued-run cancellation remains
+defense in depth and operator convenience; its failure does not remove the marker
+barrier. Follow [recovery before rerunning](#recover-before-rerunning) and do not
+dispatch the deduplication scan until remote restoration and marker removal are
+verified. Missing recovery evidence, incomplete coverage, ambiguous delivery, and
+candidates not rechecked remain explicit gaps rather than successful acceptance
+claims.
 
 Public tracker/PR updates contain only non-sensitive status and public source/check
 identifiers. Keep personal repository identities, preferences, secrets, state
@@ -265,12 +272,14 @@ The tests parse the action/template as YAML, validate execution pins, concurrenc
 permissions, credential wiring, recovery conditions/retention, durable-gate ordering,
 queued-run cancellation, and Bash syntax. They execute the actual embedded shell
 snippets against temporary local Git repositories, covering current-state reads
-after queuing, marker-absent admission, marker-present pre-scan failure, missing or
-symlinked files, unchanged state, byte-exact persistence, stale heads,
-fetch/commit/push failures, a race after fetch, marker creation from newer remote
-history without state overwrite or force push, marker-creation failure, cancellation
-failure with the durable gate still blocking later runs, and explicit operator
-marker removal. Action checks prove source/import isolation, quoted paths, failure
-propagation, and invalid config failing before state/network activity. They do not
-claim a live private artifact upload, live queue cancellation, or operational
+after queuing, marker-absent admission, marker-present pre-scan failure, causal
+transaction classification, missing or symlinked files, unchanged state, byte-exact
+persistence, stale heads, fetch/commit/push failures, a race after fetch, exact-state
+remote-persistence recovery, reconstruction-mode local-save recovery, marker creation
+from current remote history without state overwrite or force push, marker-creation
+failure, cancellation failure with the durable gate still blocking later runs, and
+explicit operator marker removal. Action checks prove source/import isolation,
+quoted paths, ordinary failure propagation, the typed post-delivery local-save
+recovery signal, and invalid config failing before state/network activity. They do
+not claim a live private artifact upload, live queue cancellation, or operational
 delivery was verified.
