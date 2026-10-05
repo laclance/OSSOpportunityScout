@@ -13,21 +13,17 @@ from opportunity_scout import reporting, selection, sources, state
 from opportunity_scout.preferences import ScoutPreferences
 from opportunity_scout.types import (
     Candidate,
+    DiscoveryFailureReason,
     GitHubIssue,
     IssueLifecycleStatus,
     RejectionRecord,
     RepositoryMetadata,
     SearchBatch,
+    SourceFailureReason,
 )
 
 REPORT_LIMIT: Final = 8
 STRATEGIC_COVERAGE_WARNING_THRESHOLD: Final = 5
-_VERIFICATION_FAILURE_REASONS: Final = (
-    "could not refresh source issue",
-    "could not refresh issue comments",
-    "could not verify open implementation PR timeline",
-)
-_PAID_VERIFICATION_FAILURE_REASONS: Final = ("could not verify active claim comments",)
 
 PaidDiscoveryResult = tuple[list[Candidate], dict[str, int], list[RejectionRecord]]
 StrategicDiscoveryResult = tuple[
@@ -163,21 +159,22 @@ def coverage_status(
     paid_rejects: dict[str, int] | None = None,
     warning_threshold: int = STRATEGIC_COVERAGE_WARNING_THRESHOLD,
 ) -> CoverageStatus:
-    """Count recognized failures and apply the independent warning thresholds."""
+    """Count semantically classified failures and apply independent warning thresholds."""
+    paid_rejects = paid_rejects or {}
     strategic_verification_failures = sum(
-        strategic_rejects.get(reason, 0) for reason in _VERIFICATION_FAILURE_REASONS
+        count
+        for reason, count in strategic_rejects.items()
+        if isinstance(reason, SourceFailureReason)
     )
-    paid_verification_failures = 0
-    if paid_rejects is not None:
-        paid_verification_failures = sum(
-            paid_rejects.get(reason, 0) for reason in _PAID_VERIFICATION_FAILURE_REASONS
-        )
+    paid_verification_failures = sum(
+        count for reason, count in paid_rejects.items() if isinstance(reason, SourceFailureReason)
+    )
     verification_failures = strategic_verification_failures + paid_verification_failures
     discovery_failures = sum(
-        1
-        for item in strategic_audit
-        if "scan coverage incomplete" in str(item.get("reason", "")).lower()
-    )
+        count
+        for reason, count in paid_rejects.items()
+        if isinstance(reason, DiscoveryFailureReason)
+    ) + sum(1 for item in strategic_audit if isinstance(item.get("reason"), DiscoveryFailureReason))
     failure_count = verification_failures + discovery_failures
 
     warning = None
@@ -355,18 +352,6 @@ def run_combined_scan(
         else ([], {}, [], [])
     )
 
-    if prefetched_paid_searches is not None:
-        for query, result in prefetched_paid_searches:
-            if not isinstance(result.get("items"), list):
-                dependencies.append_audit(
-                    strategic_audit,
-                    {
-                        "html_url": "https://github.com/issues",
-                        "title": f"Paid GitHub Search: {query}",
-                    },
-                    f"paid discovery search failed for query: {query}; scan coverage incomplete",
-                )
-
     strategic_seconds = monotonic() - strategic_started
     print(
         "Scout performance: "
@@ -388,7 +373,14 @@ def run_combined_scan(
         for item in strategic_audit:
             print(f"- {item.get('url')}: {item['reason']}")
 
-    rejects = reporting.rejection_summary(paid_rejects, strategic_rejects)
+    rejects = reporting.rejection_summary(
+        {
+            reason: count
+            for reason, count in paid_rejects.items()
+            if not isinstance(reason, DiscoveryFailureReason)
+        },
+        strategic_rejects,
+    )
     coverage = coverage_status(
         strategic_rejects,
         strategic_audit,

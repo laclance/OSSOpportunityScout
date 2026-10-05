@@ -18,11 +18,13 @@ from opportunity_scout import paid_verification
 from opportunity_scout import state
 from opportunity_scout.strategic import competition as competition_policy
 from opportunity_scout.types import (
+    DiscoveryFailureReason,
     GitHubComment,
     GitHubIssue,
     RejectionRecord,
     RepositoryMetadata,
     SearchBatch,
+    SourceFailureReason,
 )
 from tests.helpers import FakeResponse
 
@@ -464,6 +466,11 @@ class CalibrationTests(unittest.TestCase):
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
+            patch.object(
                 scout,
                 "comment_payment_signal",
                 return_value="confirmed bounty platform comment (Algora): $50",
@@ -702,10 +709,9 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(wrapper, None)),
             patch.object(scout, "issue_from_github_url", return_value=None),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "could not refresh upstream issue from aggregator wrapper",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "could not refresh upstream issue from aggregator wrapper")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -715,10 +721,24 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "upstream source: issue is no longer open",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "upstream source: issue is no longer open")
+        self.assertNotIsInstance(reason, SourceFailureReason)
+
+        with (
+            patch.object(
+                scout,
+                "refresh_issue",
+                side_effect=[
+                    (wrapper, None),
+                    (None, SourceFailureReason("could not refresh source issue")),
+                ],
+            ),
+            patch.object(scout, "issue_from_github_url", return_value=upstream),
+        ):
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "upstream source: could not refresh source issue")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -728,10 +748,9 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "issue_from_github_url", return_value=upstream),
         ):
-            self.assertEqual(
-                scout.verify(wrapper, "t", {}, {})[1],
-                "could not refresh upstream issue from aggregator wrapper",
-            )
+            reason = scout.verify(wrapper, "t", {}, {})[1]
+        self.assertEqual(reason, "could not refresh upstream issue from aggregator wrapper")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(
@@ -758,9 +777,9 @@ class VerificationTests(unittest.TestCase):
             ),
             patch.object(scout, "fetch_repo_metadata", return_value={}),
         ):
-            self.assertEqual(
-                scout.verify(fresh, "t", {}, {}, True)[1], "repository metadata unavailable"
-            )
+            reason = scout.verify(fresh, "t", {}, {}, True)[1]
+        self.assertEqual(reason, "repository metadata unavailable")
+        self.assertIsInstance(reason, SourceFailureReason)
 
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
@@ -828,6 +847,11 @@ class VerificationTests(unittest.TestCase):
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
+            patch.object(
                 paid_verification,
                 "candidate_rejection_reason",
                 return_value=("no explicit payment signal", None),
@@ -857,6 +881,32 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(
                 scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal"
             )
+
+    def test_verify_paid_fails_closed_when_payment_comments_cannot_refresh(self) -> None:
+        fresh = issue(body="", title="Funded task", comments=2)
+        failure = SourceFailureReason("could not refresh issue comments")
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(paid_policy, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([], failure),
+            ) as comments_checked,
+            patch.object(
+                paid_verification,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ) as rejection,
+        ):
+            candidate_, reason = scout.verify(fresh, "t", {}, {}, require_paid=True)
+
+        self.assertIsNone(candidate_)
+        self.assertIs(reason, failure)
+        self.assertIsInstance(reason, SourceFailureReason)
+        comments_checked.assert_called_once_with(fresh, "t")
+        rejection.assert_not_called()
 
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
@@ -1380,18 +1430,32 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(audit[0].get("url"), "https://github.com/issues")
         self.assertIn("global strategic discovery search failed", audit[0]["reason"])
         self.assertIn("coverage incomplete", audit[0]["reason"])
+        self.assertIsInstance(audit[0]["reason"], DiscoveryFailureReason)
 
-    def test_discover_paid_prefetched_failure_skips_without_duplicate_search(self) -> None:
+    def test_discover_paid_failed_search_has_direct_prefetch_parity(self) -> None:
         with (
-            patch.object(github, "search_github") as search,
+            patch.object(scout, "PAID_DISCOVERY_QUERIES", ["paid-q"]),
+            patch.object(github, "search_github", return_value={}) as direct_search,
             patch.object(scout, "platform_paid_refs", return_value={}),
         ):
-            found, rejected, examples = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
+            direct = scout.discover_paid("t", set(), {}, {})
 
-        search.assert_not_called()
-        self.assertEqual(found, [])
-        self.assertEqual(rejected, {})
-        self.assertEqual(examples, [])
+        with (
+            patch.object(github, "search_github") as prefetched_search,
+            patch.object(scout, "platform_paid_refs", return_value={}),
+        ):
+            prefetched = scout.discover_paid("t", set(), {}, {}, [("paid-q", {})])
+
+        direct_search.assert_called_once()
+        prefetched_search.assert_not_called()
+        self.assertEqual(direct[0], [])
+        self.assertEqual(prefetched[0], [])
+        self.assertEqual(direct[1], prefetched[1])
+        self.assertEqual(direct[2], prefetched[2])
+        self.assertEqual(sum(direct[1].values()), 1)
+        reason = next(iter(direct[1]))
+        self.assertIsInstance(reason, DiscoveryFailureReason)
+        self.assertIn("paid discovery search failed for query: paid-q", reason)
 
     def test_discover_paid_search_and_platform_paths(self) -> None:
         a = issue(html_url="https://github.com/a/a/issues/1")
@@ -1533,7 +1597,8 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual([x["url"] for x in found], [good.get("html_url")])
         self.assertEqual(len(audit), 1)
         self.assertEqual(audit[0].get("url"), archived.get("html_url"))
-        self.assertIn("repository metadata", audit[0]["reason"])
+        self.assertIn("repository is archived", audit[0]["reason"])
+        self.assertNotIsInstance(audit[0]["reason"], DiscoveryFailureReason)
         self.assertEqual(rejected["reject"], 1)
         self.assertEqual(examples[0].get("url"), paid.get("html_url"))
 
@@ -1759,7 +1824,12 @@ class FormattingAndMainTests(unittest.TestCase):
                         patch.object(
                             scout,
                             "discover_strategic",
-                            return_value=([], {"could not refresh source issue": count}, [], []),
+                            return_value=(
+                                [],
+                                {SourceFailureReason("source refresh failed"): count},
+                                [],
+                                [],
+                            ),
                         ),
                         patch.object(
                             delivery, "send_telegram_notification", return_value=True
@@ -1803,9 +1873,9 @@ class FormattingAndMainTests(unittest.TestCase):
                 return_value=(
                     [],
                     {
-                        "could not refresh source issue": 2,
-                        "could not refresh issue comments": 2,
-                        "could not verify open implementation PR timeline": 1,
+                        SourceFailureReason("source refresh failed"): 2,
+                        SourceFailureReason("comment refresh failed"): 2,
+                        SourceFailureReason("competition timeline failed"): 1,
                     },
                     [],
                     [],
@@ -1834,6 +1904,9 @@ class FormattingAndMainTests(unittest.TestCase):
             "GITHUB_REPORTS_ENABLED": "true",
         }
         strategic = candidate(paid=False)
+        paid_failure = DiscoveryFailureReason(
+            "paid discovery search failed for query: paid-q; scan coverage incomplete"
+        )
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
@@ -1842,7 +1915,21 @@ class FormattingAndMainTests(unittest.TestCase):
                 "prefetch_discovery_searches",
                 return_value=([("paid-q", {})], []),
             ),
-            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_paid",
+                return_value=(
+                    [],
+                    {paid_failure: 1},
+                    [
+                        {
+                            "url": "https://github.com/issues",
+                            "title": "Paid GitHub Search: paid-q",
+                            "reason": paid_failure,
+                        }
+                    ],
+                ),
+            ),
             patch.object(
                 scout,
                 "discover_strategic",
@@ -1873,7 +1960,7 @@ class FormattingAndMainTests(unittest.TestCase):
             {
                 "url": "https://github.com/issues",
                 "title": "Global GitHub Search: global-q",
-                "reason": (
+                "reason": DiscoveryFailureReason(
                     "global strategic discovery search failed for query: global-q; "
                     "scan coverage incomplete"
                 ),
@@ -2095,7 +2182,11 @@ class FormattingAndMainTests(unittest.TestCase):
                 "discover_strategic",
                 return_value=(
                     [],
-                    {"could not refresh source issue": scout.STRATEGIC_COVERAGE_WARNING_THRESHOLD},
+                    {
+                        SourceFailureReason("source refresh failed"): (
+                            scout.STRATEGIC_COVERAGE_WARNING_THRESHOLD
+                        )
+                    },
                     [],
                     [],
                 ),
@@ -2154,6 +2245,11 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
             patch.object(
                 scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
             ),

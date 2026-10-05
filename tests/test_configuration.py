@@ -24,7 +24,12 @@ from opportunity_scout import (
     state,
 )
 from opportunity_scout.strategic import discovery
-from opportunity_scout.types import Candidate, RepositoryMetadata, SearchBatch
+from opportunity_scout.types import (
+    Candidate,
+    RepositoryMetadata,
+    SearchBatch,
+    SourceFailureReason,
+)
 from tests.helpers import candidate, issue
 from tests.test_run import FIXED_TIME, dependencies
 
@@ -653,11 +658,14 @@ class SelectedStateTests(unittest.TestCase):
                     state_path=selected_path,
                     preferences=preferences.ScoutPreferences(paid=False, global_search=False),
                 )
+                strategic_rejects: dict[str, int] = {}
+                if incomplete:
+                    strategic_rejects[SourceFailureReason("source refresh failed")] = 1
                 callbacks = replace(
                     dependencies(),
                     discover_strategic=lambda *_args: (
                         [candidate()],
-                        {"could not refresh source issue": 1} if incomplete else {},
+                        strategic_rejects,
                         [],
                         [],
                     ),

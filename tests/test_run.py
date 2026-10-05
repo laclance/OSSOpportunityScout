@@ -7,13 +7,16 @@ from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from opportunity_scout import reporting, run, sources, state
+import opportunity_scout.app as scout
+from opportunity_scout import github, reporting, run, sources, state
 from opportunity_scout.types import (
+    DiscoveryFailureReason,
     GitHubIssue,
     IssueLifecycleStatus,
     RejectionRecord,
     RepositoryMetadata,
     SearchBatch,
+    SourceFailureReason,
 )
 from tests.helpers import candidate
 
@@ -171,68 +174,52 @@ class QueueAssemblyTests(unittest.TestCase):
 
 
 class CoverageTests(unittest.TestCase):
-    def test_completeness_is_independent_of_strategic_warning_threshold(self) -> None:
-        for reason in (
-            "could not refresh source issue",
-            "could not refresh issue comments",
-            "could not verify open implementation PR timeline",
-        ):
-            for count in (0, 1, 2, 3, 4, 5, 6):
-                for threshold in (1, 5, 99):
-                    with self.subTest(reason=reason, count=count, threshold=threshold):
-                        status = run.coverage_status(
-                            {reason: count}, [], warning_threshold=threshold
-                        )
-                        self.assertEqual(status.complete, count == 0)
-                        self.assertEqual(status.failure_count, count)
-                        self.assertEqual(status.warning is not None, count >= threshold)
+    def test_semantic_source_failure_completeness_is_independent_of_warning_threshold(self) -> None:
+        reason = SourceFailureReason("source evidence transport failed")
+        for count in (0, 1, 2, 3, 4, 5, 6):
+            for threshold in (1, 5, 99):
+                with self.subTest(count=count, threshold=threshold):
+                    status = run.coverage_status(
+                        {reason: count},
+                        [],
+                        warning_threshold=threshold,
+                    )
+                    self.assertEqual(status.complete, count == 0)
+                    self.assertEqual(status.failure_count, count)
+                    self.assertEqual(status.warning is not None, count >= threshold)
 
-    def test_coverage_threshold_and_failure_reasons_are_preserved(self) -> None:
-        self.assertIsNone(run.coverage_status({}, []).warning)
-        self.assertIsNone(run.coverage_status({"unrelated": 99}, []).warning)
-        self.assertTrue(run.coverage_status({"unrelated": 99}, []).complete)
-        self.assertIsNone(run.coverage_status({"could not refresh source issue": 4}, []).warning)
-
-        exact = run.coverage_status({"could not refresh source issue": 5}, [])
-        self.assertEqual(exact.verification_failures, 5)
-        self.assertEqual(exact.failure_count, 5)
-        self.assertIsNotNone(exact.warning)
-
-        all_reasons = run.coverage_status(
+    def test_display_reason_text_is_not_the_coverage_protocol(self) -> None:
+        status = run.coverage_status(
             {
-                "could not refresh source issue": 1,
-                "could not refresh issue comments": 2,
-                "could not verify open implementation PR timeline": 3,
+                "could not refresh source issue": 99,
+                "repository is archived": 99,
             },
             [],
+            paid_rejects={"could not verify active claim comments": 99},
         )
-        self.assertEqual(all_reasons.verification_failures, 6)
+        self.assertTrue(status.complete)
+        self.assertEqual(status.failure_count, 0)
+        self.assertIsNone(status.warning)
 
-    def test_any_discovery_failure_warns_and_counts_with_verification(self) -> None:
+    def test_semantic_discovery_and_paid_source_failures_always_warn(self) -> None:
         status = run.coverage_status(
-            {"could not refresh issue comments": 2},
+            {},
             [
                 {
                     "url": "https://github.com/issues",
-                    "reason": "paid discovery search failed; scan coverage incomplete",
+                    "reason": DiscoveryFailureReason("strategic discovery transport failed"),
                 }
             ],
+            paid_rejects={
+                SourceFailureReason("paid comment evidence unavailable"): 2,
+                DiscoveryFailureReason("paid Search unavailable"): 3,
+            },
         )
-        self.assertEqual(status.discovery_failures, 1)
-        self.assertEqual(status.failure_count, 3)
+        self.assertEqual(status.verification_failures, 2)
+        self.assertEqual(status.discovery_failures, 4)
+        self.assertEqual(status.failure_count, 6)
         self.assertFalse(status.complete)
-        self.assertIn("3 discovery/source/comment/competition checks failed", status.warning or "")
-
-    def test_paid_claim_verification_failure_always_warns(self) -> None:
-        status = run.coverage_status(
-            {},
-            [],
-            paid_rejects={"could not verify active claim comments": 1},
-        )
-        self.assertEqual(status.verification_failures, 1)
-        self.assertEqual(status.failure_count, 1)
-        self.assertFalse(status.complete)
-        self.assertIsNotNone(status.warning)
+        self.assertIn("6 discovery/source/comment/competition checks failed", status.warning or "")
 
 
 class DeliveryRenderingTests(unittest.TestCase):
@@ -360,21 +347,21 @@ class DeliveryRenderingTests(unittest.TestCase):
 class RunLifecycleTests(unittest.TestCase):
     def test_any_recognized_failure_blocks_new_urls_and_quiet_maintenance(self) -> None:
         failures: list[tuple[dict[str, int], dict[str, int], list[RejectionRecord]]] = [
-            ({}, {reason: count}, [])
+            ({}, {SourceFailureReason(reason): count}, [])
             for reason in (
-                "could not refresh source issue",
-                "could not refresh issue comments",
-                "could not verify open implementation PR timeline",
+                "source refresh failed",
+                "comment refresh failed",
+                "competition timeline failed",
             )
             for count in range(1, 7)
         ]
-        failures.append(({"could not verify active claim comments": 1}, {}, []))
+        failures.append(({SourceFailureReason("paid claim evidence failed"): 1}, {}, []))
         for reason in (
-            "paid discovery search failed; scan coverage incomplete",
-            "target repo discovery failed; scan coverage incomplete",
-            "global strategic discovery search failed; scan coverage incomplete",
+            "paid discovery failed",
+            "target repository discovery failed",
+            "global strategic discovery failed",
         ):
-            failures.append(({}, {}, [{"reason": reason}]))
+            failures.append(({}, {}, [{"reason": DiscoveryFailureReason(reason)}]))
 
         for paid_rejects, strategic_rejects, audit in failures:
             for has_candidates in (False, True):
@@ -734,7 +721,7 @@ class RunLifecycleTests(unittest.TestCase):
         ) -> run.StrategicDiscoveryResult:
             return (
                 [candidate(paid=False)],
-                {"could not refresh source issue": 5},
+                {SourceFailureReason("source refresh failed"): 5},
                 [],
                 [],
             )
@@ -790,7 +777,7 @@ class RunLifecycleTests(unittest.TestCase):
             _guide_cache: dict[str, str | None],
             _search_results: list[SearchBatch] | None,
         ) -> run.PaidDiscoveryResult:
-            return [], {"could not verify active claim comments": 1}, []
+            return [], {SourceFailureReason("paid claim evidence failed"): 1}, []
 
         def github_report(_repo: str, _token: str, _title: str, body: str) -> bool:
             reports.append(body)
@@ -834,7 +821,7 @@ class RunLifecycleTests(unittest.TestCase):
         self.assertIn("Opportunity discovery/verification coverage is incomplete", reports[0])
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
 
-    def test_paid_prefetch_failure_enters_audit_and_blocks_state(self) -> None:
+    def test_paid_prefetch_failure_blocks_state_without_duplicate_search(self) -> None:
         reports: list[str] = []
 
         def prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
@@ -846,9 +833,8 @@ class RunLifecycleTests(unittest.TestCase):
             _paid_urls: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            search_results: list[SearchBatch] | None,
+            _search_results: list[SearchBatch] | None,
         ) -> run.StrategicDiscoveryResult:
-            self.assertIsNotNone(search_results)
             return [candidate(paid=False)], {}, [], []
 
         def github_report(_repo: str, _token: str, _title: str, body: str) -> bool:
@@ -856,7 +842,7 @@ class RunLifecycleTests(unittest.TestCase):
             return True
 
         deps = run.RunDependencies(
-            discover_paid=empty_paid,
+            discover_paid=scout.discover_paid,
             discover_strategic=strategic,
             prefetch_discovery_searches=prefetch,
             append_audit=append_audit,
@@ -866,6 +852,8 @@ class RunLifecycleTests(unittest.TestCase):
             issue_lifecycle=open_lifecycle,
         )
         with (
+            patch.object(scout, "platform_paid_refs", return_value={}),
+            patch.object(github, "search_github") as search,
             patch.object(state, "load_seen_state", return_value=state.SeenState()),
             patch.object(state, "save_seen_state") as save,
         ):
@@ -882,8 +870,58 @@ class RunLifecycleTests(unittest.TestCase):
                 FIXED_TIME,
             )
 
+        search.assert_not_called()
         self.assertEqual(result.coverage.discovery_failures, 1)
+        self.assertFalse(result.coverage.complete)
+        self.assertTrue(result.delivery.delivered)
+        self.assertFalse(result.state_saved)
         self.assertIn("paid discovery search failed for query: paid-q", reports[0])
+        save.assert_not_called()
+
+    def test_paid_direct_search_failure_without_repo_blocks_state_after_delivery(self) -> None:
+        def strategic(
+            _token: str | None,
+            _seen: set[str],
+            _paid_urls: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.StrategicDiscoveryResult:
+            return [candidate(paid=False)], {}, [], []
+
+        def telegram(_token: str, _chat_id: str, _message: str) -> bool:
+            return True
+
+        deps = run.RunDependencies(
+            discover_paid=scout.discover_paid,
+            discover_strategic=strategic,
+            prefetch_discovery_searches=empty_prefetch,
+            append_audit=append_audit,
+            send_telegram=telegram,
+            send_discord=false_discord,
+            send_github_report=false_github,
+            issue_lifecycle=open_lifecycle,
+        )
+        with (
+            patch.object(scout, "PAID_DISCOVERY_QUERIES", ["paid-q"]),
+            patch.object(github, "search_github", return_value={}) as search,
+            patch.object(scout, "platform_paid_refs", return_value={}),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "maintain_seen_state") as maintain,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig("tok", None, "tb", "chat", None),
+                deps,
+                FIXED_TIME,
+            )
+
+        search.assert_called_once()
+        self.assertTrue(result.delivery.delivered)
+        self.assertEqual(result.coverage.discovery_failures, 1)
+        self.assertFalse(result.coverage.complete)
+        self.assertFalse(result.state_saved)
+        maintain.assert_not_called()
         save.assert_not_called()
 
     def test_delivery_success_is_or_across_all_configured_channels(self) -> None:

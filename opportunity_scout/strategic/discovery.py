@@ -24,6 +24,7 @@ from opportunity_scout.strategic.readiness import (
 from opportunity_scout.types import (
     Candidate,
     CandidateLane,
+    DiscoveryFailureReason,
     GitHubIssue,
     GitHubSearchResult,
     RejectionRecord,
@@ -185,8 +186,8 @@ def add_audit(
     *,
     limit: int = STRATEGIC_AUDIT_LIMIT,
 ) -> None:
-    """Append one bounded discovery audit record."""
-    if len(audit) >= limit:
+    """Append an audit record; semantic coverage failures bypass the tuning-only limit."""
+    if len(audit) >= limit and not isinstance(reason, DiscoveryFailureReason):
         return
     audit.append(
         {
@@ -268,7 +269,7 @@ def select_strategic_candidates(
                         html_url=f"https://github.com/{target_repo}/issues",
                         title=target_repo,
                     ),
-                    source_error,
+                    DiscoveryFailureReason(source_error),
                     limit=audit_limit,
                 )
             source_batches.append(items)
@@ -282,8 +283,10 @@ def select_strategic_candidates(
                     html_url="https://github.com/issues",
                     title=f"Global GitHub Search: {query}",
                 ),
-                f"global strategic discovery search failed for query: {query}; "
-                "scan coverage incomplete",
+                DiscoveryFailureReason(
+                    f"global strategic discovery search failed for query: {query}; "
+                    "scan coverage incomplete"
+                ),
                 limit=audit_limit,
             )
             continue
@@ -315,13 +318,23 @@ def select_strategic_candidates(
                 cache_locks,
                 namespace="repo",
             )
-            if not meta or meta.get("archived"):
+            if not meta:
+                add_audit(
+                    audit,
+                    item,
+                    DiscoveryFailureReason(
+                        "repository metadata unavailable during strategic discovery; "
+                        "scan coverage incomplete"
+                    ),
+                    limit=audit_limit,
+                )
+                continue
+            if meta.get("archived"):
                 if possible_miss_signal(item):
                     add_audit(
                         audit,
                         item,
-                        "strong-looking result skipped because repository metadata is "
-                        "unavailable or archived",
+                        "strong-looking result skipped because repository is archived",
                         limit=audit_limit,
                     )
                 continue

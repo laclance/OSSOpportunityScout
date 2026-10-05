@@ -24,6 +24,7 @@ from opportunity_scout.types import (
     GitHubSearchResult,
     IssueLifecycleStatus,
     RepositoryMetadata,
+    SourceFailureReason,
 )
 
 T = TypeVar("T")
@@ -299,7 +300,7 @@ def issue_comments_checked(
         token,
     )
     if not isinstance(comments, list):
-        return [], "could not refresh issue comments"
+        return [], SourceFailureReason("could not refresh issue comments")
     return cast(list[GitHubComment], comments), None
 
 

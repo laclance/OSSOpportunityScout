@@ -15,21 +15,19 @@ from dataclasses import dataclass
 from opportunity_scout import selection as selection_policy
 from opportunity_scout import sources
 from opportunity_scout.strategic import discovery as strategic_discovery
-from opportunity_scout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
+from opportunity_scout.types import (
+    Candidate,
+    GitHubIssue,
+    IssueRow,
+    RejectionRecord,
+    SourceFailureReason,
+)
 
 STRATEGIC_KEEP_PER_REPO = 3
 STRATEGIC_VERIFY_SCORE_UPLIFT_BOUND = 11
 STRATEGIC_REFRESH_FAILURE_LIMIT = 2
 STRATEGIC_MIN_CAREER_SCORE = 55
 STRATEGIC_VERIFY_WORKERS = 8
-
-SOURCE_FAILURE_REASONS = frozenset(
-    {
-        "could not refresh source issue",
-        "could not refresh issue comments",
-        "could not verify open implementation PR timeline",
-    }
-)
 
 DeepVerifier = Callable[[GitHubIssue], tuple[Candidate | None, str | None]]
 PreflightRejection = Callable[[GitHubIssue], str | None]
@@ -136,7 +134,7 @@ def verify_strategic_selection(
             )
             outcomes.append(outcome)
 
-            if reason in SOURCE_FAILURE_REASONS:
+            if isinstance(reason, SourceFailureReason):
                 consecutive_source_failures += 1
             else:
                 consecutive_source_failures = 0

@@ -352,10 +352,11 @@ Developer Program. Program participation is not GitHub approval, certification, 
 
 ## Coverage completeness and warnings
 
-`coverage_status()` in `opportunity_scout/run.py` counts recognized strategic source, comment,
-and implementation-PR timeline verification failures, paid active-claim comment verification
-failures, and discovery audit entries marked `scan coverage incomplete`. `CoverageStatus.complete`
-requires zero combined failures. Ordinary policy rejections do not make coverage incomplete.
+`coverage_status()` in `opportunity_scout/run.py` counts machine-classified strategic source,
+comment, and implementation-PR timeline verification failures, paid active-claim comment
+verification failures, and discovery failures. Human-readable reason text remains reporting-only;
+`CoverageStatus.complete` requires zero combined failures. Ordinary policy rejections do not make
+coverage incomplete.
 
 `run_combined_scan()` requires completeness for both delivery-related state advancement and
 quiet-run maintenance persistence. Warning thresholds control diagnostics independently:

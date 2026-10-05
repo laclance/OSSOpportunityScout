@@ -16,6 +16,14 @@ CandidateLane: TypeAlias = Literal["paid", "strategic"]
 IssueLifecycleStatus: TypeAlias = Literal["open", "closed", "not_found", "failed"]
 
 
+class DiscoveryFailureReason(str):
+    """Human-readable discovery failure carrying stable coverage semantics."""
+
+
+class SourceFailureReason(str):
+    """Human-readable verification/source failure carrying stable coverage semantics."""
+
+
 class GitHubLabel(TypedDict, total=False):
     """Normalized GitHub label fields consumed by scanner policy."""
 

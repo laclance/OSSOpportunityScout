@@ -8,6 +8,7 @@ from opportunity_scout import github
 from opportunity_scout.strategic import discovery
 from opportunity_scout.types import (
     Candidate,
+    DiscoveryFailureReason,
     CandidateLane,
     GitHubIssue,
     GitHubSearchResult,
@@ -390,7 +391,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
         self.assertEqual(metadata_calls, ["a/a"])
         self.assertEqual(selection.audit, [])
 
-    def test_selection_audits_source_search_and_archived_metadata_failures(self) -> None:
+    def test_selection_classifies_source_search_failures_but_not_archived_repo(self) -> None:
         strong = issue(
             html_url="https://github.com/x/y/issues/2",
             title="Proxy regression",
@@ -422,16 +423,51 @@ class StrategicDiscoveryTests(unittest.TestCase):
 
         self.assertEqual(selection.ranked_by_repo, {})
         self.assertEqual(len(selection.audit), 3)
+        failures = [
+            item["reason"]
+            for item in selection.audit
+            if isinstance(item["reason"], DiscoveryFailureReason)
+        ]
+        self.assertEqual(len(failures), 2)
+        self.assertTrue(any("target repo discovery failed" in reason for reason in failures))
         self.assertTrue(
-            any("target repo discovery failed" in item["reason"] for item in selection.audit)
+            any("global strategic discovery search failed" in reason for reason in failures)
         )
-        self.assertTrue(
-            any(
-                "global strategic discovery search failed" in item["reason"]
-                for item in selection.audit
-            )
+        archived = next(
+            item["reason"] for item in selection.audit if "repository is archived" in item["reason"]
         )
-        self.assertTrue(any("repository metadata" in item["reason"] for item in selection.audit))
+        self.assertNotIsInstance(archived, DiscoveryFailureReason)
+
+    def test_repository_metadata_unavailable_is_discovery_failure_even_at_audit_limit(self) -> None:
+        strong = issue(
+            html_url="https://github.com/x/y/issues/2",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+        selection = discovery.select_strategic_candidates(
+            "tok",
+            set(),
+            set(),
+            {},
+            [],
+            target_repos=["x/y"],
+            network_workers=1,
+            target_repo_pool=lambda *_: ([strong], None),
+            basic_candidate=lambda _: True,
+            fetch_repo_metadata=lambda *_: RepositoryMetadata(),
+            payment_signal=lambda _: None,
+            build_candidate=lambda *_: self.fail("missing metadata must not build candidate"),
+            cache_locks=github.KeyedLockPool(),
+            inspect_per_repo=15,
+            adaptive_budget=0,
+            audit_limit=0,
+        )
+
+        self.assertEqual(selection.ranked_by_repo, {})
+        self.assertEqual(len(selection.audit), 1)
+        self.assertIsInstance(selection.audit[0]["reason"], DiscoveryFailureReason)
+        self.assertIn("repository metadata unavailable", selection.audit[0]["reason"])
 
 
 if __name__ == "__main__":

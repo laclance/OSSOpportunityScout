@@ -14,7 +14,7 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from opportunity_scout import github
-from opportunity_scout.types import GitHubIssue
+from opportunity_scout.types import GitHubIssue, SourceFailureReason
 from tests.helpers import FakeResponse
 
 
@@ -316,10 +316,10 @@ class GitHubResourceTests(unittest.TestCase):
         self.assertEqual(github.issue_comments(issue(comments=0), "t"), [])
 
         with patch.object(github, "github_collection", return_value={"bad": "shape"}):
-            self.assertEqual(
-                github.issue_comments_checked(issue(), "t"),
-                ([], "could not refresh issue comments"),
-            )
+            comments, reason = github.issue_comments_checked(issue(), "t")
+            self.assertEqual(comments, [])
+            self.assertEqual(reason, "could not refresh issue comments")
+            self.assertIsInstance(reason, SourceFailureReason)
             self.assertEqual(github.issue_comments(issue(), "t"), [])
         with patch.object(github, "github_collection", return_value=[{"body": "x"}]) as getter:
             self.assertEqual(

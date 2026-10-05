@@ -5,7 +5,7 @@ from typing import Any
 from unittest.mock import patch
 
 from opportunity_scout import github, paid_verification
-from opportunity_scout.types import GitHubIssue
+from opportunity_scout.types import GitHubIssue, SourceFailureReason
 from tests.helpers import issue
 
 
@@ -70,15 +70,14 @@ class ExistingImplementationPrTests(unittest.TestCase):
         values: tuple[object, ...] = (None, {})
         for value in values:
             with self.subTest(value=value):
-                self.assertEqual(
-                    paid_verification.has_existing_implementation_pr(
-                        "acme/widget",
-                        42,
-                        "tok",
-                        fetch_json=lambda *_args, value=value: value,
-                    ),
-                    "could not verify open implementation PR timeline",
+                reason = paid_verification.has_existing_implementation_pr(
+                    "acme/widget",
+                    42,
+                    "tok",
+                    fetch_json=lambda *_args, value=value: value,
                 )
+                self.assertEqual(reason, "could not verify open implementation PR timeline")
+                self.assertIsInstance(reason, SourceFailureReason)
 
     def test_default_transport_is_used_once(self) -> None:
         with patch.object(github, "github_collection", return_value=[]) as getter:
@@ -114,16 +113,15 @@ class ActiveClaimTests(unittest.TestCase):
         values: tuple[object, ...] = (None, {})
         for value in values:
             with self.subTest(value=value):
-                self.assertEqual(
-                    paid_verification.active_claim_reason(
-                        "acme/widget",
-                        42,
-                        2,
-                        "tok",
-                        fetch_json=lambda *_, value=value: value,
-                    ),
-                    "could not verify active claim comments",
+                reason = paid_verification.active_claim_reason(
+                    "acme/widget",
+                    42,
+                    2,
+                    "tok",
+                    fetch_json=lambda *_, value=value: value,
                 )
+                self.assertEqual(reason, "could not verify active claim comments")
+                self.assertIsInstance(reason, SourceFailureReason)
 
     def test_valid_empty_comments_has_no_claim(self) -> None:
         self.assertIsNone(

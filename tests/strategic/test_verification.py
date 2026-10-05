@@ -9,7 +9,13 @@ from unittest.mock import patch
 
 from opportunity_scout import sources
 from opportunity_scout.strategic import discovery, verification
-from opportunity_scout.types import Candidate, GitHubIssue, IssueRow, RejectionRecord
+from opportunity_scout.types import (
+    Candidate,
+    GitHubIssue,
+    IssueRow,
+    RejectionRecord,
+    SourceFailureReason,
+)
 from tests.helpers import candidate, issue
 
 
@@ -78,15 +84,7 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(result.rejected[bound_reason], 1)
         self.assertIn("Strategic deep verification: 2/3", buf.getvalue())
 
-    def test_source_failure_breaker_uses_exact_reasons_and_resets_on_other_result(self) -> None:
-        self.assertEqual(
-            verification.SOURCE_FAILURE_REASONS,
-            {
-                "could not refresh source issue",
-                "could not refresh issue comments",
-                "could not verify open implementation PR timeline",
-            },
-        )
+    def test_source_failure_breaker_uses_semantics_and_resets_on_ordinary_rejection(self) -> None:
         items = [
             issue(
                 html_url=f"https://github.com/g/g/issues/{index}",
@@ -96,10 +94,10 @@ class StrategicVerificationTests(unittest.TestCase):
         ]
         reasons = iter(
             [
-                "could not refresh source issue",
+                SourceFailureReason("first source transport failed"),
                 "ordinary rejection",
-                "could not refresh issue comments",
-                "could not verify open implementation PR timeline",
+                SourceFailureReason("upstream source: second transport failed"),
+                SourceFailureReason("repository evidence unavailable"),
             ]
         )
         calls: list[str] = []
@@ -118,10 +116,10 @@ class StrategicVerificationTests(unittest.TestCase):
 
         self.assertEqual(len(calls), 4)
         self.assertEqual(result.network_checked_rows, 4)
-        self.assertEqual(result.rejected["could not refresh source issue"], 1)
+        self.assertEqual(result.rejected["first source transport failed"], 1)
         self.assertEqual(result.rejected["ordinary rejection"], 1)
-        self.assertEqual(result.rejected["could not refresh issue comments"], 1)
-        self.assertEqual(result.rejected["could not verify open implementation PR timeline"], 1)
+        self.assertEqual(result.rejected["upstream source: second transport failed"], 1)
+        self.assertEqual(result.rejected["repository evidence unavailable"], 1)
         self.assertTrue(
             any(
                 item.get("url") == items[4].get("html_url")
@@ -137,7 +135,7 @@ class StrategicVerificationTests(unittest.TestCase):
         )
         result = verification.verify_strategic_selection(
             selection({"g/g": [row(only, career=90)]}),
-            lambda _: (None, "could not refresh source issue"),
+            lambda _: (None, SourceFailureReason("arbitrary source failure wording")),
             lambda _: None,
             refresh_failure_limit=1,
         )

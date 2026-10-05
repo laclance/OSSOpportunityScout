@@ -50,12 +50,14 @@ from opportunity_scout.strategic.readiness import (
 from opportunity_scout.types import (
     Candidate,
     CandidateLane,
+    DiscoveryFailureReason,
     GitHubComment,
     GitHubIssue,
     GitHubSearchResult,
     RejectionRecord,
     RepositoryMetadata,
     SearchBatch,
+    SourceFailureReason,
 )
 
 TARGET_REPOS = strategic_discovery.TARGET_REPOS
@@ -375,7 +377,7 @@ def refresh_issue(item: GitHubIssue, token: str | None) -> tuple[GitHubIssue | N
         return None, "could not identify repository/issue number"
     fresh = github.github_get(f"https://api.github.com/repos/{repo}/issues/{number}", token)
     if not isinstance(fresh, dict):
-        return None, "could not refresh source issue"
+        return None, SourceFailureReason("could not refresh source issue")
     if fresh.get("state") != "open":
         return None, "issue is no longer open"
     if "pull_request" in fresh:
@@ -572,18 +574,24 @@ def verify(
     if reason:
         return None, reason
     if fresh is None:
-        return None, "could not refresh source issue"
+        return None, SourceFailureReason("could not refresh source issue")
 
     upstream_url = upstream_wrapper_issue_url(fresh)
     if upstream_url:
         upstream = issue_from_github_url(upstream_url, token)
         if upstream is None:
-            return None, "could not refresh upstream issue from aggregator wrapper"
+            return None, SourceFailureReason(
+                "could not refresh upstream issue from aggregator wrapper"
+            )
         fresh, reason = refresh_issue(upstream, token)
         if reason:
+            if isinstance(reason, SourceFailureReason):
+                return None, SourceFailureReason(f"upstream source: {reason}")
             return None, f"upstream source: {reason}"
         if fresh is None:
-            return None, "could not refresh upstream issue from aggregator wrapper"
+            return None, SourceFailureReason(
+                "could not refresh upstream issue from aggregator wrapper"
+            )
 
     repo, _ = github.issue_repo_and_number(fresh)
     if selection.repository_excluded(repo, scout_preferences):
@@ -601,14 +609,11 @@ def verify(
     issue_signal = paid.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
-        if require_paid:
-            comment_signal = comment_payment_signal(fresh, token)
-        else:
-            if comments is None:
-                comments, comments_reason = github.issue_comments_checked(fresh, token)
-                if comments_reason:
-                    return None, comments_reason
-            comment_signal = comment_payment_signal(fresh, token, comments)
+        if comments is None:
+            comments, comments_reason = github.issue_comments_checked(fresh, token)
+            if comments_reason:
+                return None, comments_reason
+        comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
     lane: CandidateLane
@@ -663,7 +668,7 @@ def verify(
         namespace="repo",
     )
     if not repo_meta:
-        return None, "repository metadata unavailable"
+        return None, SourceFailureReason("repository metadata unavailable")
     if repo_meta.get("archived"):
         return None, "repository is archived"
     if not selection.language_accepted(repo_meta.get("language"), scout_preferences):
@@ -720,9 +725,20 @@ def discover_paid(
             for query in PAID_DISCOVERY_QUERIES
         ]
 
-    for _, result in search_results:
+    for query, result in search_results:
         items = result.get("items")
         if not isinstance(items, list):
+            add_reject(
+                rejected,
+                examples,
+                GitHubIssue(
+                    html_url="https://github.com/issues",
+                    title=f"Paid GitHub Search: {query}",
+                ),
+                DiscoveryFailureReason(
+                    f"paid discovery search failed for query: {query}; scan coverage incomplete"
+                ),
+            )
             continue
         for item in items:
             url = item.get("html_url")

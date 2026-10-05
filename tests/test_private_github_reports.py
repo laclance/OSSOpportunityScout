@@ -9,6 +9,7 @@ from unittest.mock import patch
 import opportunity_scout.app as app
 from opportunity_scout import delivery, run, state
 from opportunity_scout.types import (
+    DiscoveryFailureReason,
     GitHubIssue,
     IssueLifecycleStatus,
     RejectionRecord,
@@ -57,7 +58,7 @@ def incomplete_strategic(
             {
                 "url": "https://github.com/issues",
                 "title": "coverage",
-                "reason": "scan coverage incomplete",
+                "reason": DiscoveryFailureReason("scan coverage incomplete"),
             }
         ],
     )
