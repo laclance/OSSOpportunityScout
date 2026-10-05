@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - "**/*.py"
       - ".coveragerc"
@@ -26,6 +27,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch-flow:
+    name: branch-flow
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Enforce protected branch flow
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ] && [ "$BASE_REF" = "main" ]; then
+            if [ "$HEAD_REF" != "dev" ] || [ "$HEAD_REPOSITORY" != "$CURRENT_REPOSITORY" ]; then
+              echo "::error::Pull requests to main must come from this repository's dev branch."
+              exit 1
+            fi
+          fi
+
   quality:
     runs-on: ubuntu-24.04
     steps:
