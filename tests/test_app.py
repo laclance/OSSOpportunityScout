@@ -1788,7 +1788,7 @@ class FormattingAndMainTests(unittest.TestCase):
                         patch.object(
                             scout,
                             "discover_strategic",
-                            return_value=([], {"could not refresh source issue": count}, [], []),
+                            return_value=([], {SourceFailureReason("source refresh failed"): count}, [], []),
                         ),
                         patch.object(
                             delivery, "send_telegram_notification", return_value=True
@@ -1832,9 +1832,9 @@ class FormattingAndMainTests(unittest.TestCase):
                 return_value=(
                     [],
                     {
-                        "could not refresh source issue": 2,
-                        "could not refresh issue comments": 2,
-                        "could not verify open implementation PR timeline": 1,
+                        SourceFailureReason("source refresh failed"): 2,
+                        SourceFailureReason("comment refresh failed"): 2,
+                        SourceFailureReason("competition timeline failed"): 1,
                     },
                     [],
                     [],
@@ -1863,6 +1863,9 @@ class FormattingAndMainTests(unittest.TestCase):
             "GITHUB_REPORTS_ENABLED": "true",
         }
         strategic = candidate(paid=False)
+        paid_failure = DiscoveryFailureReason(
+            "paid discovery search failed for query: paid-q; scan coverage incomplete"
+        )
         with (
             patch.dict(os.environ, env, clear=True),
             patch.object(state, "load_seen_state", return_value=state.SeenState.from_urls(["old"])),
@@ -1871,7 +1874,21 @@ class FormattingAndMainTests(unittest.TestCase):
                 "prefetch_discovery_searches",
                 return_value=([("paid-q", {})], []),
             ),
-            patch.object(scout, "discover_paid", return_value=([], {}, [])),
+            patch.object(
+                scout,
+                "discover_paid",
+                return_value=(
+                    [],
+                    {paid_failure: 1},
+                    [
+                        {
+                            "url": "https://github.com/issues",
+                            "title": "Paid GitHub Search: paid-q",
+                            "reason": paid_failure,
+                        }
+                    ],
+                ),
+            ),
             patch.object(
                 scout,
                 "discover_strategic",
@@ -1902,7 +1919,7 @@ class FormattingAndMainTests(unittest.TestCase):
             {
                 "url": "https://github.com/issues",
                 "title": "Global GitHub Search: global-q",
-                "reason": (
+                "reason": DiscoveryFailureReason(
                     "global strategic discovery search failed for query: global-q; "
                     "scan coverage incomplete"
                 ),
@@ -2124,7 +2141,11 @@ class FormattingAndMainTests(unittest.TestCase):
                 "discover_strategic",
                 return_value=(
                     [],
-                    {"could not refresh source issue": scout.STRATEGIC_COVERAGE_WARNING_THRESHOLD},
+                    {
+                        SourceFailureReason("source refresh failed"): (
+                            scout.STRATEGIC_COVERAGE_WARNING_THRESHOLD
+                        )
+                    },
                     [],
                     [],
                 ),
