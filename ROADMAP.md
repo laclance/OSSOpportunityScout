@@ -39,7 +39,7 @@ history.
 
 ### Public distribution and private scout instances
 
-`laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner version pin. Forks are optional for scanner-code customization, not runtime state ownership.
+`laclance/OSSOpportunityScout` remains the canonical public source of truth for code, development/release CI, and reusable execution machinery. It must not operate any persistent scout instance. The independent private instance owns the actual workflow, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, state persistence/history, and scanner pin. Forks are optional for scanner-code customization, not runtime state ownership.
 
 The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves
 the implementation, acceptance, and recovery history behind this ownership model.
