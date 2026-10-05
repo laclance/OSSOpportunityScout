@@ -466,6 +466,11 @@ class CalibrationTests(unittest.TestCase):
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
             patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
+            patch.object(
                 scout,
                 "comment_payment_signal",
                 return_value="confirmed bounty platform comment (Algora): $50",
@@ -841,6 +846,11 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
             patch.object(
                 paid_verification,
                 "candidate_rejection_reason",
@@ -2235,6 +2245,11 @@ class CoverageGapTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([{"body": "payment evidence"}], None),
+            ),
             patch.object(
                 scout, "comment_payment_signal", return_value="explicit /reward comment: $50"
             ),
