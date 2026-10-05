@@ -9,7 +9,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from opportunity_scout import (
+from opportunity_scout import (, sources
     app,
     delivery,
     github,
@@ -66,7 +66,7 @@ class FinalEstimateTests(unittest.TestCase):
             for allowed in (("1–3h",), ("3–6h",), ()):
                 with (
                     self.subTest(source=source["title"], allowed=allowed),
-                    patch.object(app, "platform_paid_refs", return_value={}),
+                    patch.object(app, "platform_paid_refs", return_value=sources.PlatformDiscoveryResult(refs={}, failures=())),
                     patch.object(app, "refresh_issue", return_value=(fresh, None)) as refresh,
                     patch.object(
                         paid_verification, "candidate_rejection_reason", return_value=(None, "$500")
@@ -323,7 +323,7 @@ class EffortOrchestrationTests(unittest.TestCase):
                             )
                         )
                         stack.enter_context(
-                            patch.object(app, "platform_paid_refs", return_value={})
+                            patch.object(app, "platform_paid_refs", return_value=sources.PlatformDiscoveryResult(refs={}, failures=()))
                         )
                         refresh = stack.enter_context(
                             patch.object(
