@@ -872,6 +872,32 @@ class VerificationTests(unittest.TestCase):
                 scout.verify(fresh, "t", {}, {}, True)[1], "no explicit payment signal"
             )
 
+    def test_verify_paid_fails_closed_when_payment_comments_cannot_refresh(self) -> None:
+        fresh = issue(body="", title="Funded task", comments=2)
+        failure = SourceFailureReason("could not refresh issue comments")
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(paid_policy, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(
+                github,
+                "issue_comments_checked",
+                return_value=([], failure),
+            ) as comments_checked,
+            patch.object(
+                paid_verification,
+                "candidate_rejection_reason",
+                return_value=("no explicit payment signal", None),
+            ) as rejection,
+        ):
+            candidate_, reason = scout.verify(fresh, "t", {}, {}, require_paid=True)
+
+        self.assertIsNone(candidate_)
+        self.assertIs(reason, failure)
+        self.assertIsInstance(reason, SourceFailureReason)
+        comments_checked.assert_called_once_with(fresh, "t")
+        rejection.assert_not_called()
+
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
         with (
