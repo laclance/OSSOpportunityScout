@@ -54,10 +54,10 @@ scanner baselines. The private workflow never executes the tag itself; Dependabo
 resolves the tagged release to a new immutable SHA in its PR.
 
 The current reviewed scanner baseline is
-`ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0`. Before enabling the optional example
-for this baseline, publish the initial scanner release tag `v1.0.0` on exactly that
-commit. Creating or pushing release tags is a separate maintainer-authorized release
-action, not something the runtime workflow performs automatically.
+`ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0` and has a reviewed scanner release tag
+pointing exactly to that commit. Creating or pushing future scanner release tags is a
+separate maintainer-authorized release action, not something the runtime workflow
+performs automatically.
 
 The action executes `opportunity_scout.py` and its package from `github.action_path`,
 using isolated Python 3.12 with that source directory explicitly inserted into the
