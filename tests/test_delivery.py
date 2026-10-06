@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from contextlib import redirect_stdout
@@ -30,11 +31,22 @@ def github_open_via_urlopen(
     return urllib.request.urlopen(request, timeout=timeout)
 
 
+REAL_GITHUB_MUTATION_OPEN = delivery._github_mutation_open
+
+
 class DeliveryTests(unittest.TestCase):
     def setUp(self) -> None:
-        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        read_patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        read_patcher.start()
+        self.addCleanup(read_patcher.stop)
+
+        mutation_patcher = patch.object(
+            delivery,
+            "_github_mutation_open",
+            side_effect=github_open_via_urlopen,
+        )
+        mutation_patcher.start()
+        self.addCleanup(mutation_patcher.stop)
 
     def test_telegram_success_preserves_request(self) -> None:
         with patch.object(
@@ -107,6 +119,85 @@ class DeliveryTests(unittest.TestCase):
                     with redirect_stdout(output):
                         self.assertFalse(send())
                 self.assertNotIn(secret, output.getvalue())
+
+    def test_github_mutation_open_installs_no_redirect_handler(self) -> None:
+        request = urllib.request.Request(
+            "https://api.github.com/repos/me/repo/issues",
+            data=b"{}",
+            headers={"Authorization": "Bearer secret-token"},
+            method="POST",
+        )
+        with patch.object(urllib.request, "build_opener") as build_opener:
+            opener = build_opener.return_value
+            opener.open.return_value = FakeResponse()
+            self.assertIs(
+                REAL_GITHUB_MUTATION_OPEN(request, timeout=9),
+                opener.open.return_value,
+            )
+
+        self.assertIsInstance(
+            build_opener.call_args.args[0],
+            delivery._NoGitHubMutationRedirect,
+        )
+        opener.open.assert_called_once_with(request, timeout=9)
+
+    def test_github_mutations_refuse_all_redirects(self) -> None:
+        request = urllib.request.Request(
+            "https://api.github.com/repos/me/repo/issues",
+            data=b"{}",
+            headers={"Authorization": "Bearer secret-token"},
+            method="POST",
+        )
+        handler = delivery._NoGitHubMutationRedirect()
+
+        for target in (
+            "https://api.github.com/repos/me/repo/issues/42",
+            "https://evil.example/capture",
+        ):
+            with self.subTest(target=target):
+                with self.assertRaisesRegex(
+                    urllib.error.URLError,
+                    "GitHub mutation redirect refused",
+                ):
+                    handler.redirect_request(
+                        request,
+                        None,
+                        302,
+                        "redirect",
+                        {},
+                        target,
+                    )
+
+    def test_github_mutation_rejects_untrusted_initial_url_without_transport(self) -> None:
+        request_spec = delivery._github_request(
+            "https://evil.example/capture",
+            "secret-token",
+            method="POST",
+            payload={"title": "x"},
+        )
+        with patch.object(delivery, "_github_mutation_open") as opened:
+            result = delivery._perform_github_mutation(request_spec)
+
+        self.assertFalse(result.succeeded)
+        opened.assert_not_called()
+
+    def test_github_report_rejects_untrusted_created_issue_url_without_close(self) -> None:
+        with patch.object(
+            delivery,
+            "_github_mutation_open",
+            return_value=FakeResponse(b'{"url": "https://evil.example/issues/42"}'),
+        ) as opened:
+            self.assertFalse(
+                delivery.create_github_issue("me/repo", "secret-token", "title", "body")
+            )
+
+        opened.assert_called_once()
+        create_request = cast(urllib.request.Request, opened.call_args.args[0])
+        self.assertEqual(
+            create_request.full_url,
+            "https://api.github.com/repos/me/repo/issues",
+        )
+        self.assertEqual(create_request.get_header("Authorization"), "Bearer secret-token")
 
     def test_github_report_create_and_close_preserve_requests(self) -> None:
         created_url = "https://api.github.com/repos/me/repo/issues/42"
