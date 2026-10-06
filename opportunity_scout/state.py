@@ -309,10 +309,7 @@ def _replace_with_text(path: Path, text: str) -> None:
         os.replace(temporary_path, path)
     finally:
         if temporary_path is not None:
-            try:
-                temporary_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            temporary_path.unlink(missing_ok=True)
 
 
 def save_seen_state(state: SeenState, path: str | Path = DEFAULT_STATE_FILE) -> None:
