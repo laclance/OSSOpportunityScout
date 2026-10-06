@@ -1042,6 +1042,7 @@ def discover_paid(
     )
     return found, rejected, examples
 
+
 def possible_miss_signal(item: GitHubIssue) -> bool:
     """Compatibility wrapper for strategic near-miss detection."""
     return strategic_discovery.possible_miss_signal(item)
