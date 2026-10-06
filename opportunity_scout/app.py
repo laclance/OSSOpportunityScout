@@ -273,7 +273,14 @@ def strategic_competition_reason(
             _item: GitHubIssue,
             _token: str | None,
         ) -> str | None:
-            return paid_verification.existing_implementation_pr_reason(timeline_events)
+            repo, number = github.issue_repo_and_number(_item)
+            if not repo or not number:
+                return "could not identify repository/issue number"
+            return paid_verification.existing_implementation_pr_reason(
+                timeline_events,
+                repo,
+                number,
+            )
 
         timeline_pr_checker = prefetched_timeline_pr_checker
     return competition_policy.strategic_competition_reason(

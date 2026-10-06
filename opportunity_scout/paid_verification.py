@@ -103,7 +103,7 @@ def _timeline_pr_implements_issue(
     return (
         re.search(
             rf"\b{_IMPLEMENTATION_RELATIONSHIP_PATTERN}\b"
-            rf"[^\n]{0,120}?{reference_pattern}",
+            rf"[^\n]{{0,120}}?{reference_pattern}",
             text,
             re.IGNORECASE,
         )

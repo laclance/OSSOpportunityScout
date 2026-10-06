@@ -190,8 +190,7 @@ class ExistingImplementationPrTests(unittest.TestCase):
                         "repository_url": "https://api.github.com/repos/prometheus/common",
                         "title": "expfmt: default to allow-utf-8 escaping for OpenMetrics 2.0",
                         "body": (
-                            "Part of "
-                            "https://github.com/prometheus/client_golang/issues/2149."
+                            "Part of https://github.com/prometheus/client_golang/issues/2149."
                         ),
                     }
                 },
@@ -204,8 +203,7 @@ class ExistingImplementationPrTests(unittest.TestCase):
                 "tok",
                 fetch_json=lambda *_: timeline,
             ),
-            "existing open implementation PR: "
-            "https://github.com/prometheus/common/pull/1008",
+            "existing open implementation PR: https://github.com/prometheus/common/pull/1008",
         )
 
     def test_incomplete_open_pr_source_fails_closed(self) -> None:
