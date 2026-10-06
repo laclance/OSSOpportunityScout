@@ -23,6 +23,14 @@ def issue(number: int, **overrides: Any) -> GitHubIssue:
     return cast(GitHubIssue, item)
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class TargetRepoSourceTests(unittest.TestCase):
     def test_target_repo_pool_paginates_past_prs_and_stops_at_real_issue_limit(self) -> None:
         pr = {
@@ -99,6 +107,11 @@ class TargetRepoSourceTests(unittest.TestCase):
 
 
 class GenericSourceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_optional_json_fetch_auth_and_failure(self) -> None:
         with patch.object(
             urllib.request,

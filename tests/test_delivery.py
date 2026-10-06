@@ -22,7 +22,20 @@ def request_json(req: urllib.request.Request) -> dict[str, Any]:
     return cast(dict[str, Any], loaded)
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class DeliveryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_telegram_success_preserves_request(self) -> None:
         with patch.object(
             urllib.request,

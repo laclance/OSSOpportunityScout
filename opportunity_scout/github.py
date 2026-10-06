@@ -108,11 +108,7 @@ def _trusted_github_api_url(url: str) -> bool:
         parsed = urllib.parse.urlsplit(url)
     except ValueError:
         return False
-    return (
-        parsed.scheme == "https"
-        and parsed.netloc == "api.github.com"
-        and not parsed.fragment
-    )
+    return parsed.scheme == "https" and parsed.netloc == "api.github.com" and not parsed.fragment
 
 
 class _TrustedGitHubRedirect(urllib.request.HTTPRedirectHandler):

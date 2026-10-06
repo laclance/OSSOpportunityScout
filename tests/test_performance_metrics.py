@@ -6,13 +6,27 @@ import unittest
 import urllib.error
 import urllib.request
 from contextlib import redirect_stdout
+from typing import Any
 from unittest.mock import patch
 
 from opportunity_scout import app, github, sources
 from tests.helpers import FakeResponse
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class GitHubRequestStatsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_request_stats_classify_each_endpoint_category(self) -> None:
         urls = (
             "https://api.github.com/search/issues?q=bug",

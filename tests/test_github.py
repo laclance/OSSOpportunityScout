@@ -308,16 +308,12 @@ class GitHubTrustBoundaryTests(unittest.TestCase):
             patch.object(
                 github,
                 "_github_open",
-                side_effect=github._UntrustedGitHubRedirectError(
-                    "untrusted GitHub API redirect"
-                ),
+                side_effect=github._UntrustedGitHubRedirectError("untrusted GitHub API redirect"),
             ) as opened,
             patch("opportunity_scout.github.time.sleep") as slept,
             redirect_stdout(output),
         ):
-            self.assertIsNone(
-                github.github_get("https://api.github.com/a", "secret-token")
-            )
+            self.assertIsNone(github.github_get("https://api.github.com/a", "secret-token"))
 
         opened.assert_called_once()
         slept.assert_not_called()

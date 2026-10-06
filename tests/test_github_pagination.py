@@ -24,7 +24,20 @@ def response(payload: object, link: str | None = None) -> FakeResponse:
     return result
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class PaginationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_single_page_and_relations_without_next(self) -> None:
         for link in (None, f'<{URL}>; rel="last", <{URL}>; rel="first", <{URL}>; rel="prev"'):
             with (
