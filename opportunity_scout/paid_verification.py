@@ -66,18 +66,8 @@ class _TimelineEvent(TypedDict, total=False):
     source: object
 
 
-def has_existing_implementation_pr(
-    repo: str,
-    issue_number: int,
-    token: str | None,
-    *,
-    fetch_json: FetchJson | None = None,
-) -> str | None:
-    """Consume all timeline pages; reject open implementation PRs or incomplete evidence."""
-    url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/timeline?per_page=100"
-    timeline: object = (
-        github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
-    )
+def existing_implementation_pr_reason(timeline: object) -> str | None:
+    """Reject open implementation PRs from already-fetched complete timeline evidence."""
     if not isinstance(timeline, list):
         return SourceFailureReason("could not verify open implementation PR timeline")
 
@@ -103,6 +93,20 @@ def has_existing_implementation_pr(
 
     return None
 
+
+def has_existing_implementation_pr(
+    repo: str,
+    issue_number: int,
+    token: str | None,
+    *,
+    fetch_json: FetchJson | None = None,
+) -> str | None:
+    """Consume all timeline pages; reject open implementation PRs or incomplete evidence."""
+    url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/timeline?per_page=100"
+    timeline: object = (
+        github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
+    )
+    return existing_implementation_pr_reason(timeline)
 
 def active_claim_reason(
     repo: str,

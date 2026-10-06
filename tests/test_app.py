@@ -920,12 +920,94 @@ class VerificationTests(unittest.TestCase):
         comments_checked.assert_called_once_with(fresh, "t")
         rejection.assert_not_called()
 
+    def test_strategic_timeline_evidence_requires_complete_comment_set(self) -> None:
+        timeline = [
+            "bad",
+            {"event": "labeled"},
+            {
+                "event": "commented",
+                "body": "Maintainer context",
+                "author_association": "MEMBER",
+                "user": {"login": "maintainer"},
+            },
+        ]
+
+        self.assertEqual(
+            scout._strategic_timeline_evidence({"html_url": "bad"}, "t"),
+            (None, None),
+        )
+        with patch.object(github, "github_collection", return_value=None):
+            self.assertEqual(
+                scout._strategic_timeline_evidence(issue(comments=1), "t"),
+                (None, None),
+            )
+        with patch.object(github, "github_collection", return_value=timeline) as collection:
+            self.assertEqual(
+                scout._strategic_timeline_evidence(issue(comments=2), "t"),
+                (None, timeline),
+            )
+            comments, evidence = scout._strategic_timeline_evidence(issue(comments=1), "t")
+
+        self.assertEqual(evidence, timeline)
+        self.assertEqual(comments, [timeline[2]])
+        collection.assert_called_with(
+            "https://api.github.com/repos/example/project/issues/42/timeline?per_page=100",
+            "t",
+        )
+
+    def test_verify_strategic_reuses_timeline_for_comments_and_pr_evidence(self) -> None:
+        fresh = issue(
+            body="Parser task",
+            title="Parser task",
+            comments=1,
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        timeline = [
+            {
+                "event": "commented",
+                "body": "Thanks for the report.",
+                "author_association": "NONE",
+                "user": {"login": "observer"},
+                "created_at": "2026-10-01T00:00:00Z",
+                "updated_at": "2026-10-01T00:00:00Z",
+            }
+        ]
+        meta = repo_meta()
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(paid_policy, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(github, "github_collection", return_value=timeline) as timeline_fetch,
+            patch.object(github, "issue_comments_checked") as comments_fetch,
+            patch.object(scout, "timeline_open_pr_reason") as timeline_network_check,
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+            patch.object(scout, "fetch_repo_metadata", return_value=meta),
+            patch.object(scout, "contribution_guide", return_value=None),
+            patch.object(
+                scout,
+                "build_candidate",
+                return_value={"lane": "strategic"},
+            ),
+        ):
+            self.assertEqual(
+                scout.verify(fresh, "t", {}, {}),
+                ({"lane": "strategic"}, None),
+            )
+
+        timeline_fetch.assert_called_once_with(
+            "https://api.github.com/repos/example/project/issues/42/timeline?per_page=100",
+            "t",
+        )
+        comments_fetch.assert_not_called()
+        timeline_network_check.assert_not_called()
+
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
         with (
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "_strategic_timeline_evidence", return_value=(None, None)),
             patch.object(
                 github,
                 "issue_comments_checked",
@@ -975,6 +1057,7 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "_strategic_timeline_evidence", return_value=(None, None)),
             patch.object(
                 github,
                 "issue_comments_checked",
@@ -1021,6 +1104,7 @@ class VerificationTests(unittest.TestCase):
             patch.object(scout, "refresh_issue", return_value=(fresh, None)),
             patch.object(paid_policy, "payment_signal", return_value=None),
             patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(scout, "_strategic_timeline_evidence", return_value=(None, None)),
             patch.object(
                 github,
                 "issue_comments_checked",
