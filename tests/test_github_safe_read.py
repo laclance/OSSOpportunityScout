@@ -42,9 +42,17 @@ def http_error(
 
 class SafeReadTests(unittest.TestCase):
     def setUp(self) -> None:
-        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        read_patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        read_patcher.start()
+        self.addCleanup(read_patcher.stop)
+
+        mutation_patcher = patch.object(
+            delivery,
+            "_github_mutation_open",
+            side_effect=github_open_via_urlopen,
+        )
+        mutation_patcher.start()
+        self.addCleanup(mutation_patcher.stop)
 
     def test_success_first_attempt(self) -> None:
         with patch.object(
