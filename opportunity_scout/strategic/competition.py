@@ -133,7 +133,7 @@ def linked_open_pr_reason(
         candidates.extend(
             re.findall(
                 r"\b(?:related\s+)?(?:draft\s+)?"
-                r"(?:fix|patch|implementation|pr|pull request)"
+                r"(?:fix|patch|implementation)"
                 r"(?:\s+(?:is\s+)?(?:in|at))?\s*[:(]?\s*#(\d+)\b",
                 body,
                 re.IGNORECASE,
