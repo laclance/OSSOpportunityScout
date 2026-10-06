@@ -344,11 +344,6 @@ def _comment_evidence(comment: GitHubComment) -> _CommentEvidence:
     )
 
 
-def _labels_text(item: GitHubIssue) -> str:
-    """Return issue labels as normalized lowercase text."""
-    return _issue_evidence(item).labels_text
-
-
 def _normalize_label_separators(text: str) -> str:
     return _LABEL_SEPARATOR_RE.sub(" ", text.lower())
 
