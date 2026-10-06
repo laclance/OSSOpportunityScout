@@ -22,6 +22,10 @@ The template pins checkout, Python setup, artifact upload, and scanner execution
 to full commit SHAs. The distributed template contains a deliberately reviewed full
 scanner SHA. Before adopting or upgrading it, review the selected upstream commit
 and its checks. Branches and moving tags must not silently upgrade the scanner.
+When scanner behavior is promoted to `main` and becomes the new reviewed deployment
+baseline, update the distributed template pin and its approval regression in the same
+maintenance cycle. Do not advance the scanner pin for documentation, CI, governance,
+or Marketplace-only `main` commits that leave scanner behavior unchanged.
 Changing the scanner pin is an instance-owned deployment change; a release may
 identify a candidate SHA, but the instance owner decides whether to adopt it.
 
