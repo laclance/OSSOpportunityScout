@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from contextlib import redirect_stdout
 from email.message import Message
+from typing import Any
 from unittest.mock import patch
 
 from opportunity_scout import delivery, github
@@ -17,7 +18,7 @@ def github_open_via_urlopen(
     request: urllib.request.Request,
     *,
     timeout: int,
-) -> FakeResponse:
+) -> Any:
     return urllib.request.urlopen(request, timeout=timeout)
 
 
