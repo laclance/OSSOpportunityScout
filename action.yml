@@ -1,5 +1,5 @@
 name: OSS Opportunity Scout
-description: Run pinned scanner source with explicit instance-owned config, state, and credentials
+description: Find and rank paid open-source bounties and high-value GitHub contribution opportunities.
 branding:
   icon: search
   color: orange
