@@ -431,11 +431,7 @@ class LinkedPullRequestTests(unittest.TestCase):
         with patch.object(github, "github_get") as getter:
             self.assertIsNone(
                 competition.linked_open_pr_reason(
-                    issue(
-                        html_url=(
-                            "https://github.com/duct-tape2/ai-language-partner/issues/52"
-                        )
-                    ),
+                    issue(html_url=("https://github.com/duct-tape2/ai-language-partner/issues/52")),
                     "t",
                     comments,
                 )
