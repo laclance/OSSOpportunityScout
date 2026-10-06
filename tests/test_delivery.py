@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import json
 import urllib.request
+from collections.abc import Callable
+from contextlib import redirect_stdout
 from typing import Any, cast
 import unittest
 from unittest.mock import patch
@@ -67,6 +70,31 @@ class DeliveryTests(unittest.TestCase):
         with patch.object(urllib.request, "urlopen", side_effect=OSError("discord failed")):
             self.assertFalse(delivery.send_discord_notification("https://hook", "hello"))
 
+    def test_notification_failures_do_not_expose_credentials(self) -> None:
+        cases: tuple[tuple[Callable[[], bool], str], ...] = (
+            (
+                lambda: delivery.send_telegram_notification("secret-token", "chat", "hello"),
+                "secret-token",
+            ),
+            (
+                lambda: delivery.send_discord_notification(
+                    "https://discord.example/hooks/secret-webhook", "hello"
+                ),
+                "secret-webhook",
+            ),
+        )
+        for send, secret in cases:
+            with self.subTest(secret=secret):
+                output = io.StringIO()
+                with patch.object(
+                    urllib.request,
+                    "urlopen",
+                    side_effect=OSError(f"transport failed for {secret}"),
+                ):
+                    with redirect_stdout(output):
+                        self.assertFalse(send())
+                self.assertNotIn(secret, output.getvalue())
+
     def test_github_report_create_and_close_preserve_requests(self) -> None:
         created_url = "https://api.github.com/repos/me/repo/issues/42"
         with patch.object(
@@ -105,7 +133,7 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(opened.call_args_list[1].kwargs["timeout"], 15)
 
     def test_github_report_rejects_malformed_create_response(self) -> None:
-        for body in (b"not json", b"{}", b"[]", b'{"url": ""}'):
+        for body in (b"not json", b"{}", b"[]", b'{"url": ""}', b'{"url": 42}'):
             with self.subTest(body=body):
                 with patch.object(
                     urllib.request,
@@ -177,6 +205,24 @@ class DeliveryTests(unittest.TestCase):
 
     def test_private_github_report_fails_closed_for_unverified_privacy(self) -> None:
         for body in (b'{"private": false}', b"{}", b"[]", b"not json"):
+            with self.subTest(body=body):
+                with patch.object(
+                    urllib.request,
+                    "urlopen",
+                    return_value=FakeResponse(body),
+                ) as opened:
+                    self.assertFalse(
+                        delivery.create_private_github_issue(
+                            "owner/reports",
+                            "report-token",
+                            "title",
+                            "body",
+                        )
+                    )
+                opened.assert_called_once()
+
+    def test_private_github_report_requires_literal_true(self) -> None:
+        for body in (b'{"private": 1}', b'{"private": "true"}'):
             with self.subTest(body=body):
                 with patch.object(
                     urllib.request,
