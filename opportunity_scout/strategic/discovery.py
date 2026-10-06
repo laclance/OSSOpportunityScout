@@ -303,9 +303,7 @@ def _evaluate_source_item(
     touched.add(url)
 
     if not basic_candidate(item):
-        audit_reason = (
-            basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
-        )
+        audit_reason = basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
         if audit_reason:
             add_audit(audit, item, audit_reason, limit=audit_limit)
         return None
