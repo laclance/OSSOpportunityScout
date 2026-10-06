@@ -281,6 +281,9 @@ class PaginationTests(unittest.TestCase):
                     "pull_request": {"url": "pr"},
                     "state": "open",
                     "html_url": "https://github.com/example/project/pull/7",
+                    "repository_url": "https://api.github.com/repos/example/project",
+                    "title": "Fix project issue",
+                    "body": "Fixes #42",
                 }
             },
         }

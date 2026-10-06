@@ -37,6 +37,9 @@ class ExistingImplementationPrTests(unittest.TestCase):
                         "pull_request": {},
                         "state": "open",
                         "html_url": "https://github.com/acme/widget/pull/9",
+                        "repository_url": "https://api.github.com/repos/acme/widget",
+                        "title": "Fix widget race",
+                        "body": "Fixes #42",
                     }
                 },
             },
@@ -65,6 +68,184 @@ class ExistingImplementationPrTests(unittest.TestCase):
                 )
             ],
         )
+
+    def test_unrelated_external_cross_reference_is_not_implementation(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/other/app/pull/7",
+                        "repository_url": "https://api.github.com/repos/other/app",
+                        "title": "Document widget dependency",
+                        "body": "Related to https://github.com/acme/widget/issues/42 for context.",
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "acme/widget",
+                42,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            )
+        )
+
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "acme/widget",
+                42,
+                "tok",
+                fetch_json=lambda *_: [
+                    {
+                        "event": "cross-referenced",
+                        "source": {
+                            "issue": {
+                                "pull_request": {},
+                                "state": "open",
+                                "html_url": "https://github.com/other/app/pull/8",
+                                "repository_url": "https://api.github.com/repos/other/app",
+                                "title": "Document widget dependency",
+                                "body": None,
+                            }
+                        },
+                    }
+                ],
+            )
+        )
+
+    def test_cloudflared_dependency_update_is_not_implementation(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/anthony-spruyt/spruyt-labs/pull/3267",
+                        "repository_url": (
+                            "https://api.github.com/repos/anthony-spruyt/spruyt-labs"
+                        ),
+                        "title": (
+                            "chore(deps): update container image "
+                            "docker.io/cloudflare/cloudflared to v2026.9.3"
+                        ),
+                        "body": (
+                            "Release notes mention "
+                            "https://github.com/cloudflare/cloudflared/issues/1751."
+                        ),
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "cloudflare/cloudflared",
+                1751,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            )
+        )
+
+    def test_unrelated_undici_application_pr_is_not_implementation(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/Tungdota53/QLTT-RAG/pull/1",
+                        "repository_url": "https://api.github.com/repos/Tungdota53/QLTT-RAG",
+                        "title": "Feat/core platform",
+                        "body": (
+                            "Tracking upstream behavior: "
+                            "https://github.com/nodejs/undici/issues/3492."
+                        ),
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "nodejs/undici",
+                3492,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            )
+        )
+
+    def test_cross_repository_explicit_implementation_reference_is_detected(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/prometheus/common/pull/1008",
+                        "repository_url": "https://api.github.com/repos/prometheus/common",
+                        "title": "expfmt: default to allow-utf-8 escaping for OpenMetrics 2.0",
+                        "body": (
+                            "Part of https://github.com/prometheus/client_golang/issues/2149."
+                        ),
+                    }
+                },
+            }
+        ]
+        self.assertEqual(
+            paid_verification.has_existing_implementation_pr(
+                "prometheus/client_golang",
+                2149,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            ),
+            "existing open implementation PR: https://github.com/prometheus/common/pull/1008",
+        )
+
+    def test_incomplete_open_pr_source_fails_closed(self) -> None:
+        malformed_sources = (
+            {
+                "pull_request": {},
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/9",
+                "repository_url": "https://api.github.com/repos/acme/widget",
+                "body": "Fixes #42",
+            },
+            {
+                "pull_request": {},
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/9",
+                "repository_url": "https://api.github.com/repos/acme/widget",
+                "title": "Fix widget race",
+                "body": {"unexpected": "shape"},
+            },
+            {
+                "pull_request": {},
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/9",
+                "title": "Fix widget race",
+                "body": "Fixes #42",
+            },
+        )
+        for source_issue in malformed_sources:
+            with self.subTest(source_issue=source_issue):
+                reason = paid_verification.has_existing_implementation_pr(
+                    "acme/widget",
+                    42,
+                    "tok",
+                    fetch_json=lambda *_args, source_issue=source_issue: [
+                        {
+                            "event": "cross-referenced",
+                            "source": {"issue": source_issue},
+                        }
+                    ],
+                )
+                self.assertEqual(reason, "could not verify open implementation PR timeline")
+                self.assertIsInstance(reason, SourceFailureReason)
 
     def test_failed_or_non_list_timeline_fails_closed(self) -> None:
         values: tuple[object, ...] = (None, {})

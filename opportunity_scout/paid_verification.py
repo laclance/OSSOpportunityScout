@@ -55,6 +55,9 @@ class _TimelineIssue(TypedDict, total=False):
     pull_request: object
     state: str
     html_url: str
+    repository_url: object
+    title: object
+    body: object
 
 
 class _TimelineSource(TypedDict, total=False):
@@ -66,7 +69,53 @@ class _TimelineEvent(TypedDict, total=False):
     source: object
 
 
-def existing_implementation_pr_reason(timeline: object) -> str | None:
+_IMPLEMENTATION_RELATIONSHIP_PATTERN = (
+    r"(?:fix(?:es|ed|ing)?|close(?:s|d|ing)?|resolve(?:s|d|ing)?|"
+    r"implement(?:s|ed|ing|ation)?|address(?:es|ed|ing)?|part\s+of)"
+)
+
+
+def _timeline_pr_implements_issue(
+    source_issue: _TimelineIssue,
+    repo: str,
+    issue_number: int,
+) -> bool | None:
+    """Return implementation evidence, or None when required PR metadata is incomplete."""
+    title = source_issue.get("title")
+    body = source_issue.get("body")
+    repository_url = source_issue.get("repository_url")
+    if not isinstance(title, str) or not isinstance(repository_url, str):
+        return None
+    if body is not None and not isinstance(body, str):
+        return None
+
+    escaped_repo = re.escape(repo)
+    references = [
+        rf"https?://github\.com/{escaped_repo}/issues/{issue_number}\b",
+        rf"{escaped_repo}#{issue_number}\b",
+    ]
+    target_repository_url = f"https://api.github.com/repos/{repo}"
+    if repository_url.rstrip("/").lower() == target_repository_url.lower():
+        references.append(rf"(?<![\w/-])#{issue_number}\b")
+
+    reference_pattern = "(?:" + "|".join(references) + ")"
+    text = f"{title}\n{body or ''}"
+    return (
+        re.search(
+            rf"\b{_IMPLEMENTATION_RELATIONSHIP_PATTERN}\b"
+            rf"[^\n]{{0,120}}?{reference_pattern}",
+            text,
+            re.IGNORECASE,
+        )
+        is not None
+    )
+
+
+def existing_implementation_pr_reason(
+    timeline: object,
+    repo: str,
+    issue_number: int,
+) -> str | None:
     """Reject open implementation PRs from already-fetched complete timeline evidence."""
     if not isinstance(timeline, list):
         return SourceFailureReason("could not verify open implementation PR timeline")
@@ -88,7 +137,13 @@ def existing_implementation_pr_reason(timeline: object) -> str | None:
         if "pull_request" not in source_issue or source_issue.get("state") != "open":
             continue
         pr_url = source_issue.get("html_url")
-        if pr_url:
+        if not pr_url:
+            continue
+
+        implements_issue = _timeline_pr_implements_issue(source_issue, repo, issue_number)
+        if implements_issue is None:
+            return SourceFailureReason("could not verify open implementation PR timeline")
+        if implements_issue:
             return f"existing open implementation PR: {pr_url}"
 
     return None
@@ -106,7 +161,7 @@ def has_existing_implementation_pr(
     timeline: object = (
         github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
     )
-    return existing_implementation_pr_reason(timeline)
+    return existing_implementation_pr_reason(timeline, repo, issue_number)
 
 
 def active_claim_reason(
