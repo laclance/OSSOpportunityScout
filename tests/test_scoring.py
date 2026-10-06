@@ -1174,6 +1174,54 @@ class ScoringRegressionTests(unittest.TestCase):
                 )
                 self.assertTrue(activity.startswith(prefix))
 
+    def test_paid_cash_score_preserves_amount_and_hourly_boundaries(self) -> None:
+        cases = (
+            (150, 75.0, 81),
+            (90, 45.0, 72),
+            (15, 7.5, 56),
+        )
+        for amount, expected_hourly, expected_cash in cases:
+            with self.subTest(amount=amount):
+                result = scoring.build_candidate(
+                    issue(
+                        title="Deterministic response bug",
+                        body="The response is incorrect.",
+                        comments=0,
+                    ),
+                    "paid",
+                    f"payment term + amount: ${amount}",
+                    repo_meta(stargazers_count=0),
+                    None,
+                    target_repos=set(),
+                    amount_pattern=AMOUNT_RE,
+                )
+                self.assertEqual(result["effort"], "1–3h")
+                self.assertEqual(result["expected_hourly"], expected_hourly)
+                self.assertEqual(result["cash_score"], expected_cash)
+
+    def test_technical_depth_preserves_three_signal_score_step(self) -> None:
+        common = {
+            "lane": "strategic",
+            "signal": None,
+            "repo_meta": repo_meta(stargazers_count=0),
+            "guide": None,
+            "target_repos": set(),
+            "amount_pattern": AMOUNT_RE,
+        }
+        shallow = scoring.build_candidate(
+            issue(title="Storage regression", body="Storage regression."),
+            **common,
+        )
+        deep = scoring.build_candidate(
+            issue(
+                title="Storage performance memory regression",
+                body="Storage performance memory regression.",
+            ),
+            **common,
+        )
+        self.assertEqual(deep["career_score"] - shallow["career_score"], 6)
+        self.assertIn("meaningful technical depth", deep["career_reasons"])
+
     def test_owner_module_covers_cash_star_language_and_scope_branches(self) -> None:
         now = datetime.now(timezone.utc)
         inactive = (now - timedelta(days=120)).isoformat()
