@@ -1,5 +1,5 @@
 # OPTIONAL: copy this file to .github/dependabot.yml in a private instance
-# only after the currently pinned scanner SHA has a reviewed SemVer release tag.
+# only after upstream publishes reviewed SemVer project-release tags.
 # Dependabot opens PRs; normal review/CI/human merge still applies.
 version: 2
 

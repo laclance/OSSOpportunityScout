@@ -45,19 +45,22 @@ There are two supported maintenance modes:
 
 Dependabot resolves GitHub Action versions from git tags. If an Action is pinned to
 an untagged commit, GitHub documents that Dependabot can advance it to the action
-repository's latest commit, which is broader than this project's reviewed-runtime-
-baseline policy. Therefore the optional mode uses immutable SemVer tags only as
-**release signals**: each approved scanner runtime baseline may receive the next
-version tag, and that tag must point exactly to the reviewed runtime commit. Do not
-tag documentation, governance, CI, Marketplace, or distribution-only commits as
-scanner baselines. The private workflow never executes the tag itself; Dependabot
-resolves the tagged release to a new immutable SHA in its PR.
+repository's latest commit, which is broader than this project's reviewed-release
+policy. Therefore the optional mode uses reviewed SemVer project-release tags as
+**release signals**. Each tag points to the reviewed promoted release commit for that
+whole project release, normally the current `main` commit after a `dev → main`
+promotion. A release may include scanner and non-scanner changes; the tag does not
+claim that every included commit changed scanner behavior. The private workflow
+never executes the tag itself: Dependabot resolves the tagged release to a full
+immutable commit SHA in its PR, which still requires normal review and human merge.
 
-The current reviewed scanner baseline is
-`ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0` and has a reviewed scanner release tag
-pointing exactly to that commit. Creating or pushing future scanner release tags is a
-separate maintainer-authorized release action, not something the runtime workflow
-performs automatically.
+The manually distributed scanner baseline may therefore be older than the newest
+project release tag when intervening releases do not change scanner behavior. That is
+expected: the manual template pin advances only for reviewed scanner-behavior
+baseline changes, while the optional Dependabot mode tracks reviewed project
+releases. Creating or pushing future release tags is a separate
+maintainer-authorized release action, not something the runtime workflow performs
+automatically.
 
 The action executes `opportunity_scout.py` and its package from `github.action_path`,
 using isolated Python 3.12 with that source directory explicitly inserted into the
