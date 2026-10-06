@@ -405,6 +405,62 @@ class LinkedPullRequestTests(unittest.TestCase):
             self.assertIsNone(competition.linked_open_pr_reason(background, "t", []))
         no_fetch.assert_not_called()
 
+    def test_linked_pr_ignores_flux_historical_bare_pr_reference(self) -> None:
+        comments: list[GitHubComment] = [
+            {"body": "PR #1625's health-check requeue is also downstream of build/apply."}
+        ]
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(
+                competition.linked_open_pr_reason(
+                    issue(html_url="https://github.com/fluxcd/flux2/issues/5889"),
+                    "t",
+                    comments,
+                )
+            )
+        getter.assert_not_called()
+
+    def test_linked_pr_ignores_external_listing_pr_bare_number_echo(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "body": (
+                    "Listed via https://github.com/github/forgoodfirstissue/pull/494. "
+                    "For Good First Issue PR #494 tracks the directory update."
+                )
+            }
+        ]
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(
+                competition.linked_open_pr_reason(
+                    issue(
+                        html_url=(
+                            "https://github.com/duct-tape2/ai-language-partner/issues/52"
+                        )
+                    ),
+                    "t",
+                    comments,
+                )
+            )
+        getter.assert_not_called()
+
+    def test_linked_pr_keeps_strong_same_repo_implementation_shorthand(self) -> None:
+        comments: list[GitHubComment] = [{"body": "Implementation PR #12"}]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/example/project/pull/12",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.linked_open_pr_reason(issue(), "t", comments),
+                "existing open implementation PR: https://github.com/example/project/pull/12",
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/pulls/12",
+            "t",
+        )
+
     def test_linked_pr_short_circuits_invalid_issue_and_zero_comments(self) -> None:
         with patch.object(github, "github_get") as getter:
             self.assertIsNone(
