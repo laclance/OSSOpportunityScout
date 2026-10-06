@@ -1485,7 +1485,7 @@ class DiscoveryTests(unittest.TestCase):
                     failures=(failure,),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=platform),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(platform, None)),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(
                 scout,
@@ -2350,7 +2350,7 @@ class CoverageGapTests(unittest.TestCase):
                     failures=(),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=item_reject),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(item_reject, None)),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
         ):
