@@ -56,6 +56,21 @@ class PaymentSignalTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertEqual(paid.payment_signal(item), expected)
 
+    def test_payment_signal_uses_explicit_precedence(self) -> None:
+        self.assertEqual(
+            paid.payment_signal(
+                issue(
+                    body="/bounty $25\nreward available: 50 USDC",
+                    labels=[{"name": "bounty"}, "$75"],
+                )
+            ),
+            "explicit bounty command: $25",
+        )
+        self.assertEqual(
+            paid.payment_signal(issue(body="reward $50 and $75 compensation")),
+            "payment term + amount: $50",
+        )
+
     def test_payment_signal_negative_regressions(self) -> None:
         chain_love_body = (
             "No payout is assumed unless the DBIP is approved through the official "
