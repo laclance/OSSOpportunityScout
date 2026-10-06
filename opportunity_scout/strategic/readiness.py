@@ -690,9 +690,7 @@ def release_tracking_reason(
     """Reject release bookkeeping and work that is already implemented."""
     evidence = _issue_evidence(item)
     title_and_body = f"{evidence.title}\n{evidence.body}".lower()
-    republish_only = (
-        "re-release" in title_and_body or "republish" in evidence.body_lower
-    ) and (
+    republish_only = ("re-release" in title_and_body or "republish" in evidence.body_lower) and (
         "same content as" in evidence.body_lower or "trusted-publisher" in title_and_body
     )
     if republish_only:
