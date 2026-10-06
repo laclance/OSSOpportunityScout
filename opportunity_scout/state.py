@@ -4,11 +4,11 @@ import json
 import os
 import re
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Final, Iterable, Literal, Mapping, TypedDict
+from typing import Final, Literal, TypedDict, cast
 
 from opportunity_scout.types import IssueLifecycleStatus
 
@@ -52,16 +52,14 @@ class SeenStateSaveError(Exception):
 
 
 class SeenState:
-    """Schema-independent logical view of previously reported opportunity URLs."""
+    """Logical set of previously reported opportunity URLs and their timestamps."""
 
     def __init__(self, entries: Mapping[str, SeenEntry] | None = None) -> None:
-        self._entries = dict(entries) if entries is not None else {}
+        self._entries: dict[str, SeenEntry] = dict(entries or {})
 
     @classmethod
     def from_urls(cls, urls: Iterable[str]) -> SeenState:
-        state = cls()
-        state.mark_reported_many(urls)
-        return state
+        return cls(dict.fromkeys(urls, SeenEntry()))
 
     def contains(self, url: str) -> bool:
         return url in self._entries
@@ -79,22 +77,20 @@ class SeenState:
         return SeenState(self._entries)
 
     def remove(self, url: str) -> bool:
-        return self._entries.pop(url, None) is not None
+        if url not in self._entries:
+            return False
+        del self._entries[url]
+        return True
 
     def mark_checked(self, url: str, *, checked_at: str) -> bool:
-        entry = self._entries.get(url)
-        if entry is None:
+        current = self._entries.get(url)
+        if current is None:
             return False
-        self._entries[url] = SeenEntry(
-            reported_at=entry.reported_at,
-            last_checked_at=checked_at,
-        )
+        self._entries[url] = SeenEntry(current.reported_at, checked_at)
         return True
 
     def mark_reported(self, url: str, *, reported_at: str | None = None) -> None:
-        if url in self._entries:
-            return
-        self._entries[url] = SeenEntry(reported_at=reported_at)
+        self._entries.setdefault(url, SeenEntry(reported_at=reported_at))
 
     def mark_reported_many(
         self,
@@ -106,26 +102,28 @@ class SeenState:
             self.mark_reported(url, reported_at=reported_at)
 
     def to_document(self) -> SeenStateDocument:
-        seen: dict[str, SeenEntryDocument] = {}
-        for url in sorted(self._entries):
-            entry = self._entries[url]
-            seen[url] = {
-                "reported_at": entry.reported_at,
-                "last_checked_at": entry.last_checked_at,
-            }
-        return {"version": STATE_VERSION, "seen": seen}
+        ordered_seen = {
+            url: SeenEntryDocument(
+                reported_at=entry.reported_at,
+                last_checked_at=entry.last_checked_at,
+            )
+            for url, entry in sorted(self._entries.items())
+        }
+        return SeenStateDocument(version=STATE_VERSION, seen=ordered_seen)
+
+    def _snapshot(self) -> tuple[tuple[str, SeenEntry], ...]:
+        return tuple(self._entries.items())
 
 
-def _timestamp_datetime(value: str) -> datetime:
+def _parse_timestamp(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def _state_timestamp(value: datetime) -> str:
-    utc_value = value.astimezone(timezone.utc)
-    return utc_value.isoformat().replace("+00:00", "Z")
+def _format_timestamp(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _github_issue_url(url: str) -> bool:
+def _is_github_issue_url(url: str) -> bool:
     return _GITHUB_ISSUE_URL_RE.fullmatch(url) is not None
 
 
@@ -134,10 +132,18 @@ def eligible_for_revalidation(
     now: datetime,
     interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
 ) -> bool:
-    """Return whether a seen entry is old or unknown enough for lifecycle maintenance."""
+    """Return whether an entry has never been checked or is stale enough to recheck."""
     if entry.last_checked_at is None:
         return True
-    return now - _timestamp_datetime(entry.last_checked_at) >= interval
+    return now - _parse_timestamp(entry.last_checked_at) >= interval
+
+
+def _revalidation_order(item: tuple[str, SeenEntry]) -> tuple[int, datetime, str]:
+    url, entry = item
+    checked_at = entry.last_checked_at
+    if checked_at is None:
+        return (0, datetime.min.replace(tzinfo=timezone.utc), url)
+    return (1, _parse_timestamp(checked_at).astimezone(timezone.utc), url)
 
 
 def select_revalidation_batch(
@@ -146,24 +152,17 @@ def select_revalidation_batch(
     limit: int = SEEN_STATE_REVALIDATION_LIMIT,
     interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
 ) -> list[str]:
-    """Select a deterministic bounded batch of stale canonical GitHub issue URLs."""
+    """Choose a deterministic bounded batch of stale canonical GitHub issue URLs."""
     if limit <= 0:
         return []
 
-    eligible = [
-        (url, entry)
-        for url, entry in state._entries.items()
-        if _github_issue_url(url) and eligible_for_revalidation(entry, now, interval)
+    candidates = [
+        item
+        for item in state._snapshot()
+        if _is_github_issue_url(item[0]) and eligible_for_revalidation(item[1], now, interval)
     ]
-
-    def sort_key(item: tuple[str, SeenEntry]) -> tuple[int, datetime, str]:
-        url, entry = item
-        if entry.last_checked_at is None:
-            return (0, datetime.min.replace(tzinfo=timezone.utc), url)
-        return (1, _timestamp_datetime(entry.last_checked_at).astimezone(timezone.utc), url)
-
-    eligible.sort(key=sort_key)
-    return [url for url, _ in eligible[:limit]]
+    candidates.sort(key=_revalidation_order)
+    return [url for url, _entry in candidates[:limit]]
 
 
 def apply_revalidation_result(
@@ -172,11 +171,11 @@ def apply_revalidation_result(
     status: IssueLifecycleStatus,
     checked_at: datetime,
 ) -> None:
-    """Apply one lifecycle outcome, pruning only confirmed closed GitHub issues."""
+    """Apply a lifecycle result, pruning only a confirmed closed issue."""
     if status == "closed":
         state.remove(url)
-        return
-    state.mark_checked(url, checked_at=_state_timestamp(checked_at))
+    else:
+        state.mark_checked(url, checked_at=_format_timestamp(checked_at))
 
 
 def maintain_seen_state(
@@ -187,42 +186,47 @@ def maintain_seen_state(
     limit: int = SEEN_STATE_REVALIDATION_LIMIT,
     interval: timedelta = SEEN_STATE_RECHECK_INTERVAL,
 ) -> SeenStateMaintenanceResult:
-    """Return a maintained copy after a bounded lifecycle pass.
-
-    A checker exception is treated as a failed lifecycle attempt: the URL stays seen
-    and its check timestamp advances so one failure cannot monopolize later batches.
-    """
+    """Return a maintained copy after one bounded lifecycle pass."""
+    checked_urls = tuple(select_revalidation_batch(state, now, limit, interval))
     maintained = state.copy()
-    batch = select_revalidation_batch(state, now, limit, interval)
-    pruned: list[str] = []
-    for url in batch:
+    pruned_urls: list[str] = []
+
+    for url in checked_urls:
         try:
             status = checker(url)
         except Exception:
             status = "failed"
+
         if status == "closed":
-            pruned.append(url)
+            pruned_urls.append(url)
         apply_revalidation_result(maintained, url, status, now)
+
     return SeenStateMaintenanceResult(
         state=maintained,
-        checked_urls=tuple(batch),
-        pruned_urls=tuple(pruned),
+        checked_urls=checked_urls,
+        pruned_urls=tuple(pruned_urls),
     )
 
 
-def _validated_url(value: object) -> str:
+def _as_object_dict(value: object, message: str) -> dict[object, object]:
+    if not isinstance(value, dict):
+        raise SeenStateLoadError(message)
+    return cast(dict[object, object], value)
+
+
+def _decode_url(value: object) -> str:
     if not isinstance(value, str) or not value or value != value.strip():
         raise SeenStateLoadError("Seen-state URL keys must be non-empty strings.")
     return value
 
 
-def _validated_timestamp(value: object, field_name: str) -> str | None:
+def _decode_timestamp(value: object, field_name: str) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str) or not value:
         raise SeenStateLoadError(f"{field_name} must be an ISO timestamp string or null.")
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = _parse_timestamp(value)
     except ValueError as exc:
         raise SeenStateLoadError(f"{field_name} must be a valid ISO timestamp.") from exc
     if parsed.tzinfo is None or parsed.utcoffset() is None:
@@ -230,7 +234,17 @@ def _validated_timestamp(value: object, field_name: str) -> str | None:
     return value
 
 
-def _parse_current_state(raw: dict[object, object]) -> SeenState:
+def _decode_entry(url: str, value: object) -> SeenEntry:
+    raw_entry = _as_object_dict(value, f"Seen-state entry for {url} must be an object.")
+    if set(raw_entry) != {"reported_at", "last_checked_at"}:
+        raise SeenStateLoadError(f"Seen-state entry for {url} has malformed fields.")
+    return SeenEntry(
+        reported_at=_decode_timestamp(raw_entry["reported_at"], "reported_at"),
+        last_checked_at=_decode_timestamp(raw_entry["last_checked_at"], "last_checked_at"),
+    )
+
+
+def _decode_document(raw: dict[object, object]) -> SeenState:
     if "version" not in raw:
         raise SeenStateLoadError("Versioned seen-state is missing the version field.")
 
@@ -242,60 +256,66 @@ def _parse_current_state(raw: dict[object, object]) -> SeenState:
     if set(raw) != {"version", "seen"}:
         raise SeenStateLoadError("Versioned seen-state has unexpected top-level fields.")
 
-    seen_raw = raw["seen"]
-    if not isinstance(seen_raw, dict):
-        raise SeenStateLoadError("Seen-state 'seen' field must be an object.")
-
+    raw_seen = _as_object_dict(raw["seen"], "Seen-state 'seen' field must be an object.")
     entries: dict[str, SeenEntry] = {}
-    for raw_url, raw_entry in seen_raw.items():
-        url = _validated_url(raw_url)
-        if not isinstance(raw_entry, dict):
-            raise SeenStateLoadError(f"Seen-state entry for {url} must be an object.")
-        if set(raw_entry) != {"reported_at", "last_checked_at"}:
-            raise SeenStateLoadError(f"Seen-state entry for {url} has malformed fields.")
-        entries[url] = SeenEntry(
-            reported_at=_validated_timestamp(raw_entry["reported_at"], "reported_at"),
-            last_checked_at=_validated_timestamp(raw_entry["last_checked_at"], "last_checked_at"),
-        )
-
+    for raw_url, raw_entry in raw_seen.items():
+        url = _decode_url(raw_url)
+        entries[url] = _decode_entry(url, raw_entry)
     return SeenState(entries)
 
 
 def parse_seen_state(raw: object) -> SeenState:
-    """Parse the current versioned state schema."""
-    if isinstance(raw, dict):
-        return _parse_current_state(raw)
-    raise SeenStateLoadError("Seen-state top level must be a versioned object.")
+    """Decode and validate the current versioned state schema."""
+    if not isinstance(raw, dict):
+        raise SeenStateLoadError("Seen-state top level must be a versioned object.")
+    return _decode_document(cast(dict[object, object], raw))
 
 
 def load_seen_state(path: str | Path = DEFAULT_STATE_FILE) -> SeenState:
-    """Load seen-state, treating only a genuinely absent file as empty first-run state."""
+    """Load state, treating only a missing file as an empty first run."""
     state_path = Path(path)
     try:
-        raw_text = state_path.read_text(encoding="utf-8")
+        text = state_path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return SeenState()
     except OSError as exc:
         raise SeenStateLoadError(f"Could not read seen-state file {state_path}: {exc}") from exc
 
     try:
-        raw: object = json.loads(raw_text)
+        raw: object = json.loads(text)
     except json.JSONDecodeError as exc:
         raise SeenStateLoadError(f"Malformed JSON in seen-state file {state_path}.") from exc
     return parse_seen_state(raw)
 
 
-def save_seen_state(state: SeenState, path: str | Path = DEFAULT_STATE_FILE) -> None:
-    """Atomically save the current versioned schema with deterministic formatting."""
-    state_path = Path(path)
-    serialized = json.dumps(state.to_document(), indent=2, ensure_ascii=False) + "\n"
+def _serialize_state(state: SeenState) -> str:
+    return json.dumps(state.to_document(), indent=2, ensure_ascii=False) + "\n"
+
+
+def _replace_with_text(path: Path, text: str) -> None:
+    temporary_path: Path | None = None
     try:
-        with tempfile.TemporaryDirectory(
-            dir=state_path.parent,
-            prefix=f".{state_path.name}.",
-        ) as temp_dir:
-            temp_path = Path(temp_dir) / state_path.name
-            temp_path.write_text(serialized, encoding="utf-8", newline="\n")
-            os.replace(temp_path, state_path)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            newline="\n",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(text)
+            handle.flush()
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def save_seen_state(state: SeenState, path: str | Path = DEFAULT_STATE_FILE) -> None:
+    """Persist the current versioned schema via an atomic sibling-file replacement."""
+    state_path = Path(path)
+    try:
+        _replace_with_text(state_path, _serialize_state(state))
     except OSError as exc:
         raise SeenStateSaveError(f"Could not save seen-state file {state_path}: {exc}") from exc
