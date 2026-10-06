@@ -1540,11 +1540,11 @@ class DiscoveryTests(unittest.TestCase):
             ),
             patch.object(
                 scout,
-                "issue_from_github_url",
+                "issue_from_github_url_checked",
                 side_effect=lambda url, token: {
-                    platform.get("html_url"): platform,
-                    platform_dirty.get("html_url"): platform_dirty,
-                    platform_bad: None,
+                    platform.get("html_url"): (platform, None),
+                    platform_dirty.get("html_url"): (platform_dirty, None),
+                    platform_bad: (None, None),
                 }[url],
             ),
         ):
