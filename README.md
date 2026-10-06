@@ -1,8 +1,8 @@
 # OSS Opportunity Scout
 
 [![Python Quality](https://github.com/laclance/OSSOpportunityScout/actions/workflows/python-quality.yml/badge.svg?branch=main)](https://github.com/laclance/OSSOpportunityScout/actions/workflows/python-quality.yml)
-[![Latest release](https://img.shields.io/github/v/release/laclance/OSSOpportunityScout?display_name=tag)](https://github.com/laclance/OSSOpportunityScout/releases/latest)
-[![License](https://img.shields.io/github/license/laclance/OSSOpportunityScout)](LICENSE)
+
+[GitHub Marketplace](https://github.com/marketplace/actions/oss-opportunity-scout) · [Latest release](https://github.com/laclance/OSSOpportunityScout/releases/latest) · [Apache-2.0 license](LICENSE)
 
 **Find and rank paid open-source bounties and high-value GitHub contribution opportunities automatically with GitHub Actions.**
 
