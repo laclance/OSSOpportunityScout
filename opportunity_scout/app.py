@@ -280,6 +280,7 @@ def strategic_competition_reason(
         strategic_claim_checker=strategic_claim_reason,
     )
 
+
 def supplemental_payment_signal(item: GitHubIssue) -> str | None:
     """Recognize explicit paid-work wording outside the upstream vocabulary."""
     title, body, labels, _ = issue_text(item)

@@ -108,6 +108,7 @@ def has_existing_implementation_pr(
     )
     return existing_implementation_pr_reason(timeline)
 
+
 def active_claim_reason(
     repo: str,
     issue_number: int,
