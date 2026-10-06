@@ -55,9 +55,9 @@ class _TimelineIssue(TypedDict, total=False):
     pull_request: object
     state: str
     html_url: str
-    repository_url: str
-    title: str
-    body: str | None
+    repository_url: object
+    title: object
+    body: object
 
 
 class _TimelineSource(TypedDict, total=False):
