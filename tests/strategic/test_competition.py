@@ -59,6 +59,12 @@ class ClaimCompetitionTests(unittest.TestCase):
                 [],
             )
         )
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(body="This needs an implementation decision.", created_at=recent),
+                [],
+            )
+        )
         self.assertEqual(
             competition.strategic_claim_reason(
                 issue(body=""),
@@ -278,6 +284,18 @@ class ClaimCompetitionTests(unittest.TestCase):
                 [
                     {
                         "body": "https://github.com/SomeoneElse/undici/tree/fetch/issue-5912",
+                        "updated_at": recent,
+                        "user": {"login": "observer"},
+                    }
+                ],
+            )
+        )
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(html_url="https://github.com/nodejs/undici/issues/5912", body=""),
+                [
+                    {
+                        "body": "https://github.com/observer/undici/tree/fetch/issue-6000",
                         "updated_at": recent,
                         "user": {"login": "observer"},
                     }
