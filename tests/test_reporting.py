@@ -68,9 +68,16 @@ class MarkdownFormattingTests(unittest.TestCase):
         self.assertNotIn("**Career score:**", rendered)
         self.assertNotIn("**Priority basis:**", rendered)
 
+    def test_paid_candidate_unknown_hourly_fallback(self) -> None:
+        rendered = reporting.markdown_candidate(
+            candidate(paid=True, expected_hourly=None),
+            1,
+        )
+        self.assertIn("**Expected hourly value:** unknown / not USD-comparable", rendered)
+
     def test_missing_guide_and_labels_have_readable_fallbacks(self) -> None:
         rendered = reporting.markdown_candidate(
-            candidate(contribution_guide=None, labels=[]),
+            candidate(contribution_guide=None, labels=[], effort_reasons=[]),
             1,
         )
         self.assertIn("not found at common paths", rendered)

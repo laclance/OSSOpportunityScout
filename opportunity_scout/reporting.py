@@ -1,7 +1,7 @@
 """Reporting and notification formatting for OSS Opportunity Scout.
 
-This module is deliberately presentation-only: it renders already-ranked candidate,
-rejection, and audit data without performing network I/O or scanner policy decisions.
+The module turns ranked scanner records into Markdown reports and plain-text
+notifications. It does not fetch source data, rank candidates, or deliver output.
 """
 
 from __future__ import annotations
@@ -12,25 +12,43 @@ from typing import Mapping, Sequence
 
 from opportunity_scout.types import Candidate, RejectionRecord
 
+_GITHUB_REPORT_URL = re.compile(
+    r"https://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)",
+    flags=re.IGNORECASE,
+)
+_REPORT_INTRO = (
+    "<!-- opportunity-scout-report: automated; actionable: false -->\n"
+    "> [!IMPORTANT]\n"
+    "> **Automated OSS Opportunity Scout scan report — not a development task.**\n"
+    "> Do not claim this report or open a pull request to resolve it. "
+    "The linked source issues are the actual contributor opportunities.\n\n"
+)
+_REPORT_CONTEXT = (
+    "Paid candidates reuse OSS Opportunity Scout's existing payment/competition filters unchanged. "
+    "Strategic candidates are pre-ranked, then source-refreshed and checked for assignees, "
+    "claim comments, open implementation PRs, repository legitimacy, and contribution guidance. "
+    "For strategic work, career score measures long-term value while priority score applies "
+    "execution friction from effort and visible competition.\n\n"
+)
+
 
 def github_report_ref(text: object | None) -> str:
-    """Make GitHub issue/PR URLs clickable without creating backlinks."""
+    """Render GitHub issue and pull-request URLs through the no-backlink redirector."""
     value = str(text or "")
-    return re.sub(
-        r"https://github\.com/([^/\s]+)/([^/\s]+)/(issues|pull)/(\d+)",
-        lambda match: (
-            "https://redirect.github.com/"
-            f"{match.group(1)}/{match.group(2)}/{match.group(3)}/{match.group(4)}"
-        ),
-        value,
-        flags=re.IGNORECASE,
-    )
+
+    def redirected(match: re.Match[str]) -> str:
+        owner, repo, kind, number = match.groups()
+        return f"https://redirect.github.com/{owner}/{repo}/{kind}/{number}"
+
+    return _GITHUB_REPORT_URL.sub(redirected, value)
 
 
 def markdown_label(text: object | None) -> str:
-    """Escape text used inside a Markdown link label."""
+    """Escape text that will be used as a Markdown link label."""
     value = github_report_ref(text)
-    return value.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+    for source, replacement in (("\\", "\\\\"), ("[", "\\["), ("]", "\\]")):
+        value = value.replace(source, replacement)
+    return value
 
 
 def strategic_priority_delta(candidate: Candidate) -> int:
@@ -38,100 +56,108 @@ def strategic_priority_delta(candidate: Candidate) -> int:
     return int(candidate["priority_score"]) - int(candidate["career_score"])
 
 
-def markdown_candidate(candidate: Candidate, idx: int) -> str:
-    """Render one paid or strategic candidate for the GitHub queue issue."""
-    hourly = (
-        "$" + f"{candidate['expected_hourly']:.0f}/h"
-        if candidate["expected_hourly"] is not None
-        else "unknown / not USD-comparable"
-    )
-    if candidate["expected_hourly"] is not None:
-        hourly = "~" + hourly
-    guide = (
-        f"[contribution guide]({candidate['contribution_guide']})"
-        if candidate["contribution_guide"]
-        else "not found at common paths"
-    )
-    title = markdown_label(candidate.get("title"))
-    repo = markdown_label(candidate.get("repo"))
-    lines = [
-        f"#### {idx}. [{repo} #{candidate['issue_number']}]"
-        f"({github_report_ref(candidate['url'])}): {title}",
-    ]
+def _expected_hourly_text(candidate: Candidate) -> str:
+    hourly = candidate["expected_hourly"]
+    if hourly is None:
+        return "unknown / not USD-comparable"
+    return f"~${hourly:.0f}/h"
+
+
+def _contribution_process_text(candidate: Candidate) -> str:
+    guide = candidate["contribution_guide"]
+    if not guide:
+        return "not found at common paths"
+    return f"[contribution guide]({guide})"
+
+
+def _candidate_lane_fields(candidate: Candidate) -> list[tuple[str, str]]:
     if candidate["paid"]:
-        lines.extend(
-            [
-                f"- **Reward:** {candidate['reward'] or 'unknown'}",
-                f"- **Payment confidence:** {candidate['payment_confidence']}/100",
-                f"- **Cash score:** {candidate['cash_score']}/100",
-                f"- **Effort:** {candidate['effort']}",
-                f"- **Expected hourly value:** {hourly}",
-            ]
-        )
-    else:
-        delta = strategic_priority_delta(candidate)
-        delta_text = f"+{delta}" if delta >= 0 else str(delta)
-        lines.extend(
-            [
-                f"- **Career score:** {candidate['career_score']}/100",
-                f"- **Priority score:** {candidate['priority_score']}/100",
-                f"- **Execution adjustment:** {delta_text} "
-                f"(career {candidate['career_score']} → priority {candidate['priority_score']})",
-                f"- **Effort:** {candidate['effort']}",
-            ]
-        )
+        return [
+            ("Reward", str(candidate["reward"] or "unknown")),
+            ("Payment confidence", f"{candidate['payment_confidence']}/100"),
+            ("Cash score", f"{candidate['cash_score']}/100"),
+            ("Effort", str(candidate["effort"])),
+            ("Expected hourly value", _expected_hourly_text(candidate)),
+        ]
+
+    delta = strategic_priority_delta(candidate)
+    delta_text = f"+{delta}" if delta >= 0 else str(delta)
+    return [
+        ("Career score", f"{candidate['career_score']}/100"),
+        ("Priority score", f"{candidate['priority_score']}/100"),
+        (
+            "Execution adjustment",
+            f"{delta_text} (career {candidate['career_score']} → "
+            f"priority {candidate['priority_score']})",
+        ),
+        ("Effort", str(candidate["effort"])),
+    ]
+
+
+def _candidate_detail_fields(candidate: Candidate) -> list[tuple[str, str]]:
+    fields = _candidate_lane_fields(candidate)
 
     effort_reasons = candidate.get("effort_reasons") or []
     if effort_reasons:
-        lines.append(f"- **Effort basis:** {', '.join(str(x) for x in effort_reasons)}")
+        fields.append(("Effort basis", ", ".join(str(reason) for reason in effort_reasons)))
 
     priority_reasons = candidate.get("priority_reasons") or []
     if priority_reasons and not candidate["paid"]:
-        lines.append(f"- **Priority basis:** {', '.join(str(x) for x in priority_reasons)}")
+        fields.append(("Priority basis", ", ".join(str(reason) for reason in priority_reasons)))
 
     labels = candidate.get("labels") or []
-    lines.extend(
+    fields.extend(
         [
-            f"- **Competition:** {candidate['competition']}",
-            f"- **Repo stars:** {candidate['stars']}",
-            f"- **Repo recent activity:** {candidate['recent_activity']}",
-            f"- **Language:** {candidate['language']}",
-            f"- **Labels:** {', '.join(str(x) for x in labels) or 'none'}",
-            f"- **Contribution process:** {guide}",
+            ("Competition", str(candidate["competition"])),
+            ("Repo stars", str(candidate["stars"])),
+            ("Repo recent activity", str(candidate["recent_activity"])),
+            ("Language", str(candidate["language"])),
+            ("Labels", ", ".join(str(label) for label in labels) or "none"),
+            ("Contribution process", _contribution_process_text(candidate)),
         ]
     )
+
     if candidate["paid"]:
-        lines.append(f"- **Cash reasons:** {', '.join(str(x) for x in candidate['cash_reasons'])}")
+        reason_label = "Cash reasons"
+        reasons = candidate["cash_reasons"]
     else:
-        lines.append(
-            f"- **Career reasons:** {', '.join(str(x) for x in candidate['career_reasons'])}"
-        )
-    return "\n".join(lines) + "\n\n"
+        reason_label = "Career reasons"
+        reasons = candidate["career_reasons"]
+    fields.append((reason_label, ", ".join(str(reason) for reason in reasons)))
+    return fields
+
+
+def markdown_candidate(candidate: Candidate, idx: int) -> str:
+    """Render one paid or strategic candidate for the GitHub queue issue."""
+    heading = (
+        f"#### {idx}. [{markdown_label(candidate.get('repo'))} #{candidate['issue_number']}]"
+        f"({github_report_ref(candidate['url'])}): {markdown_label(candidate.get('title'))}"
+    )
+    details = "\n".join(
+        f"- **{label}:** {value}" for label, value in _candidate_detail_fields(candidate)
+    )
+    return f"{heading}\n{details}\n\n"
 
 
 def notification_candidate(candidate: Candidate, idx: int) -> list[str]:
-    """Render one concise notification entry."""
+    """Render one concise plain-text notification entry."""
     title = str(candidate["title"] or "")
     if len(title) > 100:
         title = title[:97] + "..."
-    lines = [f"{idx}. {candidate['repo']} #{candidate['issue_number']} — {title}"]
-    if candidate["paid"]:
-        lines.append(
-            f"   • paid bounty | reward: {candidate['reward'] or 'unknown'} | "
-            f"cash: {candidate['cash_score']}/100"
-        )
-    else:
-        lines.append(
-            f"   • strategic OSS | career: {candidate['career_score']}/100 | "
-            f"priority: {candidate['priority_score']}/100"
-        )
-    lines.extend(
-        [
-            f"   • {candidate['effort']} | competition: {candidate['competition']}",
-            f"   • {candidate['url']}",
-        ]
+
+    score_line = (
+        f"   • paid bounty | reward: {candidate['reward'] or 'unknown'} | "
+        f"cash: {candidate['cash_score']}/100"
+        if candidate["paid"]
+        else f"   • strategic OSS | career: {candidate['career_score']}/100 | "
+        f"priority: {candidate['priority_score']}/100"
     )
-    return lines
+    return [
+        f"{idx}. {candidate['repo']} #{candidate['issue_number']} — {title}",
+        score_line,
+        f"   • {candidate['effort']} | competition: {candidate['competition']}",
+        f"   • {candidate['url']}",
+    ]
 
 
 def notification_message(
@@ -142,23 +168,23 @@ def notification_message(
     max_chars: int = 1900,
 ) -> str:
     """Render a notification that stays within the stricter Discord text budget."""
-    header = f"🎯 OSS Opportunity Queue ({now})\n\n"
+    message = f"🎯 OSS Opportunity Queue ({now})\n\n"
     if warning:
-        header += f"⚠️ {warning}\n\n"
-    parts: list[str] = []
-    omitted = 0
+        message += f"⚠️ {warning}\n\n"
 
+    accepted: list[str] = []
+    accepted_length = 0
+    omitted = 0
     for idx, candidate in enumerate(queue, 1):
         block = "\n".join(notification_candidate(candidate, idx)) + "\n\n"
-        remaining = len(queue) - idx
-        proposed = header + "".join(parts) + block
-        if len(proposed) <= max_chars:
-            parts.append(block)
+        if len(message) + accepted_length + len(block) <= max_chars:
+            accepted.append(block)
+            accepted_length += len(block)
             continue
-        omitted = remaining + 1
+        omitted = len(queue) - idx + 1
         break
 
-    message = header + "".join(parts)
+    message += "".join(accepted)
     if omitted:
         suffix = f"… {omitted} more ranked candidate(s) omitted from this notification."
         room = max_chars - len(suffix) - 1
@@ -167,19 +193,25 @@ def notification_message(
 
 
 def _reason_summary(counts: Mapping[str, int], *, limit: int = 6) -> str:
-    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
-    return "; ".join(f"{reason} ×{count}" for reason, count in ordered[:limit])
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return "; ".join(f"{reason} ×{count}" for reason, count in ranked[:limit])
 
 
 def rejection_summary(
     paid_rejects: Mapping[str, int],
     strategic_rejects: Mapping[str, int],
 ) -> dict[str, int]:
-    """Combine paid/strategic reject counts for reporting."""
-    combined = dict(paid_rejects)
-    for reason, count in strategic_rejects.items():
-        combined[reason] = combined.get(reason, 0) + count
-    return combined
+    """Combine paid and strategic rejection counts for report assembly."""
+    combined = Counter(paid_rejects)
+    combined.update(strategic_rejects)
+    return dict(combined)
+
+
+def _linked_record(item: RejectionRecord) -> str:
+    source = github_report_ref(item.get("url"))
+    title = markdown_label(item.get("title") or source)
+    reason = github_report_ref(item.get("reason"))
+    return f"- [{title}]({source}): {reason}"
 
 
 def markdown_examples(
@@ -188,24 +220,27 @@ def markdown_examples(
     *,
     limit: int = 12,
 ) -> str:
-    """Render linked reject/audit examples without creating source backlinks."""
+    """Render linked rejection or audit examples without creating source backlinks."""
     if not examples:
         return ""
-    lines = [f"### {heading}", ""]
-    for item in examples[:limit]:
-        source = github_report_ref(item.get("url"))
-        title = markdown_label(item.get("title") or source)
-        reason = github_report_ref(item.get("reason"))
-        lines.append(f"- [{title}]({source}): {reason}")
-    return "\n".join(lines) + "\n"
+    rows = [_linked_record(item) for item in examples[:limit]]
+    return "\n".join([f"### {heading}", "", *rows]) + "\n"
 
 
 def audit_summary(audit: Sequence[RejectionRecord]) -> str:
-    """Summarize recurring tuning signals before listing concrete examples."""
+    """Summarize recurring tuning signals before concrete examples."""
     if not audit:
         return ""
     counts = Counter(str(item.get("reason") or "unknown audit reason") for item in audit)
     return _reason_summary(counts)
+
+
+def _report_header(now: str) -> str:
+    return (
+        _REPORT_INTRO
+        + f"### Ranked OSS Opportunity Queue\n\n**Scan Time:** {now}\n\n"
+        + _REPORT_CONTEXT
+    )
 
 
 def github_report_body(
@@ -217,47 +252,32 @@ def github_report_body(
     reject_counts: Mapping[str, int] | None = None,
     coverage_warning: str | None = None,
 ) -> str:
-    """Render the full GitHub queue report."""
-    body = (
-        "<!-- opportunity-scout-report: automated; actionable: false -->\n"
-        "> [!IMPORTANT]\n"
-        "> **Automated OSS Opportunity Scout scan report — not a development task.**\n"
-        "> Do not claim this report or open a pull request to resolve it. "
-        "The linked source issues are the actual contributor opportunities.\n\n"
-        f"### Ranked OSS Opportunity Queue\n\n**Scan Time:** {now}\n\n"
-        "Paid candidates reuse OSS Opportunity Scout's existing payment/competition filters unchanged. "
-        "Strategic candidates are pre-ranked, then source-refreshed and checked for assignees, "
-        "claim comments, open implementation PRs, repository legitimacy, and contribution guidance. "
-        "For strategic work, career score measures long-term value while priority score applies "
-        "execution friction from effort and visible competition.\n\n"
-    )
-    if coverage_warning:
-        body += f"> [!WARNING]\n> {coverage_warning}\n\n"
+    """Render the complete GitHub queue report."""
+    sections = [_report_header(now)]
 
-    for idx, candidate in enumerate(queue, 1):
-        body += markdown_candidate(candidate, idx)
+    if coverage_warning:
+        sections.append(f"> [!WARNING]\n> {coverage_warning}\n\n")
+
+    sections.extend(markdown_candidate(candidate, idx) for idx, candidate in enumerate(queue, 1))
 
     if reject_counts:
-        total = sum(reject_counts.values())
-        body += "### Verification summary\n\n"
-        body += f"**Filtered candidates:** {total}\n\n"
-        body += f"**Top rejection reasons:** {_reason_summary(reject_counts)}\n\n"
+        sections.append(
+            "### Verification summary\n\n"
+            f"**Filtered candidates:** {sum(reject_counts.values())}\n\n"
+            f"**Top rejection reasons:** {_reason_summary(reject_counts)}\n\n"
+        )
 
-    body += markdown_examples("Verification rejects", verification_examples)
+    sections.append(markdown_examples("Verification rejects", verification_examples))
 
     if strategic_audit:
-        body += "\n### Potential scanner misses / tuning candidates\n\n"
-        body += f"**Audit summary:** {audit_summary(strategic_audit)}\n\n"
-        for item in strategic_audit[:12]:
-            source = github_report_ref(item.get("url"))
-            title = markdown_label(item.get("title") or source)
-            reason = github_report_ref(item.get("reason"))
-            body += f"- [{title}]({source}): {reason}\n"
+        sections.append("\n### Potential scanner misses / tuning candidates\n\n")
+        sections.append(f"**Audit summary:** {audit_summary(strategic_audit)}\n\n")
+        sections.extend(f"{_linked_record(item)}\n" for item in strategic_audit[:12])
 
-    return body
+    return "".join(sections)
 
 
 def github_report_title(queue_size: int) -> str:
     """Return the GitHub issue title for a queue run."""
-    suffix = "s" if queue_size != 1 else ""
-    return f"📊 SCAN REPORT — OSS Opportunity Queue: {queue_size} new verified candidate{suffix}"
+    candidate_word = "candidate" if queue_size == 1 else "candidates"
+    return f"📊 SCAN REPORT — OSS Opportunity Queue: {queue_size} new verified {candidate_word}"
