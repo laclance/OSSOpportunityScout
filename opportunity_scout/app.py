@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import os
 import re
 from collections.abc import Sequence
@@ -651,6 +652,215 @@ def strategic_rejection(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _VerificationSource:
+    issue: GitHubIssue
+    repository: str | None
+    wrapper: GitHubIssue | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _VerificationEvidence:
+    source: _VerificationSource
+    comments: list[GitHubComment] | None
+    timeline_events: list[Any] | None
+    payment_signal: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _VerifiedLane:
+    evidence: _VerificationEvidence
+    lane: CandidateLane
+    payment_signal: str | None
+    activity_comments: list[GitHubComment] | None
+
+
+@dataclass(frozen=True, slots=True)
+class _RepositoryContext:
+    metadata: RepositoryMetadata
+    guide: str | None
+
+
+def _resolve_verification_source(
+    item: GitHubIssue,
+    token: str | None,
+) -> tuple[_VerificationSource | None, str | None]:
+    fresh, reason = refresh_issue(item, token)
+    if reason:
+        return None, reason
+    if fresh is None:
+        return None, SourceFailureReason("could not refresh source issue")
+
+    upstream_url = upstream_wrapper_issue_url(fresh)
+    if not upstream_url:
+        repository, _ = github.issue_repo_and_number(fresh)
+        return _VerificationSource(fresh, repository), None
+
+    upstream = issue_from_github_url(upstream_url, token)
+    if upstream is None:
+        return None, SourceFailureReason("could not refresh upstream issue from aggregator wrapper")
+
+    upstream_fresh, reason = refresh_issue(upstream, token)
+    if reason:
+        if isinstance(reason, SourceFailureReason):
+            return None, SourceFailureReason(f"upstream source: {reason}")
+        return None, f"upstream source: {reason}"
+    if upstream_fresh is None:
+        return None, SourceFailureReason("could not refresh upstream issue from aggregator wrapper")
+
+    repository, _ = github.issue_repo_and_number(upstream_fresh)
+    return _VerificationSource(upstream_fresh, repository, wrapper=fresh), None
+
+
+def _source_eligibility_rejection(
+    source: _VerificationSource,
+    require_paid: bool,
+    scout_preferences: preferences.ScoutPreferences,
+) -> str | None:
+    if selection.repository_excluded(source.repository, scout_preferences):
+        return "repository excluded by configuration"
+
+    clean = (
+        paid.is_clean_candidate(source.issue)
+        if require_paid
+        else strategic_basic_candidate(source.issue)
+    )
+    if not clean:
+        return "failed basic eligibility filter after source refresh"
+
+    return reward_history_reason(source.issue)
+
+
+def _hydrate_verification_evidence(
+    source: _VerificationSource,
+    token: str | None,
+    require_paid: bool,
+    payment_signal_override: str | None,
+    activity_comments: list[GitHubComment] | None,
+) -> tuple[_VerificationEvidence | None, str | None]:
+    comments = activity_comments
+    timeline_events: list[Any] | None = None
+    issue_signal = paid.payment_signal(source.issue) or supplemental_payment_signal(source.issue)
+    comment_signal = None
+
+    if not issue_signal and int(source.issue.get("comments") or 0):
+        if comments is None and not require_paid:
+            comments, timeline_events = _strategic_timeline_evidence(source.issue, token)
+        if comments is None:
+            comments, comments_reason = github.issue_comments_checked(source.issue, token)
+            if comments_reason:
+                return None, comments_reason
+        comment_signal = comment_payment_signal(source.issue, token, comments)
+
+    return (
+        _VerificationEvidence(
+            source=source,
+            comments=comments,
+            timeline_events=timeline_events,
+            payment_signal=issue_signal or comment_signal or payment_signal_override,
+        ),
+        None,
+    )
+
+
+def _verify_paid_evidence(
+    evidence: _VerificationEvidence,
+    token: str | None,
+) -> tuple[_VerifiedLane | None, str | None]:
+    issue = evidence.source.issue
+    issue_author_claim = strategic_claim_reason(issue, [])
+    if issue_author_claim:
+        return None, issue_author_claim
+
+    reason, verified_issue_signal = paid_verification.candidate_rejection_reason(
+        issue,
+        token,
+    )
+    if reason and reason != "no explicit payment signal":
+        return None, reason
+
+    signal = verified_issue_signal or evidence.payment_signal
+    if not signal:
+        return None, "no explicit payment signal"
+
+    if reason == "no explicit payment signal":
+        competition_reason = extended_competition_reason(issue, token, evidence.comments)
+        if competition_reason:
+            return None, competition_reason
+
+    return _VerifiedLane(evidence, "paid", signal, None), None
+
+
+def _verify_strategic_evidence(
+    evidence: _VerificationEvidence,
+    token: str | None,
+) -> tuple[_VerifiedLane | None, str | None]:
+    comments = evidence.comments
+    if comments is None:
+        comments, comments_reason = github.issue_comments_checked(evidence.source.issue, token)
+        if comments_reason:
+            return None, comments_reason
+
+    if evidence.timeline_events is None:
+        reason = strategic_rejection(evidence.source.issue, token, comments)
+    else:
+        reason = strategic_rejection(
+            evidence.source.issue,
+            token,
+            comments,
+            timeline_events=evidence.timeline_events,
+        )
+    if reason:
+        return None, reason
+
+    return _VerifiedLane(evidence, "strategic", evidence.payment_signal, comments), None
+
+
+def _resolve_verification_lane(
+    evidence: _VerificationEvidence,
+    token: str | None,
+    require_paid: bool,
+) -> tuple[_VerifiedLane | None, str | None]:
+    if require_paid or evidence.payment_signal:
+        return _verify_paid_evidence(evidence, token)
+    return _verify_strategic_evidence(evidence, token)
+
+
+def _load_candidate_repository_context(
+    verified: _VerifiedLane,
+    token: str | None,
+    repo_cache: dict[str, RepositoryMetadata],
+    guide_cache: dict[str, str | None],
+    scout_preferences: preferences.ScoutPreferences,
+) -> tuple[_RepositoryContext | None, str | None]:
+    repository = verified.evidence.source.repository
+    if repository is None:
+        return None, "could not identify repository/issue number"
+
+    metadata = github.cached_value(
+        repo_cache,
+        repository,
+        lambda: fetch_repo_metadata(repository, token),
+        CACHE_LOCKS,
+        namespace="repo",
+    )
+    if not metadata:
+        return None, SourceFailureReason("repository metadata unavailable")
+    if metadata.get("archived"):
+        return None, "repository is archived"
+    if not selection.language_accepted(metadata.get("language"), scout_preferences):
+        return None, "repository language excluded by configuration"
+
+    guide = github.cached_value(
+        guide_cache,
+        repository,
+        lambda: contribution_guide(repository, token),
+        CACHE_LOCKS,
+        namespace="guide",
+    )
+    return _RepositoryContext(metadata, guide), None
+
+
 def verify(
     item: GitHubIssue,
     token: str | None,
@@ -662,136 +872,56 @@ def verify(
     *,
     scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[Candidate | None, str | None]:
-    fresh, reason = refresh_issue(item, token)
+    source, reason = _resolve_verification_source(item, token)
     if reason:
         return None, reason
-    if fresh is None:
-        return None, SourceFailureReason("could not refresh source issue")
+    assert source is not None
 
-    upstream_url = upstream_wrapper_issue_url(fresh)
-    if upstream_url:
-        upstream = issue_from_github_url(upstream_url, token)
-        if upstream is None:
-            return None, SourceFailureReason(
-                "could not refresh upstream issue from aggregator wrapper"
-            )
-        fresh, reason = refresh_issue(upstream, token)
-        if reason:
-            if isinstance(reason, SourceFailureReason):
-                return None, SourceFailureReason(f"upstream source: {reason}")
-            return None, f"upstream source: {reason}"
-        if fresh is None:
-            return None, SourceFailureReason(
-                "could not refresh upstream issue from aggregator wrapper"
-            )
+    reason = _source_eligibility_rejection(source, require_paid, scout_preferences)
+    if reason:
+        return None, reason
 
-    repo, _ = github.issue_repo_and_number(fresh)
-    if selection.repository_excluded(repo, scout_preferences):
-        return None, "repository excluded by configuration"
+    evidence, reason = _hydrate_verification_evidence(
+        source,
+        token,
+        require_paid,
+        payment_signal_override,
+        activity_comments,
+    )
+    if reason:
+        return None, reason
+    assert evidence is not None
 
-    clean = paid.is_clean_candidate(fresh) if require_paid else strategic_basic_candidate(fresh)
-    if not clean:
-        return None, "failed basic eligibility filter after source refresh"
+    verified, reason = _resolve_verification_lane(evidence, token, require_paid)
+    if reason:
+        return None, reason
+    assert verified is not None
 
-    reward_history = reward_history_reason(fresh)
-    if reward_history:
-        return None, reward_history
-
-    comments = activity_comments
-    timeline_events: list[Any] | None = None
-    issue_signal = paid.payment_signal(fresh) or supplemental_payment_signal(fresh)
-    comment_signal = None
-    if not issue_signal and int(fresh.get("comments") or 0):
-        if comments is None:
-            if not require_paid:
-                comments, timeline_events = _strategic_timeline_evidence(fresh, token)
-            if comments is None:
-                comments, comments_reason = github.issue_comments_checked(fresh, token)
-                if comments_reason:
-                    return None, comments_reason
-        comment_signal = comment_payment_signal(fresh, token, comments)
-    signal = issue_signal or comment_signal or payment_signal_override
-
-    lane: CandidateLane
-    if require_paid or signal:
-        issue_author_claim = strategic_claim_reason(fresh, [])
-        if issue_author_claim:
-            return None, issue_author_claim
-
-        reason, verified_issue_signal = paid_verification.candidate_rejection_reason(
-            fresh,
-            token,
-        )
-        if reason and reason != "no explicit payment signal":
-            return None, reason
-
-        if verified_issue_signal:
-            signal = verified_issue_signal
-
-        if not signal:
-            return None, "no explicit payment signal"
-
-        # The upstream verifier stops before competition checks when payment is
-        # only present in comments/platform feeds, so finish those checks here.
-        if reason == "no explicit payment signal":
-            repo, number = github.issue_repo_and_number(fresh)
-            competition_reason = extended_competition_reason(fresh, token, comments)
-            if competition_reason:
-                return None, competition_reason
-
-        lane = "paid"
-    else:
-        if comments is None:
-            comments, comments_reason = github.issue_comments_checked(fresh, token)
-            if comments_reason:
-                return None, comments_reason
-        if timeline_events is None:
-            reason = strategic_rejection(fresh, token, comments)
-        else:
-            reason = strategic_rejection(
-                fresh,
-                token,
-                comments,
-                timeline_events=timeline_events,
-            )
-        if reason:
-            return None, reason
-        lane = "strategic"
-
-    if not (scout_preferences.paid if lane == "paid" else scout_preferences.strategic):
+    lane_enabled = (
+        scout_preferences.paid if verified.lane == "paid" else scout_preferences.strategic
+    )
+    if not lane_enabled:
         return None, "final candidate lane disabled by configuration"
 
-    repo, _ = github.issue_repo_and_number(fresh)
-    if repo is None:
-        return None, "could not identify repository/issue number"
-    repo_meta = github.cached_value(
+    repository_context, reason = _load_candidate_repository_context(
+        verified,
+        token,
         repo_cache,
-        repo,
-        lambda: fetch_repo_metadata(repo, token),
-        CACHE_LOCKS,
-        namespace="repo",
-    )
-    if not repo_meta:
-        return None, SourceFailureReason("repository metadata unavailable")
-    if repo_meta.get("archived"):
-        return None, "repository is archived"
-    if not selection.language_accepted(repo_meta.get("language"), scout_preferences):
-        return None, "repository language excluded by configuration"
-    guide = github.cached_value(
         guide_cache,
-        repo,
-        lambda: contribution_guide(repo, token),
-        CACHE_LOCKS,
-        namespace="guide",
+        scout_preferences,
     )
+    if reason:
+        return None, reason
+    assert repository_context is not None
+
     return (
         build_candidate(
-            fresh,
-            lane,
-            signal,
-            repo_meta,
-            guide,
-            comments if lane == "strategic" else None,
+            verified.evidence.source.issue,
+            verified.lane,
+            verified.payment_signal,
+            repository_context.metadata,
+            repository_context.guide,
+            verified.activity_comments,
         ),
         None,
     )
