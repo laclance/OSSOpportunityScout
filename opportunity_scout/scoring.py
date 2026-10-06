@@ -220,7 +220,9 @@ def documentation_microfix(item: GitHubIssue) -> bool:
         or body_micro
     )
     return bool(
-        bounded and not _DOC_IMPLEMENTATION_RE.search(evidence.text) and evidence.file_refs == 0
+        bounded
+        and not _DOC_IMPLEMENTATION_RE.search(evidence.text)
+        and evidence.file_refs == 0
     )
 
 
@@ -353,7 +355,10 @@ def estimate_effort_details(
         or evidence.feature_signal
         or len(evidence.prose) > 6500
         or (platform_label and missing_reproduction)
-        or (re.search(r"\bsuggested fix(?:es)?\b", evidence.text) and suggested_fix_bullets >= 3)
+        or (
+            re.search(r"\bsuggested fix(?:es)?\b", evidence.text)
+            and suggested_fix_bullets >= 3
+        )
     )
     if broader:
         reasons: list[str] = []
@@ -397,11 +402,7 @@ def estimate_effort_details(
         )
     )
     if (localized_todo or bounded_bug) and len(evidence.prose) < 4500 and evidence.file_refs <= 2:
-        reason = (
-            "localized TODO/code-path change"
-            if localized_todo
-            else "bounded deterministic bug signal"
-        )
+        reason = "localized TODO/code-path change" if localized_todo else "bounded deterministic bug signal"
         return EffortEstimate("1–3h", (reason,))
 
     return EffortEstimate("3–6h", ("moderate implementation scope",))
@@ -587,7 +588,7 @@ def _assess_payment(
     else:
         hourly = amount / effort_hours(effort)
         score_parts.extend((_amount_points(amount), _hourly_points(hourly)))
-        reasons.append(f"~${hourly:.0f}/h expected value")
+        reasons.append(f"~\${hourly:.0f}/h expected value")
 
     score_parts.append({"none": 15, "low": 11, "medium": 6, "high": 0}[competition_level])
     if stars >= 1000:
