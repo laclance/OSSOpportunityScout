@@ -94,13 +94,26 @@ class ExistingImplementationPrTests(unittest.TestCase):
             )
         )
 
-        timeline[0]["source"]["issue"]["body"] = None  # type: ignore[index]
         self.assertIsNone(
             paid_verification.has_existing_implementation_pr(
                 "acme/widget",
                 42,
                 "tok",
-                fetch_json=lambda *_: timeline,
+                fetch_json=lambda *_: [
+                    {
+                        "event": "cross-referenced",
+                        "source": {
+                            "issue": {
+                                "pull_request": {},
+                                "state": "open",
+                                "html_url": "https://github.com/other/app/pull/8",
+                                "repository_url": "https://api.github.com/repos/other/app",
+                                "title": "Document widget dependency",
+                                "body": None,
+                            }
+                        },
+                    }
+                ],
             )
         )
 
