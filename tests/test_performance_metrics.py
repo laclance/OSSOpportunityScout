@@ -70,9 +70,7 @@ class GitHubRequestStatsTests(unittest.TestCase):
             patch.object(time, "sleep"),
         ):
             self.assertEqual(
-                github.github_get(
-                    "https://api.github.com/repos/example/project/issues/1"
-                ),
+                github.github_get("https://api.github.com/repos/example/project/issues/1"),
                 {"ok": True},
             )
 
