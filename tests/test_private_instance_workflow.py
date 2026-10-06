@@ -15,6 +15,7 @@ from tests.workflow_references import validate_workflow_references
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
+DEPENDABOT_EXAMPLE = ROOT / "examples" / "private-instance" / "dependabot.yml"
 ACTION = ROOT / "action.yml"
 
 APPROVED_DISTRIBUTED_SCANNER_SHA = "ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0"
@@ -38,6 +39,26 @@ def shell_step(
 
 
 class PrivateInstanceContractTests(unittest.TestCase):
+    def test_optional_dependabot_config_only_updates_the_scanner_action(self) -> None:
+        config = document(DEPENDABOT_EXAMPLE)
+        self.assertEqual(config["version"], 2)
+        self.assertEqual(len(config["updates"]), 1)
+        update = config["updates"][0]
+        self.assertEqual(update["package-ecosystem"], "github-actions")
+        self.assertEqual(update["directory"], "/")
+        self.assertEqual(update["schedule"], {"interval": "weekly"})
+        self.assertEqual(
+            update["allow"],
+            [{"dependency-name": "laclance/OSSOpportunityScout"}],
+        )
+        self.assertNotIn("groups", update)
+
+        template_text = TEMPLATE.read_text(encoding="utf-8")
+        self.assertNotIn("dependabot", template_text.lower())
+        scanner = document(TEMPLATE)["jobs"]["scout"]["steps"][4]["uses"]
+        self.assertRegex(scanner, r"^laclance/OSSOpportunityScout@[0-9a-f]{40}$")
+        self.assertNotIn("@main", scanner)
+
     def test_parsed_workflow_ownership_permissions_serialization_and_pins(self) -> None:
         workflow = document(TEMPLATE)
         validate_workflow_references(workflow)
