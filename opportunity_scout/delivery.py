@@ -22,15 +22,13 @@ class _JsonRequest:
     endpoint: str
     method: str
     headers: Mapping[str, str]
-    payload: Mapping[str, object] | None
+    payload: Mapping[str, object]
     timeout: int
 
     def materialize(self) -> urllib.request.Request:
         headers = dict(self.headers)
-        body: bytes | None = None
-        if self.payload is not None:
-            headers["Content-Type"] = "application/json"
-            body = json.dumps(self.payload).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(self.payload).encode("utf-8")
         return urllib.request.Request(
             self.endpoint,
             data=body,
@@ -107,7 +105,7 @@ def _github_request(
     token: str,
     *,
     method: str,
-    payload: Mapping[str, object] | None,
+    payload: Mapping[str, object],
 ) -> _JsonRequest:
     return _JsonRequest(
         endpoint=endpoint,
@@ -170,20 +168,13 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
 
 
 def _private_repository_verified(repo_fullname: str, token: str) -> bool:
-    metadata = _perform(
-        _github_request(
-            f"https://api.github.com/repos/{repo_fullname}",
-            token,
-            method="GET",
-            payload=None,
-        )
+    repository = github.github_get(
+        f"https://api.github.com/repos/{repo_fullname}",
+        token,
+        timeout=GITHUB_TIMEOUT_SECONDS,
+        log_errors=False,
     )
-    if not metadata.succeeded:
-        print("Failed to verify private GitHub report destination.")
-        return False
-
-    repository = _decode_object(metadata.body)
-    if repository is None:
+    if not isinstance(repository, dict):
         print("Failed to verify private GitHub report destination.")
         return False
     if repository.get("private") is not True:
