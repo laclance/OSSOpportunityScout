@@ -216,17 +216,32 @@ class BasicHeuristicTests(unittest.TestCase):
         fetch.assert_called_once_with("example/project", "t")
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class HttpAndPlatformTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_github_get_optional_success_failure_and_auth(self) -> None:
         with patch.object(
             urllib.request,
             "urlopen",
             return_value=FakeResponse(b'{"html_url":"x"}'),
         ) as opened:
-            self.assertEqual(scout.github_get_optional("https://x", "tok"), {"html_url": "x"})
+            self.assertEqual(
+                scout.github_get_optional("https://api.github.com/x", "tok"), {"html_url": "x"}
+            )
             self.assertEqual(opened.call_args.args[0].headers["Authorization"], "Bearer tok")
         with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
-            self.assertIsNone(scout.github_get_optional("https://x", None))
+            self.assertIsNone(scout.github_get_optional("https://api.github.com/x", None))
 
     def test_issue_comments_paths(self) -> None:
         self.assertEqual(scout.issue_comments({"html_url": "bad", "comments": 2}, "t"), [])
