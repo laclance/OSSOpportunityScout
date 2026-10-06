@@ -25,10 +25,12 @@ make setup
 1. Start ordinary work from the latest `dev`.
 2. Create a focused topic branch.
 3. Open the pull request against `dev`.
-4. Require green CI and resolved review threads.
+4. Require green CI, the required approval/CODEOWNER review, and resolved review threads.
 5. Squash-merge the focused pull request into `dev`.
-6. Promote accumulated reviewed work from `dev` to `main` through a dedicated `dev → main` pull request using a merge commit.
+6. Promote accumulated reviewed work from `dev` to `main` through a dedicated `dev → main` pull request. The same CI, approval/CODEOWNER, and review-thread requirements apply; use a merge commit.
 7. Do not use `main` as an ordinary feature-branch target.
+
+All paths are currently owned by `@laclance`. GitHub does not allow a pull-request author to satisfy their own required approval. For a pull request authored by `@laclance`, the configured administrator PR-only bypass may be used only after required CI has passed and the change has been reviewed. It does not permit direct pushes or skipping the pull-request or CI process.
 
 ## Before changing code
 
