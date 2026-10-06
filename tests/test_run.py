@@ -828,11 +828,16 @@ class RunLifecycleTests(unittest.TestCase):
 
         self.assertTrue(result.delivery.delivered)
         self.assertEqual(result.queue, (delivered,))
-        self.assertEqual(result.coverage.verification_failures, 1)
-        self.assertFalse(result.coverage.complete)
-        self.assertFalse(result.state_saved)
+        self.assertEqual(
+            (
+                result.coverage.verification_failures,
+                result.coverage.complete,
+                result.state_saved,
+                save.call_count,
+            ),
+            (1, False, False, 0),
+        )
         maintain.assert_not_called()
-        save.assert_not_called()
 
     def test_platform_discovery_failure_can_deliver_but_never_advances_state(
         self,
