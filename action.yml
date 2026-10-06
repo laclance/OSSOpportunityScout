@@ -1,5 +1,8 @@
 name: OSS Opportunity Scout
 description: Run pinned scanner source with explicit instance-owned config, state, and credentials
+branding:
+  icon: search
+  color: orange
 inputs:
   config-path:
     description: Explicit version-1 TOML path, relative to the caller workspace or absolute
