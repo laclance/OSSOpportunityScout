@@ -1200,24 +1200,26 @@ class ScoringRegressionTests(unittest.TestCase):
                 self.assertEqual(result["cash_score"], expected_cash)
 
     def test_technical_depth_preserves_three_signal_score_step(self) -> None:
-        common = {
-            "lane": "strategic",
-            "signal": None,
-            "repo_meta": repo_meta(stargazers_count=0),
-            "guide": None,
-            "target_repos": set(),
-            "amount_pattern": AMOUNT_RE,
-        }
         shallow = scoring.build_candidate(
             issue(title="Storage regression", body="Storage regression."),
-            **common,
+            "strategic",
+            None,
+            repo_meta(stargazers_count=0),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
         )
         deep = scoring.build_candidate(
             issue(
                 title="Storage performance memory regression",
                 body="Storage performance memory regression.",
             ),
-            **common,
+            "strategic",
+            None,
+            repo_meta(stargazers_count=0),
+            None,
+            target_repos=set(),
+            amount_pattern=AMOUNT_RE,
         )
         self.assertEqual(deep["career_score"] - shallow["career_score"], 6)
         self.assertIn("meaningful technical depth", deep["career_reasons"])
