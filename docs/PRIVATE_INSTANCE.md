@@ -1,7 +1,8 @@
 # Private instance execution template
 
-The public [composite action](../action.yml) and generic, manual-only
-[private workflow template](../examples/private-instance/scout.yml) are distribution
+The public [composite action](../action.yml), generic
+[private workflow template](../examples/private-instance/scout.yml), and optional
+[Dependabot example](../examples/private-instance/dependabot.yml) are distribution
 assets for independent private instances; they do not create an instance or migrate
 history. Local scans require `scout.toml` in the working directory or explicit
 `--config PATH`. See the
@@ -26,8 +27,37 @@ When scanner behavior is promoted to `main` and becomes the new reviewed deploym
 baseline, update the distributed template pin and its approval regression in the same
 maintenance cycle. Do not advance the scanner pin for documentation, CI, governance,
 or Marketplace-only `main` commits that leave scanner behavior unchanged.
-Changing the scanner pin is an instance-owned deployment change; a release may
-identify a candidate SHA, but the instance owner decides whether to adopt it.
+Changing the scanner pin is an instance-owned deployment change; the instance owner
+decides whether to adopt each reviewed baseline.
+
+There are two supported maintenance modes:
+
+1. **Manual (default):** keep only the workflow template and replace its scanner SHA
+   deliberately when the operator chooses to adopt a reviewed baseline. No Dependabot
+   configuration is required.
+2. **Optional Dependabot-managed PRs:** copy
+   `examples/private-instance/dependabot.yml` to `.github/dependabot.yml` in the
+   private instance. The example allows updates only for `laclance/OSSOpportunityScout`;
+   checkout, setup-python, upload-artifact, and other Actions remain outside this
+   Dependabot update rule. Dependabot opens an update PR; normal review, CI, and human
+   merge remain required. The resulting workflow still executes a full 40-character
+   SHA, never `@main` or another moving ref.
+
+Dependabot resolves GitHub Action versions from git tags. If an Action is pinned to
+an untagged commit, GitHub documents that Dependabot can advance it to the action
+repository's latest commit, which is broader than this project's reviewed-runtime-
+baseline policy. Therefore the optional mode uses immutable SemVer tags only as
+**release signals**: each approved scanner runtime baseline may receive the next
+version tag, and that tag must point exactly to the reviewed runtime commit. Do not
+tag documentation, governance, CI, Marketplace, or distribution-only commits as
+scanner baselines. The private workflow never executes the tag itself; Dependabot
+resolves the tagged release to a new immutable SHA in its PR.
+
+The current reviewed scanner baseline is
+`ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0`. Before enabling the optional example
+for this baseline, publish the initial scanner release tag `v1.0.0` on exactly that
+commit. Creating or pushing release tags is a separate maintainer-authorized release
+action, not something the runtime workflow performs automatically.
 
 The action executes `opportunity_scout.py` and its package from `github.action_path`,
 using isolated Python 3.12 with that source directory explicitly inserted into the

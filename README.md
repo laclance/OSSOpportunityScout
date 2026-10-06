@@ -78,8 +78,11 @@ Complete discovery and verification coverage is required before seen-state advan
 
 For the generic private deployment assets, see the [private instance guide](docs/PRIVATE_INSTANCE.md).
 The caller owns configuration, state/history, triggers, concurrency, credentials,
-delivery, and the full scanner SHA pin. Read its recovery procedure before rerunning
-a transaction whose delivery may have succeeded but persistence failed.
+delivery, and the full scanner SHA pin. Scanner-pin maintenance is manual by default;
+operators may optionally copy the narrow Dependabot example to receive reviewed
+update PRs while the workflow itself continues executing an immutable full SHA.
+Read the recovery procedure before rerunning a transaction whose delivery may have
+succeeded but persistence failed.
 
 Upstream workflows use no deployment secrets and own no production scout or runtime state.
 Private instances own execution and persistence. Historical state is retained in
