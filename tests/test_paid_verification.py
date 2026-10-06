@@ -206,6 +206,43 @@ class ExistingImplementationPrTests(unittest.TestCase):
             "existing open implementation PR: https://github.com/prometheus/common/pull/1008",
         )
 
+    def test_downstream_pr_reference_to_upstream_proposal_is_not_implementation(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": (
+                            "https://github.com/netobserv/flowlogs-pipeline/pull/1247"
+                        ),
+                        "repository_url": (
+                            "https://api.github.com/repos/netobserv/flowlogs-pipeline"
+                        ),
+                        "title": (
+                            "[DRAFT] NETOBSERV-2284 FLP metrics cache optimization "
+                            "(TTL registry)"
+                        ),
+                        "body": (
+                            "Implement TTL support for metrics. See upstream proposal: "
+                            "https://github.com/prometheus/client_golang/issues/1983\n\n"
+                            "Alternative of "
+                            "https://github.com/netobserv/flowlogs-pipeline/pull/1243"
+                        ),
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "prometheus/client_golang",
+                1983,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            )
+        )
+
     def test_incomplete_open_pr_source_fails_closed(self) -> None:
         malformed_sources = (
             {
