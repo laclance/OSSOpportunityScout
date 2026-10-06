@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from time import sleep
+from time import monotonic, sleep
 from typing import Any, cast
 
 from opportunity_scout import (
@@ -96,6 +96,29 @@ EXTENDED_AMOUNT_RE = (
 
 PLATFORM_FETCH_LIMIT = 20
 ISSUEHUNT_PAGES = 2
+
+
+def _print_performance_phase(
+    phase: str,
+    started: float,
+    request_start: github.GitHubRequestStats,
+    *,
+    platform_request_start: int | None = None,
+) -> None:
+    request_stats = github.request_stats_delta(
+        request_start,
+        github.request_stats_snapshot(),
+    )
+    platform_detail = (
+        ""
+        if platform_request_start is None
+        else " platform_requests="
+        f"{sources.platform_request_count_snapshot() - platform_request_start}"
+    )
+    print(
+        f"Scout performance: phase={phase} seconds={monotonic() - started:.1f} "
+        f"{github.format_request_stats(request_stats)}{platform_detail}"
+    )
 
 
 def target_repo_issue_pool(
@@ -771,7 +794,16 @@ def discover_paid(
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Fetch their source issues concurrently, then
     # apply the same source-authoritative verification as direct discoveries.
+    platform_discovery_started = monotonic()
+    platform_discovery_requests = github.request_stats_snapshot()
+    platform_request_start = sources.platform_request_count_snapshot()
     platform_result = platform_paid_refs()
+    _print_performance_phase(
+        "paid_platform_discovery",
+        platform_discovery_started,
+        platform_discovery_requests,
+        platform_request_start=platform_request_start,
+    )
     for failure in platform_result.failures:
         add_reject(
             rejected,
@@ -793,6 +825,8 @@ def discover_paid(
         touched.add(source_url)
         platform_sources.append((source_url, platform_signal))
 
+    platform_hydration_started = monotonic()
+    platform_hydration_requests = github.request_stats_snapshot()
     with ThreadPoolExecutor(
         max_workers=min(NETWORK_WORKERS, max(1, len(platform_sources)))
     ) as executor:
@@ -802,6 +836,11 @@ def discover_paid(
                 platform_sources,
             )
         )
+    _print_performance_phase(
+        "paid_platform_hydration",
+        platform_hydration_started,
+        platform_hydration_requests,
+    )
 
     for (source_url, platform_signal), (platform_item, source_failure) in zip(
         platform_sources,
@@ -842,8 +881,15 @@ def discover_paid(
             ),
         )
 
+    paid_verification_started = monotonic()
+    paid_verification_requests = github.request_stats_snapshot()
     with ThreadPoolExecutor(max_workers=min(NETWORK_WORKERS, max(1, len(pending)))) as executor:
         verification_results = list(executor.map(verify_paid, pending))
+    _print_performance_phase(
+        "paid_verification",
+        paid_verification_started,
+        paid_verification_requests,
+    )
 
     for (item, _, is_platform), (candidate, reason) in verification_results:
         url = str(item.get("html_url") or "")
@@ -968,6 +1014,8 @@ def discover_strategic(
     elif global_search_results is None:
         global_search_results = strategic_global_search_results(token)
 
+    strategic_discovery_started = monotonic()
+    strategic_discovery_requests = github.request_stats_snapshot()
     discovery_selection = strategic_discovery.select_strategic_candidates(
         token,
         seen,
@@ -991,6 +1039,11 @@ def discover_strategic(
             or selection.language_accepted(meta.get("language"), scout_preferences)
         ),
     )
+    _print_performance_phase(
+        "strategic_discovery",
+        strategic_discovery_started,
+        strategic_discovery_requests,
+    )
 
     def deep_verify(item: GitHubIssue) -> tuple[Candidate | None, str | None]:
         candidate, reason = verify(
@@ -1002,6 +1055,8 @@ def discover_strategic(
                 candidate = None
         return candidate, reason
 
+    strategic_verification_started = monotonic()
+    strategic_verification_requests = github.request_stats_snapshot()
     result = strategic_verification.verify_strategic_selection(
         discovery_selection,
         deep_verify,
@@ -1013,6 +1068,11 @@ def discover_strategic(
         min_cash_score=scout_preferences.min_cash_score,
         verify_workers=STRATEGIC_VERIFY_WORKERS,
         audit_limit=STRATEGIC_AUDIT_LIMIT,
+    )
+    _print_performance_phase(
+        "strategic_verification",
+        strategic_verification_started,
+        strategic_verification_requests,
     )
     return result.candidates, result.rejected, result.examples, result.audit
 

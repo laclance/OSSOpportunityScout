@@ -11,6 +11,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from threading import Lock
 from typing import Any, Callable, Sequence, cast
 
 from opportunity_scout import github
@@ -41,6 +42,21 @@ class PlatformDiscoveryResult:
 FetchText = Callable[[str], TextFetchResult]
 PlatformLoader = tuple[str, Callable[[], PlatformDiscoveryResult]]
 IssuePredicate = Callable[[GitHubIssue], bool]
+
+_PLATFORM_REQUEST_LOCK = Lock()
+_PLATFORM_REQUEST_COUNT = 0
+
+
+def platform_request_count_snapshot() -> int:
+    """Return the number of outbound official-platform HTTP attempts so far."""
+    with _PLATFORM_REQUEST_LOCK:
+        return _PLATFORM_REQUEST_COUNT
+
+
+def _record_platform_request() -> None:
+    global _PLATFORM_REQUEST_COUNT
+    with _PLATFORM_REQUEST_LOCK:
+        _PLATFORM_REQUEST_COUNT += 1
 
 
 def _platform_failure(platform: str) -> DiscoveryFailureReason:
@@ -98,6 +114,7 @@ def github_get_optional(url: str, token: str | None) -> Any:
 
 def fetch_text(url: str, timeout: int = 12) -> TextFetchResult:
     """Fetch public HTML while preserving transport-failure identity."""
+    _record_platform_request()
     headers = {"User-Agent": "OSSOpportunityScout"}
     try:
         request = urllib.request.Request(url, headers=headers)
