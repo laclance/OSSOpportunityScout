@@ -16,8 +16,10 @@ For deployment/configuration/state-ownership work, additionally read [docs/PRIVA
 
 - Ordinary work starts from the latest `dev`, uses a focused topic branch, and targets `dev`.
 - Never open a topic-branch pull request directly to `main`.
-- A `dev → main` promotion pull request is the only normal path to `main`, and agents may open one only when explicitly requested.
+- Before merge, required CI must be green, review threads must be resolved, and the required approval/CODEOWNER policy must be respected.
 - Do not merge any pull request without explicit human authorization.
+- The administrator PR-only bypass is not general merge permission. For a maintainer-authored pull request, only the human maintainer may explicitly choose to use it after review and required CI.
+- A `dev → main` promotion pull request is the only normal path to `main`, and agents may open one only when explicitly requested.
 
 ## Project constraints
 
