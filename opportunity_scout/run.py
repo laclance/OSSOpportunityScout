@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum, auto
 from pathlib import Path
 from time import monotonic
 from typing import Final
@@ -132,6 +133,61 @@ class PostDeliveryStateSaveError(state.SeenStateSaveError):
     """Raised when delivery succeeded but local seen-state persistence did not."""
 
 
+@dataclass
+class _DiscoveryContext:
+    """Shared discovery identity and caches for both scanner lanes."""
+
+    seen_urls: set[str]
+    repository_metadata: dict[str, RepositoryMetadata]
+    contribution_guides: dict[str, str | None]
+
+
+@dataclass(frozen=True)
+class _PrefetchedSearches:
+    """Search batches reused by discovery instead of issuing duplicate searches."""
+
+    paid: list[SearchBatch] | None
+    strategic: list[SearchBatch] | None
+
+
+@dataclass(frozen=True)
+class _DiscoveryOutcome:
+    """Combined lane output before final preference filtering and queue ranking."""
+
+    paid: list[Candidate]
+    paid_rejects: dict[str, int]
+    paid_examples: list[RejectionRecord]
+    strategic: list[Candidate]
+    strategic_rejects: dict[str, int]
+    strategic_examples: list[RejectionRecord]
+    strategic_audit: list[RejectionRecord]
+
+
+@dataclass(frozen=True)
+class _RunPlan:
+    """Reportable result and coverage decision produced by discovery."""
+
+    queue: tuple[Candidate, ...]
+    coverage: CoverageStatus
+    rejects: dict[str, int]
+    paid_examples: tuple[RejectionRecord, ...]
+    strategic_examples: tuple[RejectionRecord, ...]
+    strategic_audit: tuple[RejectionRecord, ...]
+
+    @property
+    def requires_delivery(self) -> bool:
+        """A candidate queue or a coverage warning creates reportable output."""
+        return bool(self.queue) or self.coverage.warning is not None
+
+
+class _StateCommitMode(Enum):
+    """Allowed persistence transitions after discovery and delivery settle."""
+
+    NONE = auto()
+    MAINTENANCE = auto()
+    DELIVERED_QUEUE = auto()
+
+
 def assemble_queue(
     paid: list[Candidate],
     strategic: list[Candidate],
@@ -140,16 +196,21 @@ def assemble_queue(
 ) -> list[Candidate]:
     """Deduplicate by URL, keep only strictly higher priority, and rank the final queue."""
     by_url: dict[str, Candidate] = {}
-    for candidate in paid + strategic:
-        old = by_url.get(candidate["url"])
-        if not old or candidate["priority_score"] > old["priority_score"]:
-            by_url[candidate["url"]] = candidate
+    for candidates in (paid, strategic):
+        for candidate in candidates:
+            previous = by_url.get(candidate["url"])
+            if previous is None or candidate["priority_score"] > previous["priority_score"]:
+                by_url[candidate["url"]] = candidate
 
     return sorted(
         by_url.values(),
         key=sources.candidate_rank_key,
         reverse=True,
     )[:limit]
+
+
+def _semantic_failure_count(rejects: dict[str, int], failure_type: type[str]) -> int:
+    return sum(count for reason, count in rejects.items() if isinstance(reason, failure_type))
 
 
 def coverage_status(
@@ -161,19 +222,15 @@ def coverage_status(
 ) -> CoverageStatus:
     """Count semantically classified failures and apply independent warning thresholds."""
     paid_rejects = paid_rejects or {}
-    strategic_verification_failures = sum(
-        count
-        for reason, count in strategic_rejects.items()
-        if isinstance(reason, SourceFailureReason)
+    strategic_verification_failures = _semantic_failure_count(
+        strategic_rejects,
+        SourceFailureReason,
     )
-    paid_verification_failures = sum(
-        count for reason, count in paid_rejects.items() if isinstance(reason, SourceFailureReason)
-    )
+    paid_verification_failures = _semantic_failure_count(paid_rejects, SourceFailureReason)
     verification_failures = strategic_verification_failures + paid_verification_failures
-    discovery_failures = sum(
-        count
-        for reason, count in paid_rejects.items()
-        if isinstance(reason, DiscoveryFailureReason)
+    discovery_failures = _semantic_failure_count(
+        paid_rejects,
+        DiscoveryFailureReason,
     ) + sum(1 for item in strategic_audit if isinstance(item.get("reason"), DiscoveryFailureReason))
     failure_count = verification_failures + discovery_failures
 
@@ -225,34 +282,36 @@ def _deliver(
 ) -> DeliveryResult:
     message = reporting.notification_message(queue, now, warning=coverage_warning)
     attempted = False
-    delivered = False
+    successful_attempts: list[bool] = []
 
     if config.telegram_token and config.telegram_chat_id:
         attempted = True
-        delivered = (
+        successful_attempts.append(
             dependencies.send_telegram(
                 config.telegram_token,
                 config.telegram_chat_id,
                 message,
             )
-            or delivered
         )
 
     if config.discord_webhook:
         attempted = True
-        delivered = (
+        successful_attempts.append(
             dependencies.send_discord(
                 config.discord_webhook,
                 message.replace("•", "-"),
             )
-            or delivered
         )
 
+    public_report_configured = bool(
+        config.github_reports_enabled and config.token and config.repo_fullname
+    )
+    private_report_configured = bool(
+        config.private_github_reports_repository and config.private_github_reports_token
+    )
     github_body: str | None = None
-    if (config.github_reports_enabled and config.token and config.repo_fullname) or (
-        config.private_github_reports_repository
-        and config.private_github_reports_token
-        and dependencies.send_private_github_report is not None
+    if public_report_configured or (
+        private_report_configured and dependencies.send_private_github_report is not None
     ):
         github_body = reporting.github_report_body(
             queue,
@@ -263,34 +322,244 @@ def _deliver(
             coverage_warning=coverage_warning,
         )
 
-    if config.github_reports_enabled and config.token and config.repo_fullname:
+    if public_report_configured:
         attempted = True
+        assert config.repo_fullname is not None
+        assert config.token is not None
         assert github_body is not None
-        delivered = (
+        successful_attempts.append(
             dependencies.send_github_report(
                 config.repo_fullname,
                 config.token,
                 reporting.github_report_title(len(queue)),
                 github_body,
             )
-            or delivered
         )
 
-    if config.private_github_reports_repository and config.private_github_reports_token:
+    if private_report_configured:
         attempted = True
         if dependencies.send_private_github_report is not None:
+            assert config.private_github_reports_repository is not None
+            assert config.private_github_reports_token is not None
             assert github_body is not None
-            delivered = (
+            successful_attempts.append(
                 dependencies.send_private_github_report(
                     config.private_github_reports_repository,
                     config.private_github_reports_token,
                     reporting.github_report_title(len(queue)),
                     github_body,
                 )
-                or delivered
             )
 
-    return DeliveryResult(attempted=attempted, delivered=delivered)
+    return DeliveryResult(
+        attempted=attempted,
+        delivered=any(successful_attempts),
+    )
+
+
+def _should_prefetch(config: RunConfig) -> bool:
+    return bool(
+        config.token
+        and config.repo_fullname
+        and (
+            config.preferences.paid
+            or (config.preferences.strategic and config.preferences.global_search)
+        )
+    )
+
+
+def _prefetch_discovery(
+    config: RunConfig,
+    dependencies: RunDependencies,
+) -> _PrefetchedSearches:
+    if not _should_prefetch(config):
+        return _PrefetchedSearches(paid=None, strategic=None)
+    paid, strategic = dependencies.prefetch_discovery_searches(config.token)
+    return _PrefetchedSearches(paid=paid, strategic=strategic)
+
+
+def _discover(
+    config: RunConfig,
+    dependencies: RunDependencies,
+    context: _DiscoveryContext,
+) -> _DiscoveryOutcome:
+    started = monotonic()
+    scan_request_start = github.request_stats_snapshot()
+
+    prefetch_started = monotonic()
+    prefetch_request_start = github.request_stats_snapshot()
+    prefetched = _prefetch_discovery(config, dependencies)
+    prefetch_seconds = monotonic() - prefetch_started
+    prefetch_request_stats = github.request_stats_delta(
+        prefetch_request_start,
+        github.request_stats_snapshot(),
+    )
+    print(
+        "Scout performance: phase=discovery_prefetch "
+        f"seconds={prefetch_seconds:.1f} {github.format_request_stats(prefetch_request_stats)}"
+    )
+
+    paid_started = monotonic()
+    if config.preferences.paid:
+        paid, paid_rejects, paid_examples = dependencies.discover_paid(
+            config.token,
+            context.seen_urls,
+            context.repository_metadata,
+            context.contribution_guides,
+            prefetched.paid,
+        )
+    else:
+        paid, paid_rejects, paid_examples = [], {}, []
+    paid_seconds = monotonic() - paid_started
+
+    strategic_started = monotonic()
+    if config.preferences.strategic:
+        (
+            strategic,
+            strategic_rejects,
+            strategic_examples,
+            strategic_audit,
+        ) = dependencies.discover_strategic(
+            config.token,
+            context.seen_urls,
+            {candidate["url"] for candidate in paid},
+            context.repository_metadata,
+            context.contribution_guides,
+            prefetched.strategic,
+        )
+    else:
+        strategic, strategic_rejects, strategic_examples, strategic_audit = [], {}, [], []
+    strategic_seconds = monotonic() - strategic_started
+
+    scan_request_stats = github.request_stats_delta(
+        scan_request_start,
+        github.request_stats_snapshot(),
+    )
+    print(
+        "Scout performance: phase=scan_total "
+        f"prefetch={prefetch_seconds:.1f}s paid={paid_seconds:.1f}s "
+        f"strategic={strategic_seconds:.1f}s seconds={monotonic() - started:.1f} "
+        f"{github.format_request_stats(scan_request_stats)}"
+    )
+
+    return _DiscoveryOutcome(
+        paid=paid,
+        paid_rejects=paid_rejects,
+        paid_examples=paid_examples,
+        strategic=strategic,
+        strategic_rejects=strategic_rejects,
+        strategic_examples=strategic_examples,
+        strategic_audit=strategic_audit,
+    )
+
+
+def _final_candidates(candidates: list[Candidate], config: RunConfig) -> list[Candidate]:
+    return [
+        candidate
+        for candidate in candidates
+        if selection.candidate_rejection(candidate, config.preferences) is None
+    ]
+
+
+def _build_run_plan(
+    outcome: _DiscoveryOutcome,
+    config: RunConfig,
+    *,
+    report_limit: int,
+    coverage_warning_threshold: int,
+) -> _RunPlan:
+    queue = assemble_queue(
+        _final_candidates(outcome.paid, config),
+        _final_candidates(outcome.strategic, config),
+        limit=min(report_limit, config.preferences.max_results),
+    )
+    rejects = reporting.rejection_summary(
+        {
+            reason: count
+            for reason, count in outcome.paid_rejects.items()
+            if not isinstance(reason, DiscoveryFailureReason)
+        },
+        outcome.strategic_rejects,
+    )
+    coverage = coverage_status(
+        outcome.strategic_rejects,
+        outcome.strategic_audit,
+        paid_rejects=outcome.paid_rejects,
+        warning_threshold=coverage_warning_threshold,
+    )
+    return _RunPlan(
+        queue=tuple(queue),
+        coverage=coverage,
+        rejects=rejects,
+        paid_examples=tuple(outcome.paid_examples),
+        strategic_examples=tuple(outcome.strategic_examples),
+        strategic_audit=tuple(outcome.strategic_audit),
+    )
+
+
+def _print_discovery_diagnostics(plan: _RunPlan) -> None:
+    if plan.strategic_audit:
+        print("=== POTENTIAL SCANNER MISSES ===")
+        for item in plan.strategic_audit:
+            print(f"- {item.get('url')}: {item['reason']}")
+    if plan.coverage.warning is not None:
+        print(f"WARNING: {plan.coverage.warning}")
+
+
+def _state_commit_mode(plan: _RunPlan, delivery: DeliveryResult) -> _StateCommitMode:
+    if not plan.coverage.complete:
+        return _StateCommitMode.NONE
+    if not plan.requires_delivery:
+        return _StateCommitMode.MAINTENANCE
+    if delivery.attempted and delivery.delivered:
+        return _StateCommitMode.DELIVERED_QUEUE
+    return _StateCommitMode.NONE
+
+
+def _commit_state(
+    mode: _StateCommitMode,
+    seen_state: state.SeenState,
+    plan: _RunPlan,
+    config: RunConfig,
+    dependencies: RunDependencies,
+    scan_time: datetime,
+) -> bool:
+    if mode is _StateCommitMode.NONE:
+        return False
+
+    maintenance = _maintain_seen_state(
+        seen_state,
+        scan_time,
+        dependencies.issue_lifecycle,
+    )
+    if mode is _StateCommitMode.MAINTENANCE:
+        if not maintenance.checked_urls:
+            return False
+        return _save_state(maintenance.state, config.state_path)
+
+    next_state = maintenance.state
+    next_state.mark_reported_many(
+        (candidate["url"] for candidate in plan.queue),
+        reported_at=scan_time.isoformat().replace("+00:00", "Z"),
+    )
+    try:
+        return _save_state(next_state, config.state_path)
+    except state.SeenStateSaveError as error:
+        raise PostDeliveryStateSaveError(str(error)) from error
+
+
+def _print_delivery_diagnostics(plan: _RunPlan, delivery: DeliveryResult) -> None:
+    if plan.rejects:
+        print(
+            "Filtered verified candidates: "
+            + ", ".join(f"{reason}={count}" for reason, count in sorted(plan.rejects.items()))
+        )
+
+    if delivery.attempted and delivery.delivered:
+        if not plan.coverage.complete:
+            print("Verification coverage incomplete; state was not updated.")
+    else:
+        print("No notification was delivered; state was not updated.")
 
 
 def run_combined_scan(
@@ -303,127 +572,38 @@ def run_combined_scan(
 ) -> CombinedRunResult:
     """Run discovery, delivery, and the transactional seen-state commit."""
     seen_state = state.load_seen_state(config.state_path)
-    seen = seen_state.urls()
-    repo_cache: dict[str, RepositoryMetadata] = {}
-    guide_cache: dict[str, str | None] = {}
+    context = _DiscoveryContext(
+        seen_urls=seen_state.urls(),
+        repository_metadata={},
+        contribution_guides={},
+    )
+    discovery = _discover(config, dependencies, context)
+    plan = _build_run_plan(
+        discovery,
+        config,
+        report_limit=report_limit,
+        coverage_warning_threshold=coverage_warning_threshold,
+    )
+    _print_discovery_diagnostics(plan)
 
-    started = monotonic()
-    scan_request_start = github.request_stats_snapshot()
-    prefetch_started = monotonic()
-    prefetch_request_start = github.request_stats_snapshot()
-    prefetched_paid_searches: list[SearchBatch] | None = None
-    prefetched_global_searches: list[SearchBatch] | None = None
-    if (
-        config.token
-        and config.repo_fullname
-        and (
-            config.preferences.paid
-            or (config.preferences.strategic and config.preferences.global_search)
-        )
-    ):
-        (
-            prefetched_paid_searches,
-            prefetched_global_searches,
-        ) = dependencies.prefetch_discovery_searches(config.token)
-    prefetch_seconds = monotonic() - prefetch_started
-    prefetch_request_stats = github.request_stats_delta(
-        prefetch_request_start,
-        github.request_stats_snapshot(),
-    )
-    print(
-        "Scout performance: phase=discovery_prefetch "
-        f"seconds={prefetch_seconds:.1f} {github.format_request_stats(prefetch_request_stats)}"
-    )
-
-    paid_started = monotonic()
-    paid, paid_rejects, paid_examples = (
-        dependencies.discover_paid(
-            config.token, seen, repo_cache, guide_cache, prefetched_paid_searches
-        )
-        if config.preferences.paid
-        else ([], {}, [])
-    )
-    paid_seconds = monotonic() - paid_started
-
-    strategic_started = monotonic()
-    (
-        strategic,
-        strategic_rejects,
-        strategic_examples,
-        strategic_audit,
-    ) = (
-        dependencies.discover_strategic(
-            config.token,
-            seen,
-            {candidate["url"] for candidate in paid},
-            repo_cache,
-            guide_cache,
-            prefetched_global_searches,
-        )
-        if config.preferences.strategic
-        else ([], {}, [], [])
-    )
-
-    strategic_seconds = monotonic() - strategic_started
-    scan_request_stats = github.request_stats_delta(
-        scan_request_start,
-        github.request_stats_snapshot(),
-    )
-    print(
-        "Scout performance: phase=scan_total "
-        f"prefetch={prefetch_seconds:.1f}s paid={paid_seconds:.1f}s "
-        f"strategic={strategic_seconds:.1f}s seconds={monotonic() - started:.1f} "
-        f"{github.format_request_stats(scan_request_stats)}"
-    )
-
-    queue = assemble_queue(
-        [item for item in paid if selection.candidate_rejection(item, config.preferences) is None],
-        [
-            item
-            for item in strategic
-            if selection.candidate_rejection(item, config.preferences) is None
-        ],
-        limit=min(report_limit, config.preferences.max_results),
-    )
-    if strategic_audit:
-        print("=== POTENTIAL SCANNER MISSES ===")
-        for item in strategic_audit:
-            print(f"- {item.get('url')}: {item['reason']}")
-
-    rejects = reporting.rejection_summary(
-        {
-            reason: count
-            for reason, count in paid_rejects.items()
-            if not isinstance(reason, DiscoveryFailureReason)
-        },
-        strategic_rejects,
-    )
-    coverage = coverage_status(
-        strategic_rejects,
-        strategic_audit,
-        paid_rejects=paid_rejects,
-        warning_threshold=coverage_warning_threshold,
-    )
-    if coverage.warning is not None:
-        print(f"WARNING: {coverage.warning}")
-
-    if not queue and coverage.warning is None:
-        state_saved = False
-        if coverage.complete:
+    if not plan.requires_delivery:
+        if plan.coverage.complete:
             print("No new verified OSS opportunities found.")
-            maintenance = _maintain_seen_state(
-                seen_state,
-                scan_time,
-                dependencies.issue_lifecycle,
-            )
-            if maintenance.checked_urls:
-                state_saved = _save_state(maintenance.state, config.state_path)
         else:
             print("Verification coverage incomplete; state was not updated.")
+        delivery = DeliveryResult(attempted=False, delivered=False)
+        state_saved = _commit_state(
+            _state_commit_mode(plan, delivery),
+            seen_state,
+            plan,
+            config,
+            dependencies,
+            scan_time,
+        )
         return CombinedRunResult(
-            queue=(),
-            coverage=coverage,
-            delivery=DeliveryResult(attempted=False, delivered=False),
+            queue=plan.queue,
+            coverage=plan.coverage,
+            delivery=delivery,
             state_saved=state_saved,
         )
 
@@ -431,45 +611,26 @@ def run_combined_scan(
     delivery = _deliver(
         config,
         dependencies,
-        queue,
+        list(plan.queue),
         now,
-        paid_examples=paid_examples,
-        strategic_examples=strategic_examples,
-        strategic_audit=strategic_audit,
-        rejects=rejects,
-        coverage_warning=coverage.warning,
+        paid_examples=list(plan.paid_examples),
+        strategic_examples=list(plan.strategic_examples),
+        strategic_audit=list(plan.strategic_audit),
+        rejects=plan.rejects,
+        coverage_warning=plan.coverage.warning,
     )
-
-    if rejects:
-        print(
-            "Filtered verified candidates: "
-            + ", ".join(f"{reason}={count}" for reason, count in sorted(rejects.items()))
-        )
-
-    state_saved = False
-    if delivery.attempted and delivery.delivered and coverage.complete:
-        maintenance = _maintain_seen_state(
-            seen_state,
-            scan_time,
-            dependencies.issue_lifecycle,
-        )
-        next_state = maintenance.state
-        next_state.mark_reported_many(
-            (candidate["url"] for candidate in queue),
-            reported_at=scan_time.isoformat().replace("+00:00", "Z"),
-        )
-        try:
-            state_saved = _save_state(next_state, config.state_path)
-        except state.SeenStateSaveError as error:
-            raise PostDeliveryStateSaveError(str(error)) from error
-    elif delivery.attempted and delivery.delivered:
-        print("Verification coverage incomplete; state was not updated.")
-    else:
-        print("No notification was delivered; state was not updated.")
-
+    _print_delivery_diagnostics(plan, delivery)
+    state_saved = _commit_state(
+        _state_commit_mode(plan, delivery),
+        seen_state,
+        plan,
+        config,
+        dependencies,
+        scan_time,
+    )
     return CombinedRunResult(
-        queue=tuple(queue),
-        coverage=coverage,
+        queue=plan.queue,
+        coverage=plan.coverage,
         delivery=delivery,
         state_saved=state_saved,
     )
