@@ -224,32 +224,16 @@ def strategic_global_search_results(
     return [(query, search_github(query, token, per_page)) for query in queries]
 
 
-def select_strategic_candidates(
+def _collect_source_batches(
     token: str | None,
-    seen: set[str],
-    paid_urls: set[str],
-    repo_cache: dict[str, RepositoryMetadata],
-    global_search_results: list[SearchBatch],
-    *,
     target_repos: list[str],
     network_workers: int,
     target_repo_pool: TargetRepoIssuePool,
-    basic_candidate: BasicCandidate,
-    fetch_repo_metadata: FetchRepoMetadata,
-    payment_signal: PaymentSignal,
-    build_candidate: BuildCandidate,
-    cache_locks: github.KeyedLockPool,
-    inspect_per_repo: int = STRATEGIC_INSPECT_PER_REPO,
-    adaptive_budget: int = STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
-    audit_limit: int = STRATEGIC_AUDIT_LIMIT,
-    repository_excluded: Callable[[str], bool] = lambda _repo: False,
-    language_eligible: LanguageEligible = lambda _item, _meta: True,
-) -> StrategicDiscoverySelection:
-    """Build deterministic pre-verification rows from bounded strategic sources."""
-    provisional: list[sources.IssueRow] = []
-    touched: set[str] = set()
-    audit: list[RejectionRecord] = []
-
+    global_search_results: list[SearchBatch],
+    audit: list[RejectionRecord],
+    *,
+    audit_limit: int,
+) -> list[list[GitHubIssue]]:
     source_batches: list[list[GitHubIssue]] = []
     with ThreadPoolExecutor(
         max_workers=min(network_workers, max(1, len(target_repos)))
@@ -292,66 +276,95 @@ def select_strategic_candidates(
             continue
         source_batches.append(global_items)
 
-    for items in source_batches:
-        for item in items:
-            url = item.get("html_url")
-            if not url or url in seen or url in paid_urls or url in touched:
-                continue
-            touched.add(url)
-            if not basic_candidate(item):
-                audit_reason = (
-                    basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
-                )
-                if audit_reason:
-                    add_audit(audit, item, audit_reason, limit=audit_limit)
-                continue
-            repo, _ = github.issue_repo_and_number(item)
-            if not repo:
-                continue
-            if repository_excluded(repo):
-                continue
-            repo_key = repo
-            meta = github.cached_value(
-                repo_cache,
-                repo_key,
-                lambda: fetch_repo_metadata(repo_key, token),
-                cache_locks,
-                namespace="repo",
-            )
-            if not meta:
-                add_audit(
-                    audit,
-                    item,
-                    DiscoveryFailureReason(
-                        "repository metadata unavailable during strategic discovery; "
-                        "scan coverage incomplete"
-                    ),
-                    limit=audit_limit,
-                )
-                continue
-            if meta.get("archived"):
-                if possible_miss_signal(item):
-                    add_audit(
-                        audit,
-                        item,
-                        "strong-looking result skipped because repository is archived",
-                        limit=audit_limit,
-                    )
-                continue
-            if not language_eligible(item, meta):
-                continue
-            signal = payment_signal(item)
-            lane: CandidateLane = "paid" if signal else "strategic"
-            preview = build_candidate(item, lane, signal, meta, None)
-            provisional.append(
-                (
-                    preview["priority_score"],
-                    preview["career_score"],
-                    preview["cash_score"],
-                    item,
-                )
-            )
+    return source_batches
 
+
+def _evaluate_source_item(
+    item: GitHubIssue,
+    *,
+    token: str | None,
+    seen: set[str],
+    paid_urls: set[str],
+    touched: set[str],
+    repo_cache: dict[str, RepositoryMetadata],
+    audit: list[RejectionRecord],
+    basic_candidate: BasicCandidate,
+    fetch_repo_metadata: FetchRepoMetadata,
+    payment_signal: PaymentSignal,
+    build_candidate: BuildCandidate,
+    cache_locks: github.KeyedLockPool,
+    audit_limit: int,
+    repository_excluded: Callable[[str], bool],
+    language_eligible: LanguageEligible,
+) -> sources.IssueRow | None:
+    url = item.get("html_url")
+    if not url or url in seen or url in paid_urls or url in touched:
+        return None
+    touched.add(url)
+
+    if not basic_candidate(item):
+        audit_reason = (
+            basic_rejection_audit_reason(item) if possible_miss_signal(item) else None
+        )
+        if audit_reason:
+            add_audit(audit, item, audit_reason, limit=audit_limit)
+        return None
+
+    repo, _ = github.issue_repo_and_number(item)
+    if not repo or repository_excluded(repo):
+        return None
+
+    meta = github.cached_value(
+        repo_cache,
+        repo,
+        lambda: fetch_repo_metadata(repo, token),
+        cache_locks,
+        namespace="repo",
+    )
+    if not meta:
+        add_audit(
+            audit,
+            item,
+            DiscoveryFailureReason(
+                "repository metadata unavailable during strategic discovery; "
+                "scan coverage incomplete"
+            ),
+            limit=audit_limit,
+        )
+        return None
+
+    if meta.get("archived"):
+        if possible_miss_signal(item):
+            add_audit(
+                audit,
+                item,
+                "strong-looking result skipped because repository is archived",
+                limit=audit_limit,
+            )
+        return None
+
+    if not language_eligible(item, meta):
+        return None
+
+    signal = payment_signal(item)
+    lane: CandidateLane = "paid" if signal else "strategic"
+    preview = build_candidate(item, lane, signal, meta, None)
+    return (
+        preview["priority_score"],
+        preview["career_score"],
+        preview["cash_score"],
+        item,
+    )
+
+
+def _select_inspection_items(
+    provisional: list[sources.IssueRow],
+    audit: list[RejectionRecord],
+    *,
+    inspect_per_repo: int,
+    adaptive_budget: int,
+    audit_limit: int,
+) -> dict[str, list[GitHubIssue]]:
     inspected = strategic_inspection_items(
         provisional,
         base_per_repo=inspect_per_repo,
@@ -372,13 +385,21 @@ def select_strategic_candidates(
                 "strong-looking result fell outside the adaptive repo inspection pool",
                 limit=audit_limit,
             )
+    return inspected
 
+
+def _build_ranked_by_repo(
+    inspected: dict[str, list[GitHubIssue]],
+    repo_cache: dict[str, RepositoryMetadata],
+    payment_signal: PaymentSignal,
+    build_candidate: BuildCandidate,
+) -> dict[str, list[sources.IssueRow]]:
     ranked_by_repo: dict[str, list[sources.IssueRow]] = {}
     for repo, items in inspected.items():
         ranked: list[sources.IssueRow] = []
         for item in items:
             signal = payment_signal(item)
-            lane = "paid" if signal else "strategic"
+            lane: CandidateLane = "paid" if signal else "strategic"
             preview = build_candidate(item, lane, signal, repo_cache[repo], None)
             ranked.append(
                 (
@@ -390,5 +411,77 @@ def select_strategic_candidates(
             )
         ranked.sort(key=lambda row: row[:3], reverse=True)
         ranked_by_repo[repo] = ranked
+    return ranked_by_repo
 
+
+def select_strategic_candidates(
+    token: str | None,
+    seen: set[str],
+    paid_urls: set[str],
+    repo_cache: dict[str, RepositoryMetadata],
+    global_search_results: list[SearchBatch],
+    *,
+    target_repos: list[str],
+    network_workers: int,
+    target_repo_pool: TargetRepoIssuePool,
+    basic_candidate: BasicCandidate,
+    fetch_repo_metadata: FetchRepoMetadata,
+    payment_signal: PaymentSignal,
+    build_candidate: BuildCandidate,
+    cache_locks: github.KeyedLockPool,
+    inspect_per_repo: int = STRATEGIC_INSPECT_PER_REPO,
+    adaptive_budget: int = STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
+    audit_limit: int = STRATEGIC_AUDIT_LIMIT,
+    repository_excluded: Callable[[str], bool] = lambda _repo: False,
+    language_eligible: LanguageEligible = lambda _item, _meta: True,
+) -> StrategicDiscoverySelection:
+    """Build deterministic pre-verification rows from bounded strategic sources."""
+    audit: list[RejectionRecord] = []
+    source_batches = _collect_source_batches(
+        token,
+        target_repos,
+        network_workers,
+        target_repo_pool,
+        global_search_results,
+        audit,
+        audit_limit=audit_limit,
+    )
+
+    provisional: list[sources.IssueRow] = []
+    touched: set[str] = set()
+    for items in source_batches:
+        for item in items:
+            row = _evaluate_source_item(
+                item,
+                token=token,
+                seen=seen,
+                paid_urls=paid_urls,
+                touched=touched,
+                repo_cache=repo_cache,
+                audit=audit,
+                basic_candidate=basic_candidate,
+                fetch_repo_metadata=fetch_repo_metadata,
+                payment_signal=payment_signal,
+                build_candidate=build_candidate,
+                cache_locks=cache_locks,
+                audit_limit=audit_limit,
+                repository_excluded=repository_excluded,
+                language_eligible=language_eligible,
+            )
+            if row is not None:
+                provisional.append(row)
+
+    inspected = _select_inspection_items(
+        provisional,
+        audit,
+        inspect_per_repo=inspect_per_repo,
+        adaptive_budget=adaptive_budget,
+        audit_limit=audit_limit,
+    )
+    ranked_by_repo = _build_ranked_by_repo(
+        inspected,
+        repo_cache,
+        payment_signal,
+        build_candidate,
+    )
     return StrategicDiscoverySelection(ranked_by_repo=ranked_by_repo, audit=audit)
