@@ -321,6 +321,14 @@ def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     return github.issue_from_github_url(url, token)
 
 
+def issue_from_github_url_checked(
+    url: str,
+    token: str | None,
+) -> tuple[GitHubIssue | None, SourceFailureReason | None]:
+    """Compatibility wrapper preserving platform source hydration failures."""
+    return github.issue_from_github_url_checked(url, token)
+
+
 def platform_paid_refs() -> sources.PlatformDiscoveryResult:
     """Merge official bounty-platform source discoveries and failures."""
     return sources.platform_paid_refs(
@@ -790,16 +798,27 @@ def discover_paid(
     ) as executor:
         platform_items = list(
             executor.map(
-                lambda row: issue_from_github_url(row[0], token),
+                lambda row: issue_from_github_url_checked(row[0], token),
                 platform_sources,
             )
         )
 
-    for (source_url, platform_signal), platform_item in zip(
+    for (source_url, platform_signal), (platform_item, source_failure) in zip(
         platform_sources,
         platform_items,
         strict=True,
     ):
+        if source_failure:
+            add_reject(
+                rejected,
+                examples,
+                GitHubIssue(
+                    html_url=source_url,
+                    title="Official bounty-platform GitHub source",
+                ),
+                source_failure,
+            )
+            continue
         if platform_item and paid.is_clean_candidate(platform_item):
             pending.append((platform_item, platform_signal, True))
 

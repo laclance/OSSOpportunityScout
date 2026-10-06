@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import io
 import unittest
+import urllib.error
+import urllib.request
 from dataclasses import replace
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from email.message import Message
 from unittest.mock import patch
 
 import opportunity_scout.app as scout
@@ -766,6 +769,75 @@ class RunLifecycleTests(unittest.TestCase):
         save.assert_not_called()
         self.assertIn("Opportunity discovery/verification coverage is incomplete", reports[0])
         self.assertIn("Verification coverage incomplete; state was not updated.", buf.getvalue())
+
+    def test_platform_source_hydration_failure_can_deliver_but_never_advances_state(
+        self,
+    ) -> None:
+        source_url = "https://github.com/platform/project/issues/7"
+        delivered = candidate(paid=False)
+
+        def prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+            return [("paid-q", {"items": []})], []
+
+        def strategic(
+            _token: str | None,
+            _seen: set[str],
+            _paid_urls: set[str],
+            _repo_cache: dict[str, RepositoryMetadata],
+            _guide_cache: dict[str, str | None],
+            _search_results: list[SearchBatch] | None,
+        ) -> run.StrategicDiscoveryResult:
+            return [delivered], {}, [], []
+
+        def telegram(_token: str, _chat_id: str, _message: str) -> bool:
+            return True
+
+        deps = replace(
+            dependencies(),
+            discover_paid=scout.discover_paid,
+            discover_strategic=strategic,
+            prefetch_discovery_searches=prefetch,
+            send_telegram=telegram,
+        )
+        source_error = urllib.error.HTTPError(
+            "https://api.github.com/repos/platform/project/issues/7",
+            401,
+            "unauthorized",
+            Message(),
+            None,
+        )
+        with (
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={source_url: "official platform signal"},
+                    failures=(),
+                ),
+            ),
+            patch.object(urllib.request, "urlopen", side_effect=source_error),
+            patch.object(state, "load_seen_state", return_value=state.SeenState()),
+            patch.object(state, "maintain_seen_state") as maintain,
+            patch.object(state, "save_seen_state") as save,
+        ):
+            result = run.run_combined_scan(
+                run.RunConfig("tok", "me/repo", "tb", "chat", None),
+                deps,
+                FIXED_TIME,
+            )
+
+        self.assertTrue(result.delivery.delivered)
+        self.assertEqual(result.queue, (delivered,))
+        self.assertEqual(
+            (
+                result.coverage.verification_failures,
+                result.coverage.complete,
+                result.state_saved,
+                save.call_count,
+            ),
+            (1, False, False, 0),
+        )
+        maintain.assert_not_called()
 
     def test_platform_discovery_failure_can_deliver_but_never_advances_state(
         self,

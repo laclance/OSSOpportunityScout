@@ -330,6 +330,28 @@ def contribution_guide(
     return None
 
 
+def issue_from_github_url_checked(
+    url: str,
+    token: str | None,
+) -> tuple[GitHubIssue | None, SourceFailureReason | None]:
+    """Fetch a source issue while preserving failures distinct from stale references."""
+    repo, number = _issue_repo_and_number_from_url(str(url))
+    if not repo or not number:
+        return None, None
+
+    endpoint = f"https://api.github.com/repos/{repo}/issues/{number}"
+    result = _github_json_get(endpoint, token, 20)
+    if result.failure is not None:
+        print(f"GitHub API Error ({result.failure}) for {endpoint}.")
+    if result.status == 404:
+        return None, None
+    if result.failure is not None:
+        return None, SourceFailureReason(f"GitHub issue source fetch failed: {result.failure}")
+    if not isinstance(result.payload, dict):
+        return None, SourceFailureReason("GitHub issue source fetch failed: malformed response")
+    return cast(GitHubIssue, result.payload), None
+
+
 def issue_from_github_url(url: str, token: str | None) -> GitHubIssue | None:
     """Fetch a GitHub issue object from its canonical issue URL."""
     repo, number = _issue_repo_and_number_from_url(str(url))

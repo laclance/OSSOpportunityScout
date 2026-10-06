@@ -1485,7 +1485,7 @@ class DiscoveryTests(unittest.TestCase):
                     failures=(failure,),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=platform),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(platform, None)),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(
                 scout,
@@ -1540,11 +1540,11 @@ class DiscoveryTests(unittest.TestCase):
             ),
             patch.object(
                 scout,
-                "issue_from_github_url",
+                "issue_from_github_url_checked",
                 side_effect=lambda url, token: {
-                    platform.get("html_url"): platform,
-                    platform_dirty.get("html_url"): platform_dirty,
-                    platform_bad: None,
+                    platform.get("html_url"): (platform, None),
+                    platform_dirty.get("html_url"): (platform_dirty, None),
+                    platform_bad: (None, None),
                 }[url],
             ),
         ):
@@ -1580,7 +1580,7 @@ class DiscoveryTests(unittest.TestCase):
                     failures=(),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=platform),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(platform, None)),
         ):
             found, rejected, examples = scout.discover_paid("t", set(), {}, {})
 
@@ -2350,7 +2350,7 @@ class CoverageGapTests(unittest.TestCase):
                     failures=(),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=item_reject),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(item_reject, None)),
             patch.object(paid_policy, "is_clean_candidate", return_value=True),
             patch.object(scout, "verify", return_value=(None, "claimed")),
         ):

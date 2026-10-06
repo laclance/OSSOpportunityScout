@@ -366,6 +366,56 @@ class GitHubResourceTests(unittest.TestCase):
             )
             self.assertIn("/repos/a/b/issues/12", getter.call_args.args[0])
 
+    def test_issue_from_github_url_checked_distinguishes_stale_and_failed_reads(self) -> None:
+        url = "https://github.com/a/b/issues/12"
+
+        self.assertEqual(github.issue_from_github_url_checked("bad", "t"), (None, None))
+
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(b'{"state": "open"}'),
+        ):
+            self.assertEqual(
+                github.issue_from_github_url_checked(url, "t"),
+                ({"state": "open"}, None),
+            )
+
+        not_found = urllib.error.HTTPError(
+            "https://api.github.com/repos/a/b/issues/12",
+            404,
+            "not found",
+            Message(),
+            None,
+        )
+        with patch.object(urllib.request, "urlopen", side_effect=not_found):
+            self.assertEqual(github.issue_from_github_url_checked(url, "t"), (None, None))
+
+        unauthorized = urllib.error.HTTPError(
+            "https://api.github.com/repos/a/b/issues/12",
+            401,
+            "unauthorized",
+            Message(),
+            None,
+        )
+        with patch.object(urllib.request, "urlopen", side_effect=unauthorized):
+            item, failure = github.issue_from_github_url_checked(url, "t")
+        self.assertIsNone(item)
+        self.assertIsInstance(failure, SourceFailureReason)
+        self.assertIn("authentication failure", str(failure))
+
+        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"{")):
+            item, failure = github.issue_from_github_url_checked(url, "t")
+        self.assertIsNone(item)
+        self.assertIsInstance(failure, SourceFailureReason)
+        self.assertIn("malformed response", str(failure))
+
+        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"[]")):
+            item, failure = github.issue_from_github_url_checked(url, "t")
+        self.assertIsNone(item)
+        self.assertIsInstance(failure, SourceFailureReason)
+        self.assertIn("malformed response", str(failure))
+
 
 if __name__ == "__main__":
     unittest.main()
