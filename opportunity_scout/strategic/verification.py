@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from functools import partial
 
 from opportunity_scout import selection as selection_policy
@@ -56,15 +57,14 @@ class StrategicVerificationResult:
     selected_rows: int
 
 
-@dataclass(frozen=True)
-class _RepoVerificationResult:
-    repo: str
-    outcomes: list[StrategicVerificationOutcome]
-    coverage_incomplete: bool
+class _RepositoryCompletion(Enum):
+    EXHAUSTED = "exhausted"
+    SLOTS_SETTLED = "slots settled"
+    COVERAGE_INCOMPLETE = "source coverage incomplete"
 
 
 @dataclass(frozen=True)
-class _VerificationConfig:
+class _VerificationPolicy:
     keep_per_repo: int
     score_uplift_bound: int
     refresh_failure_limit: int
@@ -72,47 +72,71 @@ class _VerificationConfig:
     min_cash_score: int
 
 
-def _add_reject(
-    counts: dict[str, int],
-    examples: list[RejectionRecord],
-    item: GitHubIssue,
-    reason: str,
-) -> None:
-    counts[reason] = counts.get(reason, 0) + 1
-    if len(examples) < 12:
-        examples.append(
-            {
-                "url": item.get("html_url"),
-                "title": item.get("title"),
-                "reason": reason,
-            }
-        )
+@dataclass
+class _RepositoryProgress:
+    accepted: list[Candidate] = field(default_factory=list)
+    outcomes: list[StrategicVerificationOutcome] = field(default_factory=list)
+    consecutive_source_failures: int = 0
+
+    def record(self, outcome: StrategicVerificationOutcome) -> None:
+        self.outcomes.append(outcome)
+        if isinstance(outcome.reason, SourceFailureReason):
+            self.consecutive_source_failures += 1
+        else:
+            self.consecutive_source_failures = 0
+
+        if outcome.candidate is not None and outcome.reason is None:
+            self.accepted.append(outcome.candidate)
 
 
-def _verify_row(
+@dataclass(frozen=True)
+class _RepositoryVerificationResult:
+    repo: str
+    outcomes: tuple[StrategicVerificationOutcome, ...]
+    completion: _RepositoryCompletion
+
+
+@dataclass
+class _VerificationDiagnostics:
+    audit: list[RejectionRecord]
+    rejected: dict[str, int] = field(default_factory=dict)
+    examples: list[RejectionRecord] = field(default_factory=list)
+    network_checked_rows: int = 0
+
+    def reject(self, item: GitHubIssue, reason: str) -> None:
+        self.rejected[reason] = self.rejected.get(reason, 0) + 1
+        if len(self.examples) < 12:
+            self.examples.append(
+                {
+                    "url": item.get("html_url"),
+                    "title": item.get("title"),
+                    "reason": reason,
+                }
+            )
+
+
+def _evaluate_row(
     row: IssueRow,
     deep_verify: DeepVerifier,
     preflight_rejection: PreflightRejection,
-    config: _VerificationConfig,
+    policy: _VerificationPolicy,
 ) -> StrategicVerificationOutcome:
     item = row[3]
-    preflight_reason = preflight_rejection(item)
-    if preflight_reason:
+    reason = preflight_rejection(item)
+    if reason:
         return StrategicVerificationOutcome(
             row=row,
             candidate=None,
-            reason=preflight_reason,
+            reason=reason,
             network_checked=False,
         )
 
     candidate, reason = deep_verify(item)
-    # Preview classification/scores cannot prove threshold rejection:
-    # refreshed payment and issue evidence may change either lane.
     if candidate is not None and reason is None:
         reason = selection_policy.score_rejection(
             candidate,
-            min_cash_score=config.min_cash_score,
-            min_career_score=config.min_career_score,
+            min_cash_score=policy.min_cash_score,
+            min_career_score=policy.min_career_score,
         )
 
     return StrategicVerificationOutcome(
@@ -123,60 +147,124 @@ def _verify_row(
     )
 
 
-def _verify_repo(
+def _repository_completion(
+    progress: _RepositoryProgress,
+    remaining: list[IssueRow],
+    policy: _VerificationPolicy,
+) -> _RepositoryCompletion | None:
+    if progress.consecutive_source_failures >= policy.refresh_failure_limit:
+        return _RepositoryCompletion.COVERAGE_INCOMPLETE
+
+    if sources.strategic_repo_slots_settled(
+        progress.accepted,
+        remaining,
+        keep_per_repo=policy.keep_per_repo,
+        score_uplift_bound=policy.score_uplift_bound,
+    ):
+        return _RepositoryCompletion.SLOTS_SETTLED
+
+    return None
+
+
+def _verify_repository(
     entry: tuple[str, list[IssueRow]],
     *,
     deep_verify: DeepVerifier,
     preflight_rejection: PreflightRejection,
-    config: _VerificationConfig,
-) -> _RepoVerificationResult:
+    policy: _VerificationPolicy,
+) -> _RepositoryVerificationResult:
     repo, ranked = entry
-    outcomes: list[StrategicVerificationOutcome] = []
-    accepted: list[Candidate] = []
-    consecutive_source_failures = 0
+    progress = _RepositoryProgress()
 
     for index, row in enumerate(ranked):
-        outcome = _verify_row(row, deep_verify, preflight_rejection, config)
-        outcomes.append(outcome)
+        progress.record(_evaluate_row(row, deep_verify, preflight_rejection, policy))
+        completion = _repository_completion(progress, ranked[index + 1 :], policy)
+        if completion is not None:
+            return _RepositoryVerificationResult(repo, tuple(progress.outcomes), completion)
 
-        if isinstance(outcome.reason, SourceFailureReason):
-            consecutive_source_failures += 1
-        else:
-            consecutive_source_failures = 0
-
-        if outcome.candidate is not None and outcome.reason is None:
-            accepted.append(outcome.candidate)
-
-        if consecutive_source_failures >= config.refresh_failure_limit:
-            return _RepoVerificationResult(repo, outcomes, True)
-
-        remaining = ranked[index + 1 :]
-        if sources.strategic_repo_slots_settled(
-            accepted,
-            remaining,
-            keep_per_repo=config.keep_per_repo,
-            score_uplift_bound=config.score_uplift_bound,
-        ):
-            return _RepoVerificationResult(repo, outcomes, False)
-
-    return _RepoVerificationResult(repo, outcomes, False)
+    return _RepositoryVerificationResult(
+        repo,
+        tuple(progress.outcomes),
+        _RepositoryCompletion.EXHAUSTED,
+    )
 
 
-def _select_final_candidates(
-    verified_by_repo: dict[str, list[Candidate]],
+def _record_near_miss(
+    diagnostics: _VerificationDiagnostics,
+    item: GitHubIssue,
+    reason: str,
+    *,
+    audit_limit: int,
+) -> None:
+    if reason.startswith("career score ") and strategic_discovery.possible_miss_signal(item):
+        strategic_discovery.add_audit(
+            diagnostics.audit,
+            item,
+            f"strong-looking near miss: {reason}",
+            limit=audit_limit,
+        )
+
+
+def _collect_repository_result(
+    result: _RepositoryVerificationResult,
+    ranked: list[IssueRow],
+    diagnostics: _VerificationDiagnostics,
+    accepted_by_repo: dict[str, list[Candidate]],
+    *,
+    audit_limit: int,
+) -> None:
+    diagnostics.network_checked_rows += sum(
+        1 for outcome in result.outcomes if outcome.network_checked
+    )
+
+    for outcome in result.outcomes:
+        item = outcome.row[3]
+        if outcome.reason:
+            diagnostics.reject(item, outcome.reason)
+            _record_near_miss(
+                diagnostics,
+                item,
+                outcome.reason,
+                audit_limit=audit_limit,
+            )
+            print(f"Skipping strategic candidate {item.get('html_url')}: {outcome.reason}")
+            continue
+
+        assert outcome.candidate is not None
+        accepted_by_repo[result.repo].append(outcome.candidate)
+
+    if result.completion is not _RepositoryCompletion.COVERAGE_INCOMPLETE:
+        return
+
+    remaining = ranked[len(result.outcomes) :]
+    if remaining:
+        strategic_discovery.add_audit(
+            diagnostics.audit,
+            remaining[0][3],
+            f"verification coverage incomplete for {result.repo} after repeated source failures",
+            limit=audit_limit,
+        )
+    print(
+        "Strategic verification coverage incomplete for "
+        f"{result.repo}; stopped after {len(result.outcomes)} deep checks"
+    )
+
+
+def _final_candidates(
+    accepted_by_repo: dict[str, list[Candidate]],
     repo_order: list[str],
     *,
     keep_per_repo: int,
 ) -> list[Candidate]:
-    found: list[Candidate] = []
+    candidates: list[Candidate] = []
     for repo in repo_order:
-        verified_repo = verified_by_repo[repo]
-        verified_repo.sort(
+        ranked = sorted(
+            accepted_by_repo[repo],
             key=sources.candidate_rank_key,
             reverse=True,
         )
-        found.extend(verified_repo[:keep_per_repo])
-    return found
+        candidates.extend(ranked[:keep_per_repo])
+    return candidates
 
 
 def verify_strategic_selection(
@@ -194,86 +282,52 @@ def verify_strategic_selection(
 ) -> StrategicVerificationResult:
     """Verify ranked rows within the existing inspection, worker and settlement bounds."""
     ranked_by_repo = selection.ranked_by_repo
-    config = _VerificationConfig(
+    policy = _VerificationPolicy(
         keep_per_repo=keep_per_repo,
         score_uplift_bound=score_uplift_bound,
         refresh_failure_limit=refresh_failure_limit,
         min_career_score=min_career_score,
         min_cash_score=min_cash_score,
     )
-    audit = list(selection.audit)
-    rejected: dict[str, int] = {}
-    examples: list[RejectionRecord] = []
-
+    diagnostics = _VerificationDiagnostics(audit=list(selection.audit))
+    accepted_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in ranked_by_repo}
     verification_inputs = list(ranked_by_repo.items())
-    verify_repo = partial(
-        _verify_repo,
+
+    verify_repository = partial(
+        _verify_repository,
         deep_verify=deep_verify,
         preflight_rejection=preflight_rejection,
-        config=config,
+        policy=policy,
     )
     with ThreadPoolExecutor(
         max_workers=min(verify_workers, max(1, len(verification_inputs)))
     ) as executor:
-        repo_verification_results = list(executor.map(verify_repo, verification_inputs))
+        repository_results = list(executor.map(verify_repository, verification_inputs))
 
-    verified_by_repo: dict[str, list[Candidate]] = {repo: [] for repo in ranked_by_repo}
-    network_checked_rows = 0
+    for result in repository_results:
+        _collect_repository_result(
+            result,
+            ranked_by_repo[result.repo],
+            diagnostics,
+            accepted_by_repo,
+            audit_limit=audit_limit,
+        )
+
     selected_rows = sum(len(rows) for rows in ranked_by_repo.values())
-    for repo_result in repo_verification_results:
-        repo = repo_result.repo
-        outcomes = repo_result.outcomes
-        network_checked_rows += sum(1 for outcome in outcomes if outcome.network_checked)
-        for outcome in outcomes:
-            verified_item = outcome.row[3]
-            candidate = outcome.candidate
-            reason = outcome.reason
-            if reason:
-                _add_reject(rejected, examples, verified_item, reason)
-                if reason.startswith("career score ") and strategic_discovery.possible_miss_signal(
-                    verified_item
-                ):
-                    strategic_discovery.add_audit(
-                        audit,
-                        verified_item,
-                        f"strong-looking near miss: {reason}",
-                        limit=audit_limit,
-                    )
-                print(f"Skipping strategic candidate {verified_item.get('html_url')}: {reason}")
-                continue
-
-            assert candidate is not None
-            verified_by_repo[repo].append(candidate)
-
-        if repo_result.coverage_incomplete:
-            remaining = ranked_by_repo[repo][len(outcomes) :]
-            if remaining:
-                strategic_discovery.add_audit(
-                    audit,
-                    remaining[0][3],
-                    f"verification coverage incomplete for {repo} after repeated source failures",
-                    limit=audit_limit,
-                )
-            print(
-                "Strategic verification coverage incomplete for "
-                f"{repo}; stopped after {len(outcomes)} deep checks"
-            )
-
     print(
         "Strategic deep verification: "
-        f"{network_checked_rows}/{selected_rows} inspected rows required network checks"
+        f"{diagnostics.network_checked_rows}/{selected_rows} inspected rows required network checks"
     )
 
-    found = _select_final_candidates(
-        verified_by_repo,
-        list(ranked_by_repo),
-        keep_per_repo=keep_per_repo,
-    )
     return StrategicVerificationResult(
-        candidates=found,
-        rejected=rejected,
-        examples=examples,
-        audit=audit,
-        network_checked_rows=network_checked_rows,
+        candidates=_final_candidates(
+            accepted_by_repo,
+            list(ranked_by_repo),
+            keep_per_repo=keep_per_repo,
+        ),
+        rejected=diagnostics.rejected,
+        examples=diagnostics.examples,
+        audit=diagnostics.audit,
+        network_checked_rows=diagnostics.network_checked_rows,
         selected_rows=selected_rows,
     )
