@@ -94,6 +94,16 @@ class ExistingImplementationPrTests(unittest.TestCase):
             )
         )
 
+        timeline[0]["source"]["issue"]["body"] = None  # type: ignore[index]
+        self.assertIsNone(
+            paid_verification.has_existing_implementation_pr(
+                "acme/widget",
+                42,
+                "tok",
+                fetch_json=lambda *_: timeline,
+            )
+        )
+
     def test_cloudflared_dependency_update_is_not_implementation(self) -> None:
         timeline = [
             {
@@ -103,7 +113,9 @@ class ExistingImplementationPrTests(unittest.TestCase):
                         "pull_request": {},
                         "state": "open",
                         "html_url": "https://github.com/anthony-spruyt/spruyt-labs/pull/3267",
-                        "repository_url": "https://api.github.com/repos/anthony-spruyt/spruyt-labs",
+                        "repository_url": (
+                            "https://api.github.com/repos/anthony-spruyt/spruyt-labs"
+                        ),
                         "title": (
                             "chore(deps): update container image "
                             "docker.io/cloudflare/cloudflared to v2026.9.3"
