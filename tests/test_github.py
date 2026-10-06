@@ -369,6 +369,8 @@ class GitHubResourceTests(unittest.TestCase):
     def test_issue_from_github_url_checked_distinguishes_stale_and_failed_reads(self) -> None:
         url = "https://github.com/a/b/issues/12"
 
+        self.assertEqual(github.issue_from_github_url_checked("bad", "t"), (None, None))
+
         with patch.object(
             urllib.request,
             "urlopen",
@@ -403,6 +405,12 @@ class GitHubResourceTests(unittest.TestCase):
         self.assertIn("authentication failure", str(failure))
 
         with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"{")):
+            item, failure = github.issue_from_github_url_checked(url, "t")
+        self.assertIsNone(item)
+        self.assertIsInstance(failure, SourceFailureReason)
+        self.assertIn("malformed response", str(failure))
+
+        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"[]")):
             item, failure = github.issue_from_github_url_checked(url, "t")
         self.assertIsNone(item)
         self.assertIsInstance(failure, SourceFailureReason)
