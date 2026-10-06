@@ -57,8 +57,9 @@ from opportunity_scout.types import (
     GitHubSearchResult,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
+    StrategicPreviewRow,
 )
 
 TARGET_REPOS = strategic_discovery.TARGET_REPOS
@@ -941,7 +942,7 @@ def _collect_direct_paid_candidates(
     touched: set[str],
     rejected: dict[str, int],
     examples: list[RejectionRecord],
-    search_results: list[SearchBatch] | None,
+    search_results: list[SearchQueryResult] | None,
     *,
     scout_preferences: preferences.ScoutPreferences,
 ) -> list[tuple[GitHubIssue, str | None, bool]]:
@@ -1134,7 +1135,7 @@ def discover_paid(
     seen: set[str],
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
-    search_results: list[SearchBatch] | None = None,
+    search_results: list[SearchQueryResult] | None = None,
     *,
     scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
@@ -1198,7 +1199,7 @@ def add_audit(
 
 
 def strategic_inspection_items(
-    provisional: list[sources.IssueRow],
+    provisional: list[StrategicPreviewRow],
 ) -> dict[str, list[GitHubIssue]]:
     """Compatibility wrapper for bounded strategic inspection selection."""
     return strategic_discovery.strategic_inspection_items(
@@ -1210,7 +1211,7 @@ def strategic_inspection_items(
 
 def strategic_global_search_results(
     token: str | None,
-) -> list[SearchBatch]:
+) -> list[SearchQueryResult]:
     """Compatibility wrapper for strategic global Search orchestration."""
 
     def search_github(query: str, search_token: str | None, per_page: int) -> GitHubSearchResult:
@@ -1232,7 +1233,7 @@ def prefetch_discovery_searches(
     token: str | None,
     *,
     scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
-) -> tuple[list[SearchBatch], list[SearchBatch]]:
+) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
     """Pace paid and strategic Search calls to avoid burst/secondary rate limits."""
     requests = [
         ("paid", query, 15) for query in PAID_DISCOVERY_QUERIES if scout_preferences.paid
@@ -1241,8 +1242,8 @@ def prefetch_discovery_searches(
         for query in STRATEGIC_GLOBAL_QUERIES
         if scout_preferences.strategic and scout_preferences.global_search
     ]
-    paid_results: list[SearchBatch] = []
-    strategic_results: list[SearchBatch] = []
+    paid_results: list[SearchQueryResult] = []
+    strategic_results: list[SearchQueryResult] = []
     for index, (lane, query, per_page) in enumerate(requests):
         result = github.search_github(
             query,
@@ -1262,7 +1263,7 @@ def discover_strategic(
     paid_urls: set[str],
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
-    global_search_results: list[SearchBatch] | None = None,
+    global_search_results: list[SearchQueryResult] | None = None,
     *,
     scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
 ) -> tuple[

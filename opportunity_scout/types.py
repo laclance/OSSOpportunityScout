@@ -80,8 +80,10 @@ class GitHubSearchResult(TypedDict, total=False):
     items: list[GitHubIssue]
 
 
-IssueRow: TypeAlias = tuple[int, int, int, GitHubIssue]
-SearchBatch: TypeAlias = tuple[str, GitHubSearchResult]
+StrategicPreviewRow: TypeAlias = tuple[int, int, int, GitHubIssue]
+IssueRow: TypeAlias = StrategicPreviewRow
+SearchQueryResult: TypeAlias = tuple[str, GitHubSearchResult]
+SearchBatch: TypeAlias = SearchQueryResult
 
 
 class Candidate(TypedDict):

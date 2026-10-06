@@ -30,7 +30,8 @@ from opportunity_scout.types import (
     GitHubSearchResult,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
+    StrategicPreviewRow,
 )
 
 TARGET_REPOS = [
@@ -86,7 +87,7 @@ TargetRepoIssuePool = Callable[[str, str | None], tuple[list[GitHubIssue], str |
 class StrategicDiscoverySelection:
     """Pre-verification strategic rows and bounded discovery diagnostics."""
 
-    ranked_by_repo: dict[str, list[sources.IssueRow]]
+    ranked_by_repo: dict[str, list[StrategicPreviewRow]]
     audit: list[RejectionRecord]
 
 
@@ -234,7 +235,7 @@ def _inspection_plan(
 
 
 def strategic_inspection_items(
-    provisional: list[sources.IssueRow],
+    provisional: list[StrategicPreviewRow],
     *,
     base_per_repo: int = STRATEGIC_INSPECT_PER_REPO,
     adaptive_budget: int = STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
@@ -254,7 +255,7 @@ def strategic_global_search_results(
     *,
     queries: list[str] = STRATEGIC_GLOBAL_QUERIES,
     per_page: int = STRATEGIC_GLOBAL_SEARCH_PER_PAGE,
-) -> list[SearchBatch]:
+) -> list[SearchQueryResult]:
     """Reserve the strategic global Search calls before heavier API work begins."""
     return [(query, search_github(query, token, per_page)) for query in queries]
 
@@ -292,7 +293,7 @@ def _target_repository_batches(
 
 
 def _global_search_batches(
-    global_search_results: list[SearchBatch],
+    global_search_results: list[SearchQueryResult],
     audit: list[RejectionRecord],
     *,
     audit_limit: int,
@@ -323,7 +324,7 @@ def _collect_source_batches(
     target_repos: list[str],
     network_workers: int,
     target_repo_pool: TargetRepoIssuePool,
-    global_search_results: list[SearchBatch],
+    global_search_results: list[SearchQueryResult],
     audit: list[RejectionRecord],
     *,
     audit_limit: int,
@@ -486,10 +487,10 @@ def _rank_selected_candidates(
     repo_cache: dict[str, RepositoryMetadata],
     payment_signal: PaymentSignal,
     build_candidate: BuildCandidate,
-) -> dict[str, list[sources.IssueRow]]:
-    ranked_by_repo: dict[str, list[sources.IssueRow]] = {}
+) -> dict[str, list[StrategicPreviewRow]]:
+    ranked_by_repo: dict[str, list[StrategicPreviewRow]] = {}
     for repo, previews in selected.items():
-        ranked: list[sources.IssueRow] = []
+        ranked: list[StrategicPreviewRow] = []
         for preview in previews:
             signal = payment_signal(preview.item)
             lane: CandidateLane = "paid" if signal else "strategic"
@@ -518,7 +519,7 @@ def select_strategic_candidates(
     seen: set[str],
     paid_urls: set[str],
     repo_cache: dict[str, RepositoryMetadata],
-    global_search_results: list[SearchBatch],
+    global_search_results: list[SearchQueryResult],
     *,
     target_repos: list[str],
     network_workers: int,

@@ -20,7 +20,7 @@ from opportunity_scout.strategic import discovery as strategic_discovery
 from opportunity_scout.types import (
     Candidate,
     GitHubIssue,
-    IssueRow,
+    StrategicPreviewRow,
     RejectionRecord,
     SourceFailureReason,
 )
@@ -39,7 +39,7 @@ PreflightRejection = Callable[[GitHubIssue], str | None]
 class StrategicVerificationOutcome:
     """One ranked row after preflight, deep verification and final thresholding."""
 
-    row: IssueRow
+    row: StrategicPreviewRow
     candidate: Candidate | None
     reason: str | None
     network_checked: bool
@@ -116,7 +116,7 @@ class _VerificationDiagnostics:
 
 
 def _evaluate_row(
-    row: IssueRow,
+    row: StrategicPreviewRow,
     deep_verify: DeepVerifier,
     preflight_rejection: PreflightRejection,
     policy: _VerificationPolicy,
@@ -149,7 +149,7 @@ def _evaluate_row(
 
 def _repository_completion(
     progress: _RepositoryProgress,
-    remaining: list[IssueRow],
+    remaining: list[StrategicPreviewRow],
     policy: _VerificationPolicy,
 ) -> _RepositoryCompletion | None:
     if progress.consecutive_source_failures >= policy.refresh_failure_limit:
@@ -167,7 +167,7 @@ def _repository_completion(
 
 
 def _verify_repository(
-    entry: tuple[str, list[IssueRow]],
+    entry: tuple[str, list[StrategicPreviewRow]],
     *,
     deep_verify: DeepVerifier,
     preflight_rejection: PreflightRejection,
@@ -207,7 +207,7 @@ def _record_near_miss(
 
 def _collect_repository_result(
     result: _RepositoryVerificationResult,
-    ranked: list[IssueRow],
+    ranked: list[StrategicPreviewRow],
     diagnostics: _VerificationDiagnostics,
     accepted_by_repo: dict[str, list[Candidate]],
     *,

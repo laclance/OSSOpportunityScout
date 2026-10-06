@@ -19,7 +19,7 @@ from opportunity_scout.types import (
     IssueLifecycleStatus,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
 )
 
@@ -39,7 +39,7 @@ PaidDiscovery = Callable[
         set[str],
         dict[str, RepositoryMetadata],
         dict[str, str | None],
-        list[SearchBatch] | None,
+        list[SearchQueryResult] | None,
     ],
     PaidDiscoveryResult,
 ]
@@ -50,13 +50,13 @@ StrategicDiscovery = Callable[
         set[str],
         dict[str, RepositoryMetadata],
         dict[str, str | None],
-        list[SearchBatch] | None,
+        list[SearchQueryResult] | None,
     ],
     StrategicDiscoveryResult,
 ]
 DiscoveryPrefetch = Callable[
     [str | None],
-    tuple[list[SearchBatch], list[SearchBatch]],
+    tuple[list[SearchQueryResult], list[SearchQueryResult]],
 ]
 AuditAppender = Callable[[list[RejectionRecord], GitHubIssue, str], None]
 TelegramSender = Callable[[str, str, str], bool]
@@ -146,8 +146,8 @@ class _DiscoveryContext:
 class _PrefetchedSearches:
     """Search batches reused by discovery instead of issuing duplicate searches."""
 
-    paid: list[SearchBatch] | None
-    strategic: list[SearchBatch] | None
+    paid: list[SearchQueryResult] | None
+    strategic: list[SearchQueryResult] | None
 
 
 @dataclass(frozen=True)

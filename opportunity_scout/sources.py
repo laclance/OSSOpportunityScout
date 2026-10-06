@@ -20,6 +20,7 @@ from opportunity_scout.types import (
     DiscoveryFailureReason,
     GitHubIssue,
     IssueRow as IssueRow,
+    StrategicPreviewRow,
 )
 
 
@@ -367,26 +368,26 @@ def contribution_guide(
     return github.contribution_guide(repo, token, getter)
 
 
-def _preview_score(row: IssueRow) -> tuple[int, int, int]:
+def _preview_score(row: StrategicPreviewRow) -> tuple[int, int, int]:
     return row[0], row[1], row[2]
 
 
 def strategic_inspection_items(
-    provisional: list[IssueRow],
+    provisional: list[StrategicPreviewRow],
     *,
     base_per_repo: int,
     adaptive_budget: int,
     should_expand: IssuePredicate,
 ) -> dict[str, list[GitHubIssue]]:
     """Select base per-repo rows plus a globally bounded set of strong overflow rows."""
-    grouped: dict[str, list[IssueRow]] = {}
+    grouped: dict[str, list[StrategicPreviewRow]] = {}
     for row in provisional:
         repo, _ = github.issue_repo_and_number(row[3])
         if repo is not None:
             grouped.setdefault(repo, []).append(row)
 
-    selected: dict[str, list[IssueRow]] = {}
-    overflow: list[tuple[IssueRow, str]] = []
+    selected: dict[str, list[StrategicPreviewRow]] = {}
+    overflow: list[tuple[StrategicPreviewRow, str]] = []
     for repo, rows in grouped.items():
         ordered = sorted(rows, key=_preview_score, reverse=True)
         selected[repo] = ordered[:base_per_repo]
@@ -412,7 +413,7 @@ def candidate_rank_key(candidate: Candidate) -> tuple[int, int, int, int]:
 
 
 def strategic_verification_upper_bound(
-    row: IssueRow,
+    row: StrategicPreviewRow,
     *,
     score_uplift_bound: int,
 ) -> tuple[int, int, int, int]:
@@ -427,7 +428,7 @@ def strategic_verification_upper_bound(
 
 def strategic_repo_slots_settled(
     verified: Sequence[Candidate],
-    remaining: Sequence[IssueRow],
+    remaining: Sequence[StrategicPreviewRow],
     *,
     keep_per_repo: int,
     score_uplift_bound: int,
