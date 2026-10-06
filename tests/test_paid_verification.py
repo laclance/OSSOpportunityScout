@@ -69,6 +69,162 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ],
         )
 
+    def test_issue_reference_scope_distinguishes_same_and_cross_repository_prs(self) -> None:
+        same_repo_timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/acme/widget/pull/9",
+                        "repository_url": "https://api.github.com/repos/ACME/WIDGET/",
+                        "title": "Fix widget race",
+                        "body": "Fixes #42",
+                    }
+                },
+            }
+        ]
+        self.assertEqual(
+            paid_verification.existing_implementation_pr_reason(
+                same_repo_timeline,
+                "acme/widget",
+                42,
+            ),
+            "existing open implementation PR: https://github.com/acme/widget/pull/9",
+        )
+
+        cross_repo_timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/other/app/pull/9",
+                        "repository_url": "https://api.github.com/repos/other/app",
+                        "title": "Fix widget race",
+                        "body": "Fixes #42",
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.existing_implementation_pr_reason(
+                cross_repo_timeline,
+                "acme/widget",
+                42,
+            )
+        )
+
+    def test_cross_repository_repo_qualified_reference_is_detected(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/other/app/pull/9",
+                        "repository_url": "https://api.github.com/repos/other/app",
+                        "title": "Fix widget race",
+                        "body": "Resolves acme/widget#42",
+                    }
+                },
+            }
+        ]
+        self.assertEqual(
+            paid_verification.existing_implementation_pr_reason(
+                timeline,
+                "acme/widget",
+                42,
+            ),
+            "existing open implementation PR: https://github.com/other/app/pull/9",
+        )
+
+    def test_relationship_keyword_cannot_cross_sentence_boundary(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/other/app/pull/9",
+                        "repository_url": "https://api.github.com/repos/other/app",
+                        "title": "Widget cache work",
+                        "body": "Implement cache support. acme/widget#42",
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.existing_implementation_pr_reason(
+                timeline,
+                "acme/widget",
+                42,
+            )
+        )
+
+    def test_relationship_keyword_outside_bounded_context_is_ignored(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/other/app/pull/9",
+                        "repository_url": "https://api.github.com/repos/other/app",
+                        "title": "Widget cache work",
+                        "body": "Fix" + ("x" * 121) + " acme/widget#42",
+                    }
+                },
+            }
+        ]
+        self.assertIsNone(
+            paid_verification.existing_implementation_pr_reason(
+                timeline,
+                "acme/widget",
+                42,
+            )
+        )
+
+    def test_non_candidate_prs_ignore_malformed_relationship_metadata(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "closed",
+                        "html_url": "https://github.com/acme/widget/pull/7",
+                        "title": {"bad": "shape"},
+                        "body": {"bad": "shape"},
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "repository_url": {"bad": "shape"},
+                        "title": {"bad": "shape"},
+                        "body": {"bad": "shape"},
+                    }
+                },
+            },
+        ]
+        self.assertIsNone(
+            paid_verification.existing_implementation_pr_reason(
+                timeline,
+                "acme/widget",
+                42,
+            )
+        )
+
     def test_unrelated_external_cross_reference_is_not_implementation(self) -> None:
         timeline = [
             {
@@ -326,6 +482,33 @@ class ActiveClaimTests(unittest.TestCase):
         )
         self.assertEqual(calls, [])
 
+    def test_comment_request_is_capped_at_exactly_thirty(self) -> None:
+        calls: list[tuple[str, str | None]] = []
+
+        def fetch_json(url: str, token: str | None) -> Any:
+            calls.append((url, token))
+            return []
+
+        self.assertIsNone(
+            paid_verification.active_claim_reason(
+                "acme/widget",
+                42,
+                31,
+                "tok",
+                fetch_json=fetch_json,
+            )
+        )
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "https://api.github.com/repos/acme/widget/issues/42/comments"
+                    "?per_page=30&sort=created&direction=desc",
+                    "tok",
+                )
+            ],
+        )
+
     def test_failed_or_non_list_comments_fails_closed(self) -> None:
         values: tuple[object, ...] = (None, {})
         for value in values:
@@ -474,6 +657,29 @@ class CandidateRejectionTests(unittest.TestCase):
             active_claim_checker=claim_checker,
         )
         self.assertEqual(reason, "existing pr")
+        self.assertIsNotNone(signal)
+        self.assertEqual(claim_calls, [])
+
+    def test_source_failure_reason_is_preserved_and_short_circuits_claim_check(self) -> None:
+        failure = SourceFailureReason("could not verify open implementation PR timeline")
+        claim_calls: list[int] = []
+
+        def claim_checker(
+            _repo: str,
+            _number: int,
+            _comments: int,
+            _token: str | None,
+        ) -> str | None:
+            claim_calls.append(1)
+            return None
+
+        reason, signal = paid_verification.candidate_rejection_reason(
+            issue(body="bounty $100", comments=1),
+            "tok",
+            existing_pr_checker=lambda *_: failure,
+            active_claim_checker=claim_checker,
+        )
+        self.assertIs(reason, failure)
         self.assertIsNotNone(signal)
         self.assertEqual(claim_calls, [])
 
