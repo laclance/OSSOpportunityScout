@@ -805,19 +805,16 @@ def add_reject(
         examples.append({"url": item.get("html_url"), "title": item.get("title"), "reason": reason})
 
 
-def discover_paid(
+def _collect_direct_paid_candidates(
     token: str | None,
     seen: set[str],
-    repo_cache: dict[str, RepositoryMetadata],
-    guide_cache: dict[str, str | None],
-    search_results: list[SearchBatch] | None = None,
+    touched: set[str],
+    rejected: dict[str, int],
+    examples: list[RejectionRecord],
+    search_results: list[SearchBatch] | None,
     *,
-    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
-) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
-    found: list[Candidate] = []
-    touched: set[str] = set()
-    rejected: dict[str, int] = {}
-    examples: list[RejectionRecord] = []
+    scout_preferences: preferences.ScoutPreferences,
+) -> list[tuple[GitHubIssue, str | None, bool]]:
     pending: list[tuple[GitHubIssue, str | None, bool]] = []
 
     if search_results is None:
@@ -855,6 +852,18 @@ def discover_paid(
             ) and paid.is_clean_candidate(item):
                 pending.append((item, None, False))
 
+    return pending
+
+
+def _collect_platform_paid_candidates(
+    token: str | None,
+    seen: set[str],
+    touched: set[str],
+    rejected: dict[str, int],
+    examples: list[RejectionRecord],
+    *,
+    scout_preferences: preferences.ScoutPreferences,
+) -> list[tuple[GitHubIssue, str | None, bool]]:
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Fetch their source issues concurrently, then
     # apply the same source-authoritative verification as direct discoveries.
@@ -906,6 +915,7 @@ def discover_paid(
         platform_hydration_requests,
     )
 
+    pending: list[tuple[GitHubIssue, str | None, bool]] = []
     for (source_url, platform_signal), (platform_item, source_failure) in zip(
         platform_sources,
         platform_items,
@@ -925,6 +935,19 @@ def discover_paid(
         if platform_item and paid.is_clean_candidate(platform_item):
             pending.append((platform_item, platform_signal, True))
 
+    return pending
+
+
+def _verify_paid_candidates(
+    pending: list[tuple[GitHubIssue, str | None, bool]],
+    token: str | None,
+    repo_cache: dict[str, RepositoryMetadata],
+    guide_cache: dict[str, str | None],
+    rejected: dict[str, int],
+    examples: list[RejectionRecord],
+    *,
+    scout_preferences: preferences.ScoutPreferences,
+) -> list[Candidate]:
     def verify_paid(
         row: tuple[GitHubIssue, str | None, bool],
     ) -> tuple[
@@ -955,6 +978,7 @@ def discover_paid(
         paid_verification_requests,
     )
 
+    found: list[Candidate] = []
     for (item, _, is_platform), (candidate, reason) in verification_results:
         url = str(item.get("html_url") or "")
         kind = "platform" if is_platform else "paid"
@@ -972,8 +996,51 @@ def discover_paid(
 
         found.append(candidate)
 
-    return found, rejected, examples
+    return found
 
+
+def discover_paid(
+    token: str | None,
+    seen: set[str],
+    repo_cache: dict[str, RepositoryMetadata],
+    guide_cache: dict[str, str | None],
+    search_results: list[SearchBatch] | None = None,
+    *,
+    scout_preferences: preferences.ScoutPreferences = preferences.ScoutPreferences(),
+) -> tuple[list[Candidate], dict[str, int], list[RejectionRecord]]:
+    touched: set[str] = set()
+    rejected: dict[str, int] = {}
+    examples: list[RejectionRecord] = []
+
+    pending = _collect_direct_paid_candidates(
+        token,
+        seen,
+        touched,
+        rejected,
+        examples,
+        search_results,
+        scout_preferences=scout_preferences,
+    )
+    pending.extend(
+        _collect_platform_paid_candidates(
+            token,
+            seen,
+            touched,
+            rejected,
+            examples,
+            scout_preferences=scout_preferences,
+        )
+    )
+    found = _verify_paid_candidates(
+        pending,
+        token,
+        repo_cache,
+        guide_cache,
+        rejected,
+        examples,
+        scout_preferences=scout_preferences,
+    )
+    return found, rejected, examples
 
 def possible_miss_signal(item: GitHubIssue) -> bool:
     """Compatibility wrapper for strategic near-miss detection."""
