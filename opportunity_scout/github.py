@@ -247,13 +247,13 @@ def _request_category(url: str) -> str:
         return "search"
     if re.fullmatch(r"/repos/[^/]+/[^/]+/issues", path):
         return "issues_list"
-    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+/comments", path):
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\d+/comments", path):
         return "comments"
-    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+/timeline", path):
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\d+/timeline", path):
         return "timeline"
-    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+", path):
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\d+", path):
         return "issue"
-    if re.fullmatch(r"/repos/[^/]+/[^/]+/pulls/\\d+", path):
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/pulls/\d+", path):
         return "pull"
     if re.fullmatch(r"/repos/[^/]+/[^/]+/contents(?:/.*)?", path):
         return "contents"
