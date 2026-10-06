@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
 ACTION = ROOT / "action.yml"
 
-APPROVED_DISTRIBUTED_SCANNER_SHA = "dec9ea3ffd347160aa06d22d3be1e7e2991eadbe"
+APPROVED_DISTRIBUTED_SCANNER_SHA = "3725a11c17aa0f0ede86a0a4c34f35695016024f"
 
 
 def document(path: Path) -> dict[str, Any]:

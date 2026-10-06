@@ -45,8 +45,12 @@ For deployment/configuration/state-ownership work, additionally read [docs/PRIVA
 The public upstream owns scanner code, development/release CI, documentation, and
 reusable distribution assets. Independent private instances own workflows,
 configuration/state, triggers/schedules, concurrency, secrets, delivery,
-persistence/history, recovery, and scanner pins. Default `scout.toml` or explicit
-`--config PATH` is mandatory before state/network/delivery activity.
+persistence/history, recovery, and scanner pins. When a scanner-behavior change is
+promoted to `main` and becomes the reviewed deployment baseline, update the
+distributed private-instance template pin and its approval regression in the same
+maintenance cycle; do not advance that pin for docs/CI/governance/Marketplace-only
+`main` commits. Default `scout.toml` or explicit `--config PATH` is mandatory before
+state/network/delivery activity.
 
 Do not recreate upstream `scout-state` ownership, restore upstream persistent
 scheduling, expose private evidence, or claim exactly-once delivery. Do not reopen
