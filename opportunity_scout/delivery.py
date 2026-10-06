@@ -7,9 +7,11 @@ It does not render reports, rank candidates, or manage seen-state.
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from opportunity_scout import github
 
@@ -43,10 +45,41 @@ class _TransportResult:
     body: bytes = b""
 
 
+class _NoGitHubMutationRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        """Fail closed on every GitHub mutation redirect before credentials can move."""
+        raise urllib.error.URLError("GitHub mutation redirect refused")
+
+
+def _github_mutation_open(request: urllib.request.Request, *, timeout: int) -> Any:
+    return urllib.request.build_opener(_NoGitHubMutationRedirect()).open(request, timeout=timeout)
+
+
 def _perform(request_spec: _JsonRequest) -> _TransportResult:
     try:
         request = request_spec.materialize()
         with urllib.request.urlopen(request, timeout=request_spec.timeout) as response:
+            return _TransportResult(True, bytes(response.read()))
+    except Exception:
+        return _TransportResult(False)
+
+
+def _perform_github_mutation(request_spec: _JsonRequest) -> _TransportResult:
+    """Execute one authenticated GitHub mutation only on the trusted API origin."""
+    if not github._trusted_github_api_url(request_spec.endpoint):
+        return _TransportResult(False)
+
+    try:
+        request = request_spec.materialize()
+        with _github_mutation_open(request, timeout=request_spec.timeout) as response:
             return _TransportResult(True, bytes(response.read()))
     except Exception:
         return _TransportResult(False)
@@ -134,7 +167,7 @@ def _created_issue_url(raw: bytes) -> str | None:
 
 def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a native GitHub scan report and immediately close it as not planned."""
-    created = _perform(
+    created = _perform_github_mutation(
         _github_request(
             f"https://api.github.com/repos/{repo_fullname}/issues",
             token,
@@ -151,7 +184,7 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         print("Failed to auto-close GitHub Issue notification: created issue URL missing.")
         return False
 
-    closed = _perform(
+    closed = _perform_github_mutation(
         _github_request(
             issue_url,
             token,
@@ -188,7 +221,7 @@ def create_private_github_issue(repo_fullname: str, token: str, title: str, body
     if not _private_repository_verified(repo_fullname, token):
         return False
 
-    created = _perform(
+    created = _perform_github_mutation(
         _github_request(
             f"https://api.github.com/repos/{repo_fullname}/issues",
             token,
