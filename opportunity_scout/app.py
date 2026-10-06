@@ -268,9 +268,14 @@ def strategic_competition_reason(
     loaded_comments = issue_comments(item, token) if comments is None else comments
     timeline_pr_checker: competition_policy.TimelinePrChecker = timeline_open_pr_reason
     if timeline_events is not None:
-        timeline_pr_checker = lambda _item, _token: (
-            paid_verification.existing_implementation_pr_reason(timeline_events)
-        )
+
+        def prefetched_timeline_pr_checker(
+            _item: GitHubIssue,
+            _token: str | None,
+        ) -> str | None:
+            return paid_verification.existing_implementation_pr_reason(timeline_events)
+
+        timeline_pr_checker = prefetched_timeline_pr_checker
     return competition_policy.strategic_competition_reason(
         item,
         token,
