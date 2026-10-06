@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import urllib.request
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from opportunity_scout import github
 
@@ -16,131 +17,186 @@ NOTIFICATION_TIMEOUT_SECONDS = 10
 GITHUB_TIMEOUT_SECONDS = 15
 
 
-def _request_json(
-    url: str,
-    payload: Mapping[str, object] | None,
-    *,
-    method: str,
-    headers: Mapping[str, str],
-    timeout: int,
-) -> bytes:
-    """Serialize and perform one JSON HTTP request."""
-    request_headers = {"Content-Type": "application/json"}
-    request_headers.update(headers)
-    request = urllib.request.Request(
-        url,
-        data=None if payload is None else json.dumps(payload).encode("utf-8"),
-        headers=request_headers,
-        method=method,
-    )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        return bytes(response.read())
+@dataclass(frozen=True)
+class _JsonRequest:
+    endpoint: str
+    method: str
+    headers: Mapping[str, str]
+    payload: Mapping[str, object]
+    timeout: int
 
-
-def _send_notification(provider: str, endpoint: str, payload: Mapping[str, object]) -> bool:
-    """Deliver one notification through the shared JSON transport."""
-    try:
-        _request_json(
-            endpoint,
-            payload,
-            method="POST",
-            headers={},
-            timeout=NOTIFICATION_TIMEOUT_SECONDS,
+    def materialize(self) -> urllib.request.Request:
+        headers = dict(self.headers)
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(self.payload).encode("utf-8")
+        return urllib.request.Request(
+            self.endpoint,
+            data=body,
+            headers=headers,
+            method=self.method,
         )
-    except Exception as exc:
-        print(f"Failed to send {provider} notification: {exc}")
-        return False
 
+
+@dataclass(frozen=True)
+class _TransportResult:
+    succeeded: bool
+    body: bytes = b""
+
+
+def _perform(request_spec: _JsonRequest) -> _TransportResult:
+    try:
+        request = request_spec.materialize()
+        with urllib.request.urlopen(request, timeout=request_spec.timeout) as response:
+            return _TransportResult(True, bytes(response.read()))
+    except Exception:
+        return _TransportResult(False)
+
+
+def _notification_request(endpoint: str, payload: Mapping[str, object]) -> _JsonRequest:
+    return _JsonRequest(
+        endpoint=endpoint,
+        method="POST",
+        headers={},
+        payload=payload,
+        timeout=NOTIFICATION_TIMEOUT_SECONDS,
+    )
+
+
+def _deliver_notification(provider: str, request_spec: _JsonRequest) -> bool:
+    if not _perform(request_spec).succeeded:
+        print(f"Failed to send {provider} notification.")
+        return False
     print(f"{provider} notification sent successfully.")
     return True
 
 
 def send_telegram_notification(token: str, chat_id: str, message: str) -> bool:
     """Send a notification message via Telegram Bot API."""
-    return _send_notification(
+    return _deliver_notification(
         "Telegram",
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        {
-            "chat_id": chat_id,
-            "text": message,
-            "disable_web_page_preview": False,
-        },
+        _notification_request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            {
+                "chat_id": chat_id,
+                "text": message,
+                "disable_web_page_preview": False,
+            },
+        ),
     )
 
 
 def send_discord_notification(webhook_url: str, message: str) -> bool:
     """Send a notification message via Discord Webhook."""
-    return _send_notification("Discord", webhook_url, {"content": message})
+    return _deliver_notification(
+        "Discord",
+        _notification_request(webhook_url, {"content": message}),
+    )
+
+
+def _github_headers(token: str) -> dict[str, str]:
+    return {
+        **github.GITHUB_API_HEADERS,
+        "Authorization": f"Bearer {token}",
+    }
+
+
+def _github_request(
+    endpoint: str,
+    token: str,
+    *,
+    method: str,
+    payload: Mapping[str, object],
+) -> _JsonRequest:
+    return _JsonRequest(
+        endpoint=endpoint,
+        method=method,
+        headers=_github_headers(token),
+        payload=payload,
+        timeout=GITHUB_TIMEOUT_SECONDS,
+    )
+
+
+def _decode_object(raw: bytes) -> dict[str, object] | None:
+    try:
+        decoded: object = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return decoded if isinstance(decoded, dict) else None
+
+
+def _created_issue_url(raw: bytes) -> str | None:
+    payload = _decode_object(raw)
+    if payload is None:
+        return None
+    issue_url = payload.get("url")
+    return issue_url if isinstance(issue_url, str) and issue_url else None
 
 
 def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
     """Create a native GitHub scan report and immediately close it as not planned."""
-    headers = {
-        **github.GITHUB_API_HEADERS,
-        "Authorization": f"Bearer {token}",
-    }
-    try:
-        created_body = _request_json(
+    created = _perform(
+        _github_request(
             f"https://api.github.com/repos/{repo_fullname}/issues",
-            {"title": title, "body": body, "labels": ["bounty-alert"]},
+            token,
             method="POST",
-            headers=headers,
-            timeout=GITHUB_TIMEOUT_SECONDS,
+            payload={"title": title, "body": body, "labels": ["bounty-alert"]},
         )
-        created: object = json.loads(created_body.decode("utf-8"))
-    except Exception as exc:
-        print(f"Failed to create GitHub Issue notification: {exc}")
+    )
+    if not created.succeeded:
+        print("Failed to create GitHub Issue notification.")
         return False
 
-    issue_url = created.get("url") if isinstance(created, dict) else None
-    if not isinstance(issue_url, str) or not issue_url:
+    issue_url = _created_issue_url(created.body)
+    if issue_url is None:
         print("Failed to auto-close GitHub Issue notification: created issue URL missing.")
         return False
 
-    try:
-        _request_json(
+    closed = _perform(
+        _github_request(
             issue_url,
-            {"state": "closed", "state_reason": "not_planned"},
+            token,
             method="PATCH",
-            headers=headers,
-            timeout=GITHUB_TIMEOUT_SECONDS,
+            payload={"state": "closed", "state_reason": "not_planned"},
         )
-    except Exception as exc:
-        print(f"Failed to auto-close GitHub Issue notification: {exc}")
+    )
+    if not closed.succeeded:
+        print("Failed to auto-close GitHub Issue notification.")
         return False
 
     print("GitHub Issue notification created and auto-closed successfully.")
     return True
 
 
-def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
-    """Create a report only after GitHub confirms the destination is private."""
-    metadata = github.github_get(
+def _private_repository_verified(repo_fullname: str, token: str) -> bool:
+    repository = github.github_get(
         f"https://api.github.com/repos/{repo_fullname}",
         token,
         timeout=GITHUB_TIMEOUT_SECONDS,
         log_errors=False,
     )
-    if not isinstance(metadata, dict):
+    if not isinstance(repository, dict):
         print("Failed to verify private GitHub report destination.")
         return False
-    if metadata.get("private") is not True:
+    if repository.get("private") is not True:
         print("Private GitHub report destination is not verified private.")
         return False
+    return True
 
-    headers = {
-        **github.GITHUB_API_HEADERS,
-        "Authorization": f"Bearer {token}",
-    }
-    try:
-        _request_json(
+
+def create_private_github_issue(repo_fullname: str, token: str, title: str, body: str) -> bool:
+    """Create a report only after GitHub confirms the destination is private."""
+    if not _private_repository_verified(repo_fullname, token):
+        return False
+
+    created = _perform(
+        _github_request(
             f"https://api.github.com/repos/{repo_fullname}/issues",
-            {"title": title, "body": body},
+            token,
             method="POST",
-            headers=headers,
-            timeout=GITHUB_TIMEOUT_SECONDS,
+            payload={"title": title, "body": body},
         )
-    except Exception:
+    )
+    if not created.succeeded:
         print("Failed to create private GitHub report.")
         return False
 
