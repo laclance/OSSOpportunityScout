@@ -206,7 +206,9 @@ class ExistingImplementationPrTests(unittest.TestCase):
             "existing open implementation PR: https://github.com/prometheus/common/pull/1008",
         )
 
-    def test_downstream_pr_reference_to_upstream_proposal_is_not_implementation(self) -> None:
+    def test_downstream_pr_reference_to_upstream_proposal_is_not_implementation(
+        self,
+    ) -> None:
         timeline = [
             {
                 "event": "cross-referenced",
