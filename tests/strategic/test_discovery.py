@@ -323,9 +323,7 @@ class StrategicDiscoveryTests(unittest.TestCase):
                 "rejected candidates must not fetch repository metadata"
             ),
             payment_signal=lambda _item: None,
-            build_candidate=lambda *_args: self.fail(
-                "rejected candidates must not be ranked"
-            ),
+            build_candidate=lambda *_args: self.fail("rejected candidates must not be ranked"),
             cache_locks=github.KeyedLockPool(),
         )
 
