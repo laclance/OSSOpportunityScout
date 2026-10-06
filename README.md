@@ -33,10 +33,10 @@ Forking is optional and intended only for scanner-code customization.
 
 ## Illustrative ranked result
 
-> **Illustrative example — synthetic, not a current bounty.**  
-> `example/project#123` — Improve retry handling in a contributor-facing CLI  
-> **Paid:** $250 bounty with explicit reward evidence · **Cash score:** 82 · **Career score:** 74  
-> **Effort:** 3–6h · **Competition:** low  
+> **Illustrative example — synthetic, not a current bounty.**<br>
+> `example/project#123` — Improve retry handling in a contributor-facing CLI<br>
+> **Paid:** $250 bounty with explicit reward evidence · **Cash score:** 82 · **Career score:** 74<br>
+> **Effort:** 3–6h · **Competition:** low<br>
 > **Why it ranked:** funded, actionable scope, healthy repository activity, clear maintainer signals, and limited visible competition.
 
 ## How OSS Opportunity Scout works
