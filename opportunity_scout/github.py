@@ -98,6 +98,43 @@ class _GitHubReadResult:
     link: str | None = None
 
 
+class _UntrustedGitHubRedirectError(urllib.error.URLError):
+    """Signal that an ordinary GitHub read tried to leave the trusted API origin."""
+
+
+def _trusted_github_api_url(url: str) -> bool:
+    """Return whether a URL is exactly on the trusted HTTPS GitHub API origin."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and parsed.netloc == "api.github.com"
+        and not parsed.fragment
+    )
+
+
+class _TrustedGitHubRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        """Allow redirects only while they remain on the trusted GitHub API origin."""
+        if not _trusted_github_api_url(newurl):
+            raise _UntrustedGitHubRedirectError("untrusted GitHub API redirect")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _github_open(request: urllib.request.Request, *, timeout: int) -> Any:
+    return urllib.request.build_opener(_TrustedGitHubRedirect()).open(request, timeout=timeout)
+
+
 class _NoPaginationRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(
         self,
@@ -134,9 +171,9 @@ def _next_link(link: str | None) -> str | None:
 
 def _pagination_identity(url: str) -> tuple[str, tuple[tuple[str, str], ...], int]:
     """Only HTTPS GitHub API URLs with an unambiguous numeric page are usable."""
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "https" or parsed.netloc != "api.github.com" or parsed.fragment:
+    if not _trusted_github_api_url(url):
         raise ValueError("untrusted pagination URL")
+    parsed = urllib.parse.urlsplit(url)
     params = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
     pages = [value for key, value in params if key == "page"]
     if len(pages) > 1 or (pages and not re.fullmatch(r"[1-9]\d*", pages[0])):
@@ -548,12 +585,15 @@ def _github_json_get(
     *,
     pagination: bool = False,
 ) -> _GitHubReadResult:
+    if not _trusted_github_api_url(url):
+        return _GitHubReadResult(None, "untrusted GitHub API URL")
+
     attempt = 0
     while True:
         _record_request_attempt(url)
         request = urllib.request.Request(url, headers=_github_headers(token), method="GET")
         try:
-            open_url = _pagination_open if pagination else urllib.request.urlopen
+            open_url = _pagination_open if pagination else _github_open
             with open_url(request, timeout=timeout) as response:
                 raw = response.read()
                 link = response.headers.get("Link")
@@ -561,6 +601,8 @@ def _github_json_get(
                 return _GitHubReadResult(json.loads(raw.decode("utf-8")), status=200, link=link)
             except (UnicodeDecodeError, json.JSONDecodeError):
                 return _GitHubReadResult(None, "malformed response", 200)
+        except _UntrustedGitHubRedirectError:
+            return _GitHubReadResult(None, "untrusted redirect")
         except urllib.error.HTTPError as exc:
             is_rate_limited, delay = _rate_limit_retry_delay(exc, retry_index=attempt)
             if is_rate_limited:

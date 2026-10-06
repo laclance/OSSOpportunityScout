@@ -27,6 +27,14 @@ def issue(**overrides: Any) -> GitHubIssue:
     return cast(GitHubIssue, item)
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> Any:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 class GitHubParsingTests(unittest.TestCase):
     def test_issue_repo_and_number_preserves_canonical_url_semantics(self) -> None:
         repo, number = github.issue_repo_and_number(issue())
@@ -53,6 +61,11 @@ class GitHubParsingTests(unittest.TestCase):
 
 
 class GitHubHttpTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_canonical_github_api_identity(self) -> None:
         self.assertEqual(
             dict(github.GITHUB_API_HEADERS),
@@ -243,6 +256,108 @@ class GitHubHttpTests(unittest.TestCase):
         opened.assert_not_called()
 
 
+class GitHubTrustBoundaryTests(unittest.TestCase):
+    def test_untrusted_initial_urls_fail_before_transport_or_accounting(self) -> None:
+        urls = (
+            "https://evil.example/x",
+            "http://api.github.com/x",
+            "https://api.github.com.evil.example/x",
+            "https://api.github.com:443/x",
+            "https://user@api.github.com/x",
+            "https://api.github.com/x#fragment",
+            "https://[api.github.com/x",
+        )
+        before = github.request_stats_snapshot()
+        output = io.StringIO()
+        with (
+            patch.object(github, "_github_open") as opened,
+            patch("opportunity_scout.github.time.sleep") as slept,
+            redirect_stdout(output),
+        ):
+            for url in urls:
+                with self.subTest(url=url):
+                    self.assertIsNone(github.github_get(url, "secret-token"))
+
+        opened.assert_not_called()
+        slept.assert_not_called()
+        self.assertEqual(
+            github.request_stats_delta(before, github.request_stats_snapshot()).total,
+            0,
+        )
+        self.assertIn("untrusted GitHub API URL", output.getvalue())
+        self.assertNotIn("secret-token", output.getvalue())
+
+    def test_cross_origin_redirect_is_rejected_without_retry(self) -> None:
+        request = urllib.request.Request(
+            "https://api.github.com/a",
+            headers=github._github_headers("secret-token"),
+        )
+        handler = github._TrustedGitHubRedirect()
+        with self.assertRaises(github._UntrustedGitHubRedirectError):
+            handler.redirect_request(
+                request,
+                None,
+                302,
+                "redirect",
+                {},
+                "https://evil.example/b",
+            )
+
+        output = io.StringIO()
+        with (
+            patch.object(
+                github,
+                "_github_open",
+                side_effect=github._UntrustedGitHubRedirectError(
+                    "untrusted GitHub API redirect"
+                ),
+            ) as opened,
+            patch("opportunity_scout.github.time.sleep") as slept,
+            redirect_stdout(output),
+        ):
+            self.assertIsNone(
+                github.github_get("https://api.github.com/a", "secret-token")
+            )
+
+        opened.assert_called_once()
+        slept.assert_not_called()
+        self.assertIn("untrusted redirect", output.getvalue())
+        self.assertNotIn("secret-token", output.getvalue())
+
+    def test_same_origin_redirect_preserves_authenticated_get(self) -> None:
+        request = urllib.request.Request(
+            "https://api.github.com/a",
+            headers=github._github_headers("secret-token"),
+            method="GET",
+        )
+        redirected = github._TrustedGitHubRedirect().redirect_request(
+            request,
+            None,
+            301,
+            "redirect",
+            {},
+            "https://api.github.com/b",
+        )
+        self.assertIsNotNone(redirected)
+        assert redirected is not None
+        self.assertEqual(redirected.full_url, "https://api.github.com/b")
+        self.assertEqual(redirected.get_method(), "GET")
+        self.assertEqual(redirected.get_header("Authorization"), "Bearer secret-token")
+
+    def test_ordinary_open_installs_trusted_redirect_handler(self) -> None:
+        request = urllib.request.Request("https://api.github.com/x")
+        with patch.object(urllib.request, "build_opener") as build_opener:
+            opener = build_opener.return_value
+            opener.open.return_value = FakeResponse(b"{}")
+            self.assertIs(
+                github._github_open(request, timeout=9),
+                opener.open.return_value,
+            )
+
+        self.assertIsInstance(build_opener.call_args.args[0], github._TrustedGitHubRedirect)
+        opener.open.assert_called_once_with(request, timeout=9)
+
+
 class CacheTests(unittest.TestCase):
     def test_keyed_lock_pool_reuses_only_matching_keys(self) -> None:
         locks = github.KeyedLockPool()
@@ -299,6 +414,11 @@ class CacheTests(unittest.TestCase):
 
 
 class GitHubResourceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_repo_metadata_requires_dict_shape(self) -> None:
         with patch.object(github, "github_get", return_value={"stargazers_count": 10}):
             self.assertEqual(github.repo_metadata("a/b", "t"), {"stargazers_count": 10})

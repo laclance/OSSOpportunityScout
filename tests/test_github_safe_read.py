@@ -13,6 +13,14 @@ from opportunity_scout import delivery, github
 from tests.helpers import FakeResponse
 
 
+def github_open_via_urlopen(
+    request: urllib.request.Request,
+    *,
+    timeout: int,
+) -> FakeResponse:
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
 def http_error(
     code: int,
     *,
@@ -32,6 +40,11 @@ def http_error(
 
 
 class SafeReadTests(unittest.TestCase):
+    def setUp(self) -> None:
+        patcher = patch.object(github, "_github_open", side_effect=github_open_via_urlopen)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_success_first_attempt(self) -> None:
         with patch.object(
             urllib.request, "urlopen", return_value=FakeResponse(b'{"ok": true}')
