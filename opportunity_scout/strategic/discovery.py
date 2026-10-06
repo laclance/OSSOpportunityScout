@@ -225,9 +225,7 @@ def _inspection_plan(
     for repo, rows in grouped.items():
         ordered = sorted(rows, key=lambda row: row.rank, reverse=True)
         selected[repo] = ordered[:base_per_repo]
-        overflow.extend(
-            row for row in ordered[base_per_repo:] if possible_miss_signal(row.item)
-        )
+        overflow.extend(row for row in ordered[base_per_repo:] if possible_miss_signal(row.item))
 
     overflow.sort(key=lambda row: row.rank, reverse=True)
     for row in overflow[:adaptive_budget]:
