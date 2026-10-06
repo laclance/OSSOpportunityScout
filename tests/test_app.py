@@ -236,7 +236,9 @@ class HttpAndPlatformTests(unittest.TestCase):
             "urlopen",
             return_value=FakeResponse(b'{"html_url":"x"}'),
         ) as opened:
-            self.assertEqual(scout.github_get_optional("https://api.github.com/x", "tok"), {"html_url": "x"})
+            self.assertEqual(
+                scout.github_get_optional("https://api.github.com/x", "tok"), {"html_url": "x"}
+            )
             self.assertEqual(opened.call_args.args[0].headers["Authorization"], "Bearer tok")
         with patch.object(urllib.request, "urlopen", side_effect=OSError("x")):
             self.assertIsNone(scout.github_get_optional("https://api.github.com/x", None))
