@@ -7,6 +7,7 @@ import urllib.request
 from dataclasses import replace
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from email.message import Message
 from unittest.mock import patch
 
 import opportunity_scout.app as scout
@@ -802,7 +803,7 @@ class RunLifecycleTests(unittest.TestCase):
             "https://api.github.com/repos/platform/project/issues/7",
             401,
             "unauthorized",
-            None,
+            Message(),
             None,
         )
         with (
@@ -820,7 +821,7 @@ class RunLifecycleTests(unittest.TestCase):
             patch.object(state, "save_seen_state") as save,
         ):
             result = run.run_combined_scan(
-                run.RunConfig(None, None, "tb", "chat", None),
+                run.RunConfig("tok", "me/repo", "tb", "chat", None),
                 deps,
                 FIXED_TIME,
             )
