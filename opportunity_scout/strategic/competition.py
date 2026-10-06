@@ -1,14 +1,11 @@
-"""Strategic competition and implementation-PR detection.
-
-This module interprets claim and pull-request evidence for OSS opportunities. It
-uses package-owned GitHub utilities and paid-verification policy, never the root scanner
-or application orchestrator, and is directly testable with mocked GitHub responses.
-"""
+"""Strategic competition and implementation-PR evidence policy."""
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum, auto
 from typing import Callable, Iterable
 
 from opportunity_scout import github, paid_verification
@@ -35,17 +32,25 @@ _ISSUE_BODY_IMPLEMENTATION_CONTEXT = re.compile(
     r"address(?:es|ed|ing)?|resolv(?:es|ed|ing)?)\b",
     re.IGNORECASE,
 )
-_STRONG_COMMENT_PR_REFERENCE = re.compile(
-    r"\b(?:related|implementation|opened|submitted)\s+"
-    r"(?:pr|pull request)\s*:?\s*#(\d+)\b",
+_COMMENT_PR_SHORTHAND = (
+    re.compile(
+        r"\b(?:related|implementation|opened|submitted)\s+"
+        r"(?:pr|pull request)\s*:?\s*#(\d+)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:related\s+)?(?:draft\s+)?"
+        r"(?:fix|patch|implementation)"
+        r"(?:\s+(?:is\s+)?(?:in|at))?\s*[:(]?\s*#(\d+)\b",
+        re.IGNORECASE,
+    ),
+)
+_BRANCH_URL = re.compile(
+    r"https://github\.com/(?P<owner>[^/\s]+)/[^/\s]+/tree/(?P<branch>[^\s)]+)",
     re.IGNORECASE,
 )
-_FIX_COMMENT_PR_REFERENCE = re.compile(
-    r"\b(?:related\s+)?(?:draft\s+)?"
-    r"(?:fix|patch|implementation)"
-    r"(?:\s+(?:is\s+)?(?:in|at))?\s*[:(]?\s*#(\d+)\b",
-    re.IGNORECASE,
-)
+_LINKED_PR_FAILURE = "could not verify linked implementation PR"
+_UNIDENTIFIABLE_ISSUE = "could not identify repository/issue number"
 
 LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
 ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
@@ -54,10 +59,55 @@ TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
 ExistingPrChecker = Callable[[str, int, str | None], str | None]
 
 
+@dataclass(frozen=True, slots=True)
+class _IssueIdentity:
+    repo: str
+    number: int
+
+    @classmethod
+    def from_issue(cls, item: GitHubIssue) -> _IssueIdentity | None:
+        repo, number = github.issue_repo_and_number(item)
+        if not repo or not number:
+            return None
+        return cls(repo=repo, number=number)
+
+    def pull_api_url(self, number: str) -> str:
+        return f"https://api.github.com/repos/{self.repo}/pulls/{number}"
+
+    def pull_web_url(self, number: str) -> str:
+        return f"https://github.com/{self.repo}/pull/{number}"
+
+
+class _LinkedPrEvidenceSource(Enum):
+    ISSUE_BODY_URL = auto()
+    COMMENT_URL = auto()
+    COMMENT_SHORTHAND = auto()
+
+
+@dataclass(frozen=True, slots=True)
+class _LinkedPrEvidence:
+    number: str
+    source: _LinkedPrEvidenceSource
+
+
+@dataclass(frozen=True, slots=True)
+class _CommentEvidence:
+    text: str
+    author: str
+
+    @classmethod
+    def from_comment(cls, comment: GitHubComment) -> _CommentEvidence:
+        user = comment.get("user") or {}
+        return cls(
+            text=str(comment.get("body", "")),
+            author=str(user.get("login", "someone")),
+        )
+
+
 def claim_source_is_recent(
     source: GitHubIssue | GitHubComment, *, issue_body: bool = False
 ) -> bool:
-    """Keep old claims from permanently suppressing strategic opportunities."""
+    """Return whether claim evidence is current enough to suppress an opportunity."""
     timestamp = (
         source.get("created_at")
         if issue_body
@@ -70,106 +120,134 @@ def claim_source_is_recent(
     return age_days <= STRATEGIC_CLAIM_MAX_AGE_DAYS
 
 
-def _comment_author(comment: GitHubComment) -> str:
-    return str((comment.get("user") or {}).get("login", "someone"))
+def _issue_body_claim_reason(item: GitHubIssue) -> str | None:
+    body = str(item.get("body", ""))
+    if not body or not claim_source_is_recent(item, issue_body=True):
+        return None
+    if strategic_claim_text(body):
+        return "issue author already has an implementation/fix in progress"
+    return None
 
 
-def _implementation_branch_owner(body: str, issue_number: int) -> str | None:
-    branch = re.search(
-        rf"https://github\.com/([^/\s]+)/[^/\s]+/tree/"
-        rf"[^\s)]*(?:issue|fix)[-_/]?{issue_number}\b",
-        body,
-        re.IGNORECASE,
-    )
-    return branch.group(1) if branch else None
+def _implementation_branch_owner(text: str, issue_number: int) -> str | None:
+    target = re.compile(rf"(?:issue|fix)[-_/]?{issue_number}\b", re.IGNORECASE)
+    for match in _BRANCH_URL.finditer(text):
+        if target.search(match.group("branch")):
+            return match.group("owner")
+    return None
+
+
+def _comment_claim_reason(comment: GitHubComment, issue_number: int | None) -> str | None:
+    if not claim_source_is_recent(comment):
+        return None
+
+    evidence = _CommentEvidence.from_comment(comment)
+    if strategic_claim_text(evidence.text):
+        return f"active claim by @{evidence.author}"
+
+    if issue_number is None:
+        return None
+    branch_owner = _implementation_branch_owner(evidence.text, issue_number)
+    if branch_owner and branch_owner.lower() == evidence.author.lower():
+        return f"active implementation branch linked by @{evidence.author}"
+    return None
 
 
 def strategic_claim_reason(
     item: GitHubIssue,
     comments: list[GitHubComment],
 ) -> str | None:
-    """Detect active implementation ownership in the issue body and recent comments."""
-    body = str(item.get("body", ""))
-    if body and claim_source_is_recent(item, issue_body=True) and strategic_claim_text(body):
-        return "issue author already has an implementation/fix in progress"
+    """Detect current strategic claim or branch-ownership evidence."""
+    issue_reason = _issue_body_claim_reason(item)
+    if issue_reason is not None:
+        return issue_reason
 
-    _, number = github.issue_repo_and_number(item)
+    identity = _IssueIdentity.from_issue(item)
+    issue_number = identity.number if identity is not None else None
     for comment in comments:
-        if not claim_source_is_recent(comment):
-            continue
-
-        body = str(comment.get("body", ""))
-        author = _comment_author(comment)
-        if strategic_claim_text(body):
-            return f"active claim by @{author}"
-
-        if number:
-            branch_owner = _implementation_branch_owner(body, number)
-            if branch_owner and branch_owner.lower() == author.lower():
-                return f"active implementation branch linked by @{author}"
+        reason = _comment_claim_reason(comment, issue_number)
+        if reason is not None:
+            return reason
     return None
 
 
-def _same_repo_pull_pattern(repo: str) -> re.Pattern[str]:
+def _same_repository_pr_pattern(identity: _IssueIdentity) -> re.Pattern[str]:
     return re.compile(
-        rf"https://github\.com/{re.escape(repo)}/pull/(\d+)",
+        rf"https://github\.com/{re.escape(identity.repo)}/pull/(\d+)",
         re.IGNORECASE,
     )
 
 
-def _issue_body_pr_candidates(repo: str, issue_body: str) -> list[str]:
-    candidates: list[str] = []
-    for match in _same_repo_pull_pattern(repo).finditer(issue_body):
-        start = max(0, match.start() - 160)
-        end = min(len(issue_body), match.end() + 160)
-        if _ISSUE_BODY_IMPLEMENTATION_CONTEXT.search(issue_body[start:end]):
-            candidates.append(match.group(1))
-    return candidates
+def _issue_body_pr_evidence(
+    identity: _IssueIdentity,
+    item: GitHubIssue,
+) -> list[_LinkedPrEvidence]:
+    text = str(item.get("body", ""))
+    evidence: list[_LinkedPrEvidence] = []
+    for match in _same_repository_pr_pattern(identity).finditer(text):
+        context_start = max(0, match.start() - 160)
+        context_end = min(len(text), match.end() + 160)
+        if _ISSUE_BODY_IMPLEMENTATION_CONTEXT.search(text[context_start:context_end]):
+            evidence.append(
+                _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.ISSUE_BODY_URL)
+            )
+    return evidence
 
 
-def _comment_pr_candidates(repo: str, comments: list[GitHubComment]) -> list[str]:
-    candidates: list[str] = []
-    same_repo_pull = _same_repo_pull_pattern(repo)
-
+def _comment_pr_evidence(
+    identity: _IssueIdentity,
+    comments: list[GitHubComment],
+) -> list[_LinkedPrEvidence]:
+    evidence: list[_LinkedPrEvidence] = []
+    same_repo_url = _same_repository_pr_pattern(identity)
     for comment in comments:
-        body = str(comment.get("body", ""))
-        candidates.extend(match.group(1) for match in same_repo_pull.finditer(body))
-        candidates.extend(match.group(1) for match in _STRONG_COMMENT_PR_REFERENCE.finditer(body))
-        candidates.extend(match.group(1) for match in _FIX_COMMENT_PR_REFERENCE.finditer(body))
+        text = str(comment.get("body", ""))
+        evidence.extend(
+            _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.COMMENT_URL)
+            for match in same_repo_url.finditer(text)
+        )
+        for shorthand in _COMMENT_PR_SHORTHAND:
+            evidence.extend(
+                _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.COMMENT_SHORTHAND)
+                for match in shorthand.finditer(text)
+            )
+    return evidence
 
-    return candidates
 
-
-def _linked_pr_candidates(
-    repo: str,
+def _linked_pr_evidence(
+    identity: _IssueIdentity,
     item: GitHubIssue,
     comments: list[GitHubComment],
-) -> list[str]:
-    candidates = _issue_body_pr_candidates(repo, str(item.get("body", "")))
-    candidates.extend(_comment_pr_candidates(repo, comments))
-    return list(dict.fromkeys(candidates))
+) -> list[_LinkedPrEvidence]:
+    observed = _issue_body_pr_evidence(identity, item)
+    observed.extend(_comment_pr_evidence(identity, comments))
+
+    unique: list[_LinkedPrEvidence] = []
+    seen: set[str] = set()
+    for evidence in observed:
+        if evidence.number in seen:
+            continue
+        seen.add(evidence.number)
+        unique.append(evidence)
+    return unique
 
 
-def _verify_linked_pr_candidates(
-    repo: str,
+def _verify_linked_pr_evidence(
+    identity: _IssueIdentity,
     token: str | None,
-    candidates: Iterable[str],
+    evidence: Iterable[_LinkedPrEvidence],
 ) -> str | None:
-    for pr_number in candidates:
-        pr = github.github_get(
-            f"https://api.github.com/repos/{repo}/pulls/{pr_number}",
-            token,
-        )
-        if not isinstance(pr, dict):
-            return SourceFailureReason("could not verify linked implementation PR")
+    for candidate in evidence:
+        pull = github.github_get(identity.pull_api_url(candidate.number), token)
+        if not isinstance(pull, dict):
+            return SourceFailureReason(_LINKED_PR_FAILURE)
 
-        state = pr.get("state")
+        state = pull.get("state")
         if state == "open":
-            url = pr.get("html_url") or f"https://github.com/{repo}/pull/{pr_number}"
+            url = pull.get("html_url") or identity.pull_web_url(candidate.number)
             return f"existing open implementation PR: {url}"
         if state != "closed":
-            return SourceFailureReason("could not verify linked implementation PR")
-
+            return SourceFailureReason(_LINKED_PR_FAILURE)
     return None
 
 
@@ -178,22 +256,20 @@ def linked_open_pr_reason(
     token: str | None,
     comments: list[GitHubComment],
 ) -> str | None:
-    """Detect explicit implementation PR links in the issue body or comments."""
-    repo, number = github.issue_repo_and_number(item)
-    if not repo or not number:
+    """Verify explicit same-repository implementation-PR evidence."""
+    identity = _IssueIdentity.from_issue(item)
+    if identity is None:
         return None
-
-    candidates = _linked_pr_candidates(repo, item, comments)
-    return _verify_linked_pr_candidates(repo, token, candidates)
+    evidence = _linked_pr_evidence(identity, item, comments)
+    return _verify_linked_pr_evidence(identity, token, evidence)
 
 
 def timeline_open_pr_reason(item: GitHubIssue, token: str | None) -> str | None:
-    """Adapt strategic issue identity to the canonical implementation-PR timeline check."""
-    repo, number = github.issue_repo_and_number(item)
-    if not repo or not number:
-        return "could not identify repository/issue number"
-
-    return paid_verification.has_existing_implementation_pr(repo, number, token)
+    """Delegate timeline relationship evidence to the canonical verifier."""
+    identity = _IssueIdentity.from_issue(item)
+    if identity is None:
+        return _UNIDENTIFIABLE_ISSUE
+    return paid_verification.has_existing_implementation_pr(identity.repo, identity.number, token)
 
 
 def _claim_reason_from_patterns(
@@ -201,10 +277,9 @@ def _claim_reason_from_patterns(
     patterns: Iterable[str],
 ) -> str | None:
     for comment in comments:
-        body = str(comment.get("body", ""))
-        for pattern in patterns:
-            if re.search(pattern, body, re.IGNORECASE):
-                return f"active claim by @{_comment_author(comment)}"
+        evidence = _CommentEvidence.from_comment(comment)
+        if any(re.search(pattern, evidence.text, re.IGNORECASE) for pattern in patterns):
+            return f"active claim by @{evidence.author}"
     return None
 
 
@@ -212,10 +287,9 @@ def supplemental_claim_reason(
     item: GitHubIssue,
     comments: list[GitHubComment],
 ) -> str | None:
-    """Detect clear work claims not covered by the upstream scanner."""
+    """Detect paid-compatible work claims outside the canonical paid patterns."""
     if not int(item.get("comments") or 0):
         return None
-
     return _claim_reason_from_patterns(comments, SUPPLEMENTAL_CLAIM_PATTERNS)
 
 
@@ -228,13 +302,13 @@ def extended_competition_reason(
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     supplemental_claim_checker: SupplementalClaimChecker = supplemental_claim_reason,
 ) -> str | None:
-    """Apply paid-lane competition checks using supplied issue comments."""
-    repo, number = github.issue_repo_and_number(item)
-    if not repo or not number:
-        return "could not identify repository/issue number"
+    """Apply paid-compatible competition evidence in stable precedence order."""
+    identity = _IssueIdentity.from_issue(item)
+    if identity is None:
+        return _UNIDENTIFIABLE_ISSUE
 
     checker = existing_pr_checker or paid_verification.has_existing_implementation_pr
-    reason = checker(repo, number, token)
+    reason = checker(identity.repo, identity.number, token)
     if reason:
         return reason
 
@@ -258,10 +332,9 @@ def strategic_competition_reason(
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
     strategic_claim_checker: ClaimChecker = strategic_claim_reason,
 ) -> str | None:
-    """Apply strategic-only competition checks without changing paid-bounty behavior."""
-    repo, number = github.issue_repo_and_number(item)
-    if not repo or not number:
-        return "could not identify repository/issue number"
+    """Apply strategic competition evidence in stable precedence order."""
+    if _IssueIdentity.from_issue(item) is None:
+        return _UNIDENTIFIABLE_ISSUE
 
     reason = strategic_claim_checker(item, comments)
     if reason:
