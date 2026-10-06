@@ -216,15 +216,12 @@ class ExistingImplementationPrTests(unittest.TestCase):
                     "issue": {
                         "pull_request": {},
                         "state": "open",
-                        "html_url": (
-                            "https://github.com/netobserv/flowlogs-pipeline/pull/1247"
-                        ),
+                        "html_url": ("https://github.com/netobserv/flowlogs-pipeline/pull/1247"),
                         "repository_url": (
                             "https://api.github.com/repos/netobserv/flowlogs-pipeline"
                         ),
                         "title": (
-                            "[DRAFT] NETOBSERV-2284 FLP metrics cache optimization "
-                            "(TTL registry)"
+                            "[DRAFT] NETOBSERV-2284 FLP metrics cache optimization (TTL registry)"
                         ),
                         "body": (
                             "Implement TTL support for metrics. See upstream proposal: "
