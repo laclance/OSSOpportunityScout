@@ -331,6 +331,34 @@ class StrategicDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(selection.audit), 1)
         self.assertIn("unrecognized basic eligibility", selection.audit[0]["reason"])
 
+    def test_selection_does_not_audit_known_basic_rejection(self) -> None:
+        assigned = issue(
+            html_url="https://github.com/example/project/issues/1",
+            title="Proxy regression",
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+            assignees=[{"login": "dev"}],
+            updated_at=datetime.now(timezone.utc).isoformat(),
+        )
+
+        selection = discovery.select_strategic_candidates(
+            None,
+            set(),
+            set(),
+            {},
+            [("global", {"items": [assigned]})],
+            target_repos=[],
+            network_workers=1,
+            target_repo_pool=lambda *_args: ([], None),
+            basic_candidate=lambda _item: False,
+            fetch_repo_metadata=lambda *_args: self.fail("known rejection must not fetch metadata"),
+            payment_signal=lambda _item: None,
+            build_candidate=lambda *_args: self.fail("known rejection must not be ranked"),
+            cache_locks=github.KeyedLockPool(),
+        )
+
+        self.assertEqual(selection.ranked_by_repo, {})
+        self.assertEqual(selection.audit, [])
+
     def test_selection_does_not_spend_adaptive_budget_on_weak_overflow(self) -> None:
         base = issue(
             html_url="https://github.com/example/project/issues/1",
