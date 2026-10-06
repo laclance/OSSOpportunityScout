@@ -172,6 +172,32 @@ def issue_comments(item: GitHubIssue, token: str | None) -> list[GitHubComment]:
     return github.issue_comments(item, token)
 
 
+def _strategic_timeline_evidence(
+    item: GitHubIssue,
+    token: str | None,
+) -> tuple[list[GitHubComment] | None, list[Any] | None]:
+    """Load one complete timeline and reuse its comment events only when complete."""
+    repo, number = github.issue_repo_and_number(item)
+    if not repo or not number:
+        return None, None
+
+    timeline = github.github_collection(
+        f"https://api.github.com/repos/{repo}/issues/{number}/timeline?per_page=100",
+        token,
+    )
+    if not isinstance(timeline, list):
+        return None, None
+
+    comments = [
+        cast(GitHubComment, event)
+        for event in timeline
+        if isinstance(event, dict) and event.get("event") == "commented"
+    ]
+    if len(comments) != int(item.get("comments") or 0):
+        return None, timeline
+    return comments, timeline
+
+
 TRIAGE_PENDING_LABELS = {"needs-triage"}
 TRIAGE_ACCEPTED_LABELS = {"triage/accepted", "good first issue", "help wanted"}
 STRATEGIC_CLAIM_MAX_AGE_DAYS = competition_policy.STRATEGIC_CLAIM_MAX_AGE_DAYS
@@ -235,14 +261,26 @@ def strategic_competition_reason(
     item: GitHubIssue,
     token: str | None,
     comments: list[GitHubComment] | None = None,
+    *,
+    timeline_events: list[Any] | None = None,
 ) -> str | None:
     """Apply strategic-only competition checks through the extracted policy module."""
     loaded_comments = issue_comments(item, token) if comments is None else comments
+    timeline_pr_checker: competition_policy.TimelinePrChecker = timeline_open_pr_reason
+    if timeline_events is not None:
+
+        def prefetched_timeline_pr_checker(
+            _item: GitHubIssue,
+            _token: str | None,
+        ) -> str | None:
+            return paid_verification.existing_implementation_pr_reason(timeline_events)
+
+        timeline_pr_checker = prefetched_timeline_pr_checker
     return competition_policy.strategic_competition_reason(
         item,
         token,
         loaded_comments,
-        timeline_pr_checker=timeline_open_pr_reason,
+        timeline_pr_checker=timeline_pr_checker,
         linked_pr_checker=linked_open_pr_reason,
         strategic_claim_checker=strategic_claim_reason,
     )
@@ -554,6 +592,8 @@ def strategic_rejection(
     item: GitHubIssue,
     token: str | None,
     comments: list[GitHubComment] | None = None,
+    *,
+    timeline_events: list[Any] | None = None,
 ) -> str | None:
     common_reason = _strategic_common_source_rejection(item)
     if common_reason:
@@ -596,7 +636,14 @@ def strategic_rejection(
     if diagnostic_reason:
         return diagnostic_reason
 
-    return strategic_competition_reason(item, token, comments)
+    if timeline_events is None:
+        return strategic_competition_reason(item, token, comments)
+    return strategic_competition_reason(
+        item,
+        token,
+        comments,
+        timeline_events=timeline_events,
+    )
 
 
 def verify(
@@ -646,13 +693,17 @@ def verify(
         return None, reward_history
 
     comments = activity_comments
+    timeline_events: list[Any] | None = None
     issue_signal = paid.payment_signal(fresh) or supplemental_payment_signal(fresh)
     comment_signal = None
     if not issue_signal and int(fresh.get("comments") or 0):
         if comments is None:
-            comments, comments_reason = github.issue_comments_checked(fresh, token)
-            if comments_reason:
-                return None, comments_reason
+            if not require_paid:
+                comments, timeline_events = _strategic_timeline_evidence(fresh, token)
+            if comments is None:
+                comments, comments_reason = github.issue_comments_checked(fresh, token)
+                if comments_reason:
+                    return None, comments_reason
         comment_signal = comment_payment_signal(fresh, token, comments)
     signal = issue_signal or comment_signal or payment_signal_override
 
@@ -689,7 +740,15 @@ def verify(
             comments, comments_reason = github.issue_comments_checked(fresh, token)
             if comments_reason:
                 return None, comments_reason
-        reason = strategic_rejection(fresh, token, comments)
+        if timeline_events is None:
+            reason = strategic_rejection(fresh, token, comments)
+        else:
+            reason = strategic_rejection(
+                fresh,
+                token,
+                comments,
+                timeline_events=timeline_events,
+            )
         if reason:
             return None, reason
         lane = "strategic"
