@@ -42,6 +42,47 @@ GITHUB_MAX_RETRY_DELAY_SECONDS: Final = 120.0
 GITHUB_SECONDARY_RETRY_BASE_SECONDS: Final = 60.0
 GITHUB_TRANSIENT_RETRY_BASE_SECONDS: Final = 1.0
 _TRANSIENT_HTTP_STATUSES: Final = frozenset({500, 502, 503, 504})
+_REQUEST_STATS_LOCK = Lock()
+_REQUEST_COUNTS: dict[str, int] = {
+    "search": 0,
+    "issues_list": 0,
+    "issue": 0,
+    "comments": 0,
+    "timeline": 0,
+    "pull": 0,
+    "repository": 0,
+    "contents": 0,
+    "other": 0,
+}
+
+
+@dataclass(frozen=True)
+class GitHubRequestStats:
+    """Bounded per-process counters for outbound GitHub API request attempts."""
+
+    search: int
+    issues_list: int
+    issue: int
+    comments: int
+    timeline: int
+    pull: int
+    repository: int
+    contents: int
+    other: int
+
+    @property
+    def total(self) -> int:
+        return (
+            self.search
+            + self.issues_list
+            + self.issue
+            + self.comments
+            + self.timeline
+            + self.pull
+            + self.repository
+            + self.contents
+            + self.other
+        )
 
 
 @dataclass(frozen=True)
@@ -198,6 +239,77 @@ def _github_headers(token: str | None) -> dict[str, str]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def _request_category(url: str) -> str:
+    path = urllib.parse.urlsplit(url).path
+    if path == "/search/issues":
+        return "search"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues", path):
+        return "issues_list"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+/comments", path):
+        return "comments"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+/timeline", path):
+        return "timeline"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/issues/\\d+", path):
+        return "issue"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/pulls/\\d+", path):
+        return "pull"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+/contents(?:/.*)?", path):
+        return "contents"
+    if re.fullmatch(r"/repos/[^/]+/[^/]+", path):
+        return "repository"
+    return "other"
+
+
+def _record_request_attempt(url: str) -> None:
+    category = _request_category(url)
+    with _REQUEST_STATS_LOCK:
+        _REQUEST_COUNTS[category] += 1
+
+
+def request_stats_snapshot() -> GitHubRequestStats:
+    """Return a thread-safe immutable snapshot of GitHub request attempts."""
+    with _REQUEST_STATS_LOCK:
+        return GitHubRequestStats(
+            search=_REQUEST_COUNTS["search"],
+            issues_list=_REQUEST_COUNTS["issues_list"],
+            issue=_REQUEST_COUNTS["issue"],
+            comments=_REQUEST_COUNTS["comments"],
+            timeline=_REQUEST_COUNTS["timeline"],
+            pull=_REQUEST_COUNTS["pull"],
+            repository=_REQUEST_COUNTS["repository"],
+            contents=_REQUEST_COUNTS["contents"],
+            other=_REQUEST_COUNTS["other"],
+        )
+
+
+def request_stats_delta(
+    before: GitHubRequestStats,
+    after: GitHubRequestStats,
+) -> GitHubRequestStats:
+    """Return the bounded request-attempt delta between two snapshots."""
+    return GitHubRequestStats(
+        search=after.search - before.search,
+        issues_list=after.issues_list - before.issues_list,
+        issue=after.issue - before.issue,
+        comments=after.comments - before.comments,
+        timeline=after.timeline - before.timeline,
+        pull=after.pull - before.pull,
+        repository=after.repository - before.repository,
+        contents=after.contents - before.contents,
+        other=after.other - before.other,
+    )
+
+
+def format_request_stats(stats: GitHubRequestStats) -> str:
+    """Format stable, machine-readable request-attempt counters for run logs."""
+    return (
+        f"github_requests={stats.total} search={stats.search} "
+        f"issues_list={stats.issues_list} issue={stats.issue} comments={stats.comments} "
+        f"timeline={stats.timeline} pull={stats.pull} repository={stats.repository} "
+        f"contents={stats.contents} other={stats.other}"
+    )
 
 
 def github_get(
@@ -438,6 +550,7 @@ def _github_json_get(
 ) -> _GitHubReadResult:
     attempt = 0
     while True:
+        _record_request_attempt(url)
         request = urllib.request.Request(url, headers=_github_headers(token), method="GET")
         try:
             open_url = _pagination_open if pagination else urllib.request.urlopen

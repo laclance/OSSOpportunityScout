@@ -9,7 +9,7 @@ from pathlib import Path
 from time import monotonic
 from typing import Final
 
-from opportunity_scout import reporting, selection, sources, state
+from opportunity_scout import github, reporting, selection, sources, state
 from opportunity_scout.preferences import ScoutPreferences
 from opportunity_scout.types import (
     Candidate,
@@ -308,6 +308,9 @@ def run_combined_scan(
     guide_cache: dict[str, str | None] = {}
 
     started = monotonic()
+    scan_request_start = github.request_stats_snapshot()
+    prefetch_started = monotonic()
+    prefetch_request_start = github.request_stats_snapshot()
     prefetched_paid_searches: list[SearchBatch] | None = None
     prefetched_global_searches: list[SearchBatch] | None = None
     if (
@@ -322,6 +325,15 @@ def run_combined_scan(
             prefetched_paid_searches,
             prefetched_global_searches,
         ) = dependencies.prefetch_discovery_searches(config.token)
+    prefetch_seconds = monotonic() - prefetch_started
+    prefetch_request_stats = github.request_stats_delta(
+        prefetch_request_start,
+        github.request_stats_snapshot(),
+    )
+    print(
+        "Scout performance: phase=discovery_prefetch "
+        f"seconds={prefetch_seconds:.1f} {github.format_request_stats(prefetch_request_stats)}"
+    )
 
     paid_started = monotonic()
     paid, paid_rejects, paid_examples = (
@@ -353,10 +365,15 @@ def run_combined_scan(
     )
 
     strategic_seconds = monotonic() - strategic_started
+    scan_request_stats = github.request_stats_delta(
+        scan_request_start,
+        github.request_stats_snapshot(),
+    )
     print(
-        "Scout performance: "
-        f"paid={paid_seconds:.1f}s, strategic={strategic_seconds:.1f}s, "
-        f"total={monotonic() - started:.1f}s"
+        "Scout performance: phase=scan_total "
+        f"prefetch={prefetch_seconds:.1f}s paid={paid_seconds:.1f}s "
+        f"strategic={strategic_seconds:.1f}s seconds={monotonic() - started:.1f} "
+        f"{github.format_request_stats(scan_request_stats)}"
     )
 
     queue = assemble_queue(
