@@ -1580,7 +1580,7 @@ class DiscoveryTests(unittest.TestCase):
                     failures=(),
                 ),
             ),
-            patch.object(scout, "issue_from_github_url", return_value=platform),
+            patch.object(scout, "issue_from_github_url_checked", return_value=(platform, None)),
         ):
             found, rejected, examples = scout.discover_paid("t", set(), {}, {})
 
