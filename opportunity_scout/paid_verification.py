@@ -71,7 +71,7 @@ class _TimelineEvent(TypedDict, total=False):
 
 _IMPLEMENTATION_RELATIONSHIP_PATTERN = (
     r"(?:fix(?:es|ed|ing)?|close(?:s|d|ing)?|resolve(?:s|d|ing)?|"
-    r"implement(?:s|ed|ing|ation)?|address(?:es|ed|ing)?|part\\s+of)"
+    r"implement(?:s|ed|ing|ation)?|address(?:es|ed|ing)?|part\s+of)"
 )
 
 
@@ -91,19 +91,19 @@ def _timeline_pr_implements_issue(
 
     escaped_repo = re.escape(repo)
     references = [
-        rf"https?://github\\.com/{escaped_repo}/issues/{issue_number}\\b",
-        rf"{escaped_repo}#{issue_number}\\b",
+        rf"https?://github\.com/{escaped_repo}/issues/{issue_number}\b",
+        rf"{escaped_repo}#{issue_number}\b",
     ]
     target_repository_url = f"https://api.github.com/repos/{repo}"
     if repository_url.rstrip("/").lower() == target_repository_url.lower():
-        references.append(rf"(?<![\\w/-])#{issue_number}\\b")
+        references.append(rf"(?<![\w/-])#{issue_number}\b")
 
     reference_pattern = "(?:" + "|".join(references) + ")"
-    text = f"{title}\\n{body or ''}"
+    text = f"{title}\n{body or ''}"
     return (
         re.search(
-            rf"\\b{_IMPLEMENTATION_RELATIONSHIP_PATTERN}\\b"
-            rf"[^\\n]{{0,120}}?{reference_pattern}",
+            rf"\b{_IMPLEMENTATION_RELATIONSHIP_PATTERN}\b"
+            rf"[^\n]{0,120}?{reference_pattern}",
             text,
             re.IGNORECASE,
         )
