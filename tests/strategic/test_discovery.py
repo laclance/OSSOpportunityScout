@@ -301,6 +301,59 @@ class StrategicDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(expanded["a/a"]), 16)
         self.assertEqual(expanded["a/a"][-1].get("html_url"), strong.get("html_url"))
 
+    def test_selection_does_not_spend_adaptive_budget_on_weak_overflow(self) -> None:
+        base = issue(
+            html_url="https://github.com/example/project/issues/1",
+            title="High-ranked task",
+        )
+        weak_overflow = issue(
+            html_url="https://github.com/example/project/issues/2",
+            title="Routine cleanup",
+            updated_at=(datetime.now(timezone.utc) - timedelta(days=300)).isoformat(),
+        )
+        scores = {
+            base["html_url"]: 100,
+            weak_overflow["html_url"]: 90,
+        }
+
+        def build(
+            item: GitHubIssue,
+            _lane: CandidateLane,
+            _signal: str | None,
+            _meta: RepositoryMetadata,
+            _guide: str | None,
+        ) -> Candidate:
+            score = scores[item["html_url"]]
+            return candidate(
+                url=item["html_url"],
+                priority_score=score,
+                career_score=score,
+            )
+
+        selection = discovery.select_strategic_candidates(
+            None,
+            set(),
+            set(),
+            {},
+            [("global", {"items": [base, weak_overflow]})],
+            target_repos=[],
+            network_workers=1,
+            target_repo_pool=lambda *_args: ([], None),
+            basic_candidate=lambda _item: True,
+            fetch_repo_metadata=lambda *_args: repo_meta(),
+            payment_signal=lambda _item: None,
+            build_candidate=build,
+            cache_locks=github.KeyedLockPool(),
+            inspect_per_repo=1,
+            adaptive_budget=1,
+        )
+
+        self.assertEqual(
+            [row[3]["html_url"] for row in selection.ranked_by_repo["example/project"]],
+            [base["html_url"]],
+        )
+        self.assertEqual(selection.audit, [])
+
     def test_global_search_results_preserve_query_order_and_page_budget(self) -> None:
         calls: list[tuple[str, str | None, int]] = []
 
