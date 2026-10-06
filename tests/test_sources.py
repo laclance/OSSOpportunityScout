@@ -83,6 +83,20 @@ class TargetRepoSourceTests(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual(getter.call_count, 2)
 
+    def test_target_repo_pool_stops_after_short_page(self) -> None:
+        i1 = issue(1)
+        with patch.object(github, "github_get", return_value=[i1]) as getter:
+            items, error = sources.target_repo_issue_pool(
+                "example/project",
+                "t",
+                fetch_per_page=2,
+                fetch_pages=4,
+                result_limit=5,
+            )
+        self.assertEqual(items, [i1])
+        self.assertIsNone(error)
+        getter.assert_called_once()
+
 
 class GenericSourceTests(unittest.TestCase):
     def test_optional_json_fetch_auth_and_failure(self) -> None:
@@ -110,6 +124,14 @@ class GenericSourceTests(unittest.TestCase):
             failure = sources.fetch_text("https://example.test")
         self.assertEqual(failure.text, "")
         self.assertEqual(failure.failure, "boom")
+
+    def test_public_text_fetch_counts_success_and_failure_attempts(self) -> None:
+        before = sources.platform_request_count_snapshot()
+        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
+            sources.fetch_text("https://example.test/success")
+        with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
+            sources.fetch_text("https://example.test/failure")
+        self.assertEqual(sources.platform_request_count_snapshot(), before + 2)
 
     def test_issuehunt_fetch_failure_records_discovery_failure(self) -> None:
         with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
@@ -227,6 +249,51 @@ class PlatformAdapterTests(unittest.TestCase):
         )
         self.assertEqual(empty.refs, {})
         self.assertEqual(empty.failures, ())
+
+    def test_opire_deduplicates_and_bounds_detail_requests(self) -> None:
+        calls: list[str] = []
+        pages = {
+            "https://app.opire.dev/home": (
+                '<a href="/issues/A">a</a><a href="/issues/A">dup</a>'
+                '<a href="/issues/B">b</a><a href="/issues/C">c</a>'
+            ),
+            "https://app.opire.dev/issues/A": "https://github.com/acme/widget/issues/1",
+            "https://app.opire.dev/issues/B": "https://github.com/acme/widget/issues/2",
+            "https://app.opire.dev/issues/C": "https://github.com/acme/widget/issues/3",
+        }
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            calls.append(url)
+            return sources.TextFetchResult(pages[url])
+
+        result = sources.opire_platform_refs(fetcher, fetch_limit=2, network_workers=2)
+
+        self.assertEqual(
+            set(result.refs),
+            {
+                "https://github.com/acme/widget/issues/1",
+                "https://github.com/acme/widget/issues/2",
+            },
+        )
+        self.assertEqual(calls.count("https://app.opire.dev/issues/A"), 1)
+        self.assertEqual(calls.count("https://app.opire.dev/issues/B"), 1)
+        self.assertNotIn("https://app.opire.dev/issues/C", calls)
+
+    def test_opire_worker_count_does_not_change_results(self) -> None:
+        pages = {
+            "https://app.opire.dev/home": '<a href="/issues/A">a</a><a href="/issues/B">b</a>',
+            "https://app.opire.dev/issues/A": "$50 bounty https://github.com/acme/a/issues/1",
+            "https://app.opire.dev/issues/B": "https://github.com/acme/b/issues/2",
+        }
+
+        def discover(workers: int) -> sources.PlatformDiscoveryResult:
+            return sources.opire_platform_refs(
+                lambda url: sources.TextFetchResult(pages[url]),
+                fetch_limit=2,
+                network_workers=workers,
+            )
+
+        self.assertEqual(discover(1), discover(3))
 
     def test_opire_listing_and_detail_failures_are_semantic(self) -> None:
         listing_failure = sources.opire_platform_refs(
@@ -459,6 +526,22 @@ class AdaptiveInspectionTests(unittest.TestCase):
         self.assertEqual(
             [item.get("html_url") for item in selected["example/project"]],
             [issue(1).get("html_url")],
+        )
+
+    def test_equal_preview_scores_preserve_stable_inspection_order(self) -> None:
+        selected = sources.strategic_inspection_items(
+            [
+                (90, 90, 0, issue(1)),
+                (90, 90, 0, issue(2)),
+                (90, 90, 0, issue(3)),
+            ],
+            base_per_repo=1,
+            adaptive_budget=1,
+            should_expand=lambda _: True,
+        )
+        self.assertEqual(
+            [item.get("html_url") for item in selected["example/project"]],
+            [issue(1).get("html_url"), issue(2).get("html_url")],
         )
 
     def test_invalid_issue_urls_are_not_selected(self) -> None:
