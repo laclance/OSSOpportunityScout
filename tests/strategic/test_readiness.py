@@ -525,6 +525,80 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
                 )
 
 
+class MaintainerCurrentBehaviorTests(unittest.TestCase):
+    def test_moby_current_default_save_load_preserves_digest(self) -> None:
+        moby = issue(
+            title="Digest is lost after loading a saved image",
+            body=(
+                "Save image with docker save, delete it, then load it again. "
+                "The digest disappears after docker load."
+            ),
+        )
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "Do you have the containerd image store enabled, which is now the default "
+                    "for new installations? Save the image, then delete, and load it again. "
+                    "After loading; digests are the same."
+                ),
+            }
+        ]
+
+        self.assertEqual(
+            readiness.maintainer_current_behavior_reason(moby, comments),
+            "trusted maintainer demonstrates current default behavior already resolves issue",
+        )
+
+    def test_current_behavior_resolution_requires_trusted_full_proof(self) -> None:
+        item = issue(
+            body="Save the image, load it, and compare the digest.",
+        )
+        cases: tuple[GitHubComment, ...] = (
+            {
+                "author_association": "NONE",
+                "body": (
+                    "The containerd image store is now the default for new installations. "
+                    "Save the image, load it again. After loading; digests are the same."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "With the optional containerd image store, save the image, load it again. "
+                    "After loading; digests are the same."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "The containerd image store is now the default for new installations. "
+                    "Please try save and load and report whether the digest changes."
+                ),
+            },
+        )
+        for candidate_comment in cases:
+            with self.subTest(body=candidate_comment["body"]):
+                self.assertIsNone(
+                    readiness.maintainer_current_behavior_reason(item, [candidate_comment])
+                )
+
+        self.assertIsNone(
+            readiness.maintainer_current_behavior_reason(
+                issue(body="Parser crash after restart."),
+                [
+                    {
+                        "author_association": "MEMBER",
+                        "body": (
+                            "The new parser is now the default for new installations. "
+                            "Save the image, load it again. After loading; digests are the same."
+                        ),
+                    }
+                ],
+            )
+        )
+
+
 class MaintainerOpenIdeaTests(unittest.TestCase):
     def test_controller_runtime_unsettled_maintainer_idea_is_not_ready(self) -> None:
         controller_runtime = issue(

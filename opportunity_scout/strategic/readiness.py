@@ -235,6 +235,15 @@ _MAINTAINER_OPINION_REQUEST_RE: Final = re.compile(
     r"\bdo\s+you\s+have\s+an\s+opinion\s+on\s+this\b",
     re.IGNORECASE,
 )
+_MAINTAINER_CURRENT_DEFAULT_RE: Final = re.compile(
+    r"\bnow\s+the\s+default\s+for\s+new\s+installations\b",
+    re.IGNORECASE,
+)
+_MAINTAINER_SAVE_LOAD_RESOLUTION_RE: Final = re.compile(
+    r"\bsave\s+the\s+image\b.{0,1200}\bload\s+it\s+again\b"
+    r".{0,1200}\bafter\s+loading\b.{0,120}\bdigests?\s+are\s+the\s+same\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _SUBMISSION_CLOSED_RE: Final = re.compile(
     r"\b(?:a |the )?(?:pr|pull request).{0,80}\bwill be closed\b",
     re.DOTALL,
@@ -592,6 +601,29 @@ def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
         return "maintainer-authored issue is still deciding implementation semantics"
     if _MAINTAINER_FUTURE_OWNERSHIP_RE.search(body):
         return "maintainer-authored issue is planned as related project follow-up"
+    return None
+
+
+def maintainer_current_behavior_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Reject when a trusted maintainer proves the current default behavior resolves the issue."""
+    issue_text = _issue_evidence(item).normalized_body_lower
+    if not all(marker in issue_text for marker in ("save", "load", "digest")):
+        return None
+
+    for comment in comments or []:
+        evidence = _comment_evidence(comment)
+        if evidence.author_association not in TRUSTED_ASSOCIATIONS:
+            continue
+
+        body = evidence.normalized_body_lower
+        if (
+            _MAINTAINER_CURRENT_DEFAULT_RE.search(body)
+            and _MAINTAINER_SAVE_LOAD_RESOLUTION_RE.search(body)
+        ):
+            return "trusted maintainer demonstrates current default behavior already resolves issue"
     return None
 
 
