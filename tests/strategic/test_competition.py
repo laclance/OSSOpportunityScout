@@ -786,6 +786,58 @@ class LinkedPullRequestTests(unittest.TestCase):
             )
         getter.assert_not_called()
 
+    def test_linked_pr_ignores_external_implementation_pr_number_echo(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "body": (
+                    "Verified external-effect advance. Receiver implementation PR #13406: "
+                    "https://github.com/QwenLM/qwen-code/pull/13406. "
+                    "The receiver implementation remains open and unmerged."
+                )
+            }
+        ]
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(
+                competition.linked_open_pr_reason(
+                    issue(
+                        html_url=(
+                            "https://github.com/Nakagawa-master/"
+                            "nakagawa-theory-archive/issues/402"
+                        )
+                    ),
+                    "t",
+                    comments,
+                )
+            )
+        getter.assert_not_called()
+
+    def test_external_pr_echo_only_suppresses_nearby_matching_number(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "body": (
+                    "External background: https://github.com/other/project/pull/12. "
+                    + ("unrelated context " * 30)
+                    + "Implementation PR #12"
+                )
+            }
+        ]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/example/project/pull/12",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.linked_open_pr_reason(issue(), "t", comments),
+                "existing open implementation PR: https://github.com/example/project/pull/12",
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/pulls/12",
+            "t",
+        )
+
     def test_linked_pr_keeps_strong_same_repo_implementation_shorthand(self) -> None:
         comments: list[GitHubComment] = [{"body": "Implementation PR #12"}]
         with patch.object(

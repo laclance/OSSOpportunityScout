@@ -45,6 +45,12 @@ _COMMENT_PR_SHORTHAND = (
         re.IGNORECASE,
     ),
 )
+_QUALIFIED_PR_URL = re.compile(
+    r"https://github\.com/(?P<repo>[^/\s]+/[^/\s]+)/pull/(?P<number>\d+)\b",
+    re.IGNORECASE,
+)
+_EXTERNAL_PR_ECHO_CONTEXT = 240
+
 _BRANCH_URL = re.compile(
     r"https://github\.com/(?P<owner>[^/\s]+)/[^/\s]+/tree/(?P<branch>[^\s)]+)",
     re.IGNORECASE,
@@ -326,6 +332,22 @@ def _issue_body_pr_evidence(
     return evidence
 
 
+def _external_pr_echo(
+    identity: _IssueIdentity,
+    text: str,
+    shorthand: re.Match[str],
+) -> bool:
+    number = shorthand.group(1)
+    start = max(0, shorthand.start() - _EXTERNAL_PR_ECHO_CONTEXT)
+    end = min(len(text), shorthand.end() + _EXTERNAL_PR_ECHO_CONTEXT)
+    for qualified in _QUALIFIED_PR_URL.finditer(text, start, end):
+        if qualified.group("number") != number:
+            continue
+        if qualified.group("repo").lower() != identity.repo.lower():
+            return True
+    return False
+
+
 def _comment_pr_evidence(
     identity: _IssueIdentity,
     comments: list[GitHubComment],
@@ -338,11 +360,16 @@ def _comment_pr_evidence(
             _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.COMMENT_URL)
             for match in same_repo_url.finditer(text)
         )
-        for shorthand in _COMMENT_PR_SHORTHAND:
-            evidence.extend(
-                _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.COMMENT_SHORTHAND)
-                for match in shorthand.finditer(text)
-            )
+        for shorthand_pattern in _COMMENT_PR_SHORTHAND:
+            for shorthand in shorthand_pattern.finditer(text):
+                if _external_pr_echo(identity, text, shorthand):
+                    continue
+                evidence.append(
+                    _LinkedPrEvidence(
+                        shorthand.group(1),
+                        _LinkedPrEvidenceSource.COMMENT_SHORTHAND,
+                    )
+                )
     return evidence
 
 
