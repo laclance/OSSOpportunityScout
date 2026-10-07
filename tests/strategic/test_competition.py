@@ -810,12 +810,7 @@ class LinkedPullRequestTests(unittest.TestCase):
 
     def test_same_repo_qualified_pr_does_not_suppress_matching_shorthand(self) -> None:
         comments: list[GitHubComment] = [
-            {
-                "body": (
-                    "Implementation PR #12: "
-                    "https://github.com/example/project/pull/12"
-                )
-            }
+            {"body": ("Implementation PR #12: https://github.com/example/project/pull/12")}
         ]
         with patch.object(
             github,
