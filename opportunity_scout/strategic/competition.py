@@ -74,9 +74,7 @@ _CANONICAL_ISSUE_FAILURE = "could not verify canonical issue reference"
 _UNIDENTIFIABLE_ISSUE = "could not identify repository/issue number"
 
 LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
-CanonicalIssueChecker = Callable[
-    [GitHubIssue, str | None, list[GitHubComment]], str | None
-]
+CanonicalIssueChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
 ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 SupplementalClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
