@@ -52,9 +52,9 @@ upstream or fork SHAs.
 
 ### Maintain the release baseline
 
-The stable OSS release baseline is established; `v1.0.3` records the reviewed hardened `main` state after the repository cleanup.
+The stable OSS release baseline is established. Reviewed SemVer releases identify promoted `main` commits; use the [latest GitHub release](https://github.com/laclance/OSSOpportunityScout/releases/latest) for the current published baseline rather than duplicating a version number here.
 
-Future releases should describe the current ownership model, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
+Release notes should describe the current ownership model, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
 
 ## Product improvements
 
