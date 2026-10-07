@@ -49,6 +49,11 @@ _BRANCH_URL = re.compile(
     r"https://github\.com/(?P<owner>[^/\s]+)/[^/\s]+/tree/(?P<branch>[^\s)]+)",
     re.IGNORECASE,
 )
+_REPORTER_IMPLEMENTATION_FORK_RE = re.compile(
+    r"\bimplementation\s+(?:pr|pull request)\s+will\s+follow\s+from\s+fork\s+"
+    r"[\x60'"]?(?P<owner>[A-Za-z0-9-]+)/",
+    re.IGNORECASE,
+)
 _CANONICAL_ISSUE_LEAD_RE = re.compile(
     r"\b(?:existing|canonical|original|earlier|previous)\s+(?:open\s+)?issue\b",
     re.IGNORECASE,
@@ -153,6 +158,16 @@ def _issue_body_claim_reason(item: GitHubIssue) -> str | None:
     if not body or not claim_source_is_recent(item, issue_body=True):
         return None
     if strategic_claim_text(body):
+        return "issue author already has an implementation/fix in progress"
+
+    reporter = item.get("user") or {}
+    reporter_login = str(reporter.get("login", "")) if isinstance(reporter, dict) else ""
+    planned_pr = _REPORTER_IMPLEMENTATION_FORK_RE.search(body)
+    if (
+        reporter_login
+        and planned_pr is not None
+        and planned_pr.group("owner").lower() == reporter_login.lower()
+    ):
         return "issue author already has an implementation/fix in progress"
     return None
 

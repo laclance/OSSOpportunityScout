@@ -144,6 +144,44 @@ class ClaimCompetitionTests(unittest.TestCase):
             )
         )
 
+    def test_aws_reporter_owned_followup_pr_is_active_ownership(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        aws_issue = issue(
+            html_url=(
+                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4874"
+            ),
+            user={"login": "a7i"},
+            created_at=recent,
+            body=(
+                "Support discovering NLB EIP allocations via EC2 tags. "
+                "Implementation PR will follow from fork "
+                "`a7i/aws-load-balancer-controller`."
+            ),
+        )
+
+        self.assertEqual(
+            competition.strategic_claim_reason(aws_issue, []),
+            "issue author already has an implementation/fix in progress",
+        )
+
+    def test_reporter_followup_pr_requires_matching_fork_owner(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        for body in (
+            "Implementation PR will follow after maintainer review.",
+            "Implementation PR will follow from fork `someone-else/project`.",
+        ):
+            with self.subTest(body=body):
+                self.assertIsNone(
+                    competition.strategic_claim_reason(
+                        issue(
+                            user={"login": "reporter"},
+                            created_at=recent,
+                            body=body,
+                        ),
+                        [],
+                    )
+                )
+
     def test_chain_love_3969_direct_claim_is_active_ownership(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
         comments: list[GitHubComment] = [
