@@ -26,6 +26,7 @@ _OWNERSHIP_PATTERNS: Final = _patterns(
     r"(?:a |the )?(?:pr|pull request)\b",
     r"\bi(?:'ll| will) (?:take|work on|handle|implement|fix|resolve)\b",
     r"\bi(?:'ll| will) take a look at implementing\b",
+    r"\bputting up (?:a |the )?(?:pr|pull request)\b(?=\s*[:.,;—-]|\s+(?:to|with|for)\b|$)",
     r"\bbefore i (?:write|start writing) code\b",
     r"\b(?:please|kindly) assign(?: it| this issue)? to me\b",
     r"\bassign (?:this|it) to me\b",
