@@ -468,6 +468,20 @@ def maintainer_comment_authority(comment: GitHubComment) -> bool:
     return _comment_has_maintainer_authority(_comment_evidence(comment))
 
 
+def maintainer_reopened_frozen_signal(
+    comments: list[GitHubComment] | None,
+) -> bool:
+    """Recognize a maintainer deliberately reopening and preserving an issue."""
+    for comment in comments or []:
+        evidence = _comment_evidence(comment)
+        if evidence.author_association not in TRUSTED_ASSOCIATIONS:
+            continue
+        commands = {line.strip() for line in evidence.body_lower.splitlines()}
+        if "/reopen" in commands and "/lifecycle frozen" in commands:
+            return True
+    return False
+
+
 def _diagnostic_evidence_supplied(body: str) -> bool:
     return _DIAGNOSTIC_EVIDENCE_RE.search(body) is not None
 

@@ -52,6 +52,29 @@ class ReadinessLabelTests(unittest.TestCase):
         labels_text = " ".join(readiness.issue_label_set(connection_pool))
         self.assertTrue(readiness.triage_pending_signal(labels_text))
 
+    def test_reopened_frozen_requires_trusted_maintainer_commands(self) -> None:
+        preserved: list[GitHubComment] = [
+            {
+                "body": "/remove-lifecycle rotten\n/lifecycle frozen\n/reopen",
+                "author_association": "MEMBER",
+            }
+        ]
+        self.assertTrue(readiness.maintainer_reopened_frozen_signal(preserved))
+
+        for comments in (
+            [
+                {
+                    "body": "/lifecycle frozen\n/reopen",
+                    "author_association": "NONE",
+                }
+            ],
+            [{"body": "/lifecycle frozen", "author_association": "MEMBER"}],
+            [{"body": "/reopen", "author_association": "MEMBER"}],
+            [],
+        ):
+            with self.subTest(comments=comments):
+                self.assertFalse(readiness.maintainer_reopened_frozen_signal(comments))
+
     def test_stale_label_is_not_abandoned_lifecycle(self) -> None:
         self.assertIsNone(readiness.abandoned_lifecycle_reason(issue(labels=[{"name": "stale"}])))
 

@@ -38,6 +38,7 @@ from opportunity_scout.strategic.readiness import (
     maintainer_current_behavior_reason as maintainer_current_behavior_reason,
     maintainer_issue_decision_reason as maintainer_issue_decision_reason,
     maintainer_open_idea_reason as maintainer_open_idea_reason,
+    maintainer_reopened_frozen_signal as maintainer_reopened_frozen_signal,
     maintainer_submission_hold_reason as maintainer_submission_hold_reason,
     manual_tracking_issue_reason as manual_tracking_issue_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
@@ -627,13 +628,14 @@ def strategic_rejection(
         or maintainer_ready_signal(labels_text)
         or comment_ready is True
     )
+    triage_accepted = accepted or maintainer_reopened_frozen_signal(comments)
 
     readiness_reason = readiness_pending_label_reason(item, accepted)
     if readiness_reason:
         return readiness_reason
 
     pending = bool(TRIAGE_PENDING_LABELS & label_set) or triage_pending_signal(labels_text)
-    if pending and not accepted:
+    if pending and not triage_accepted:
         return "awaiting maintainer triage"
 
     classification_reason = _strategic_classification_rejection(item, comments or [])

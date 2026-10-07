@@ -618,6 +618,39 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+        maintainer_reopen = [
+            {
+                "body": "/remove-lifecycle rotten\n/lifecycle frozen\n/reopen",
+                "author_association": "MEMBER",
+            }
+        ]
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(
+                        labels=[{"name": "needs-triage"}, {"name": "lifecycle/frozen"}],
+                        comments=1,
+                    ),
+                    "t",
+                    maintainer_reopen,
+                )
+            )
+            self.assertEqual(
+                scout.strategic_rejection(
+                    issue(
+                        labels=[
+                            {"name": "needs-triage"},
+                            {"name": "needs/design"},
+                            {"name": "lifecycle/frozen"},
+                        ],
+                        comments=1,
+                    ),
+                    "t",
+                    maintainer_reopen,
+                ),
+                "awaiting maintainer design decision",
+            )
+
         with (
             patch.object(scout, "abandoned_lifecycle_reason", return_value="abandoned"),
             patch.object(scout, "readiness_pending_label_reason", return_value="readiness"),
