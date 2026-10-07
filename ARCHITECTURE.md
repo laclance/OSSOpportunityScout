@@ -368,6 +368,8 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 ## Invariants
 
 - Shared comments and paid/strategic timelines require complete pagination. Collection traversal validates HTTPS GitHub API destinations, collection identity, unchanged query parameters, and successive page numbers; numeric repository aliases require matching repository metadata. Redirects are refused before credentials can be forwarded. A 1000-page safety ceiling fails closed for complete-evidence callers.
+- Public bounty-platform HTML redirects stay within the same normalized HTTPS origin (scheme, hostname, and effective port). Cross-origin redirects, HTTPS downgrades, malformed ports, and userinfo targets are rejected before the replacement request is issued.
+- Source-derived text is untrusted at delivery sinks. Discord disables mention parsing for webhook payloads, and GitHub report rendering neutralizes `@user` / `@org/team` mention syntax at the completed-report boundary without changing scanner selection, scoring, or persisted candidate/state data.
 - Search remains one intentionally bounded page. Curated repository discovery retains its configured page/result limits and short-page termination. The separate paid active-claim check retains its existing at-most-30-comment request; issue-specific comment sorting is not guaranteed by the documented API.
 
 - Paid candidates require explicit payment evidence and must represent open work rather than payout-history/leaderboard summaries.
