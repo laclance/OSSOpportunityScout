@@ -311,6 +311,8 @@ def estimate_effort_details(
         or re.search(
             r"\b(?:unable to reproduce|cannot reproduce|can't reproduce|"
             r"haven't been able to reproduce|have not been able to reproduce|"
+            r"(?:i\s+)?(?:don't|do not)\s+have\s+(?:a\s+)?deterministic\s+reproduction|"
+            r"no\s+deterministic\s+reproduction|"
             r"low-probability race|non[- ]deterministic repro)\b",
             evidence.text,
         )

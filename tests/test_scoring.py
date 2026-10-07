@@ -216,6 +216,38 @@ class EffortCalibrationTests(unittest.TestCase):
                 self.assertEqual(estimate.bucket, "3–6h")
                 self.assertEqual(estimate.reasons, ("moderate implementation scope",))
 
+    def test_report_13_nondeterministic_reproduction_raises_effort(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title=(
+                    'macOS network extension aborts with "panic: invalid return from write"'
+                ),
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "I don't have a deterministic reproduction. The machine was under "
+                    "sustained high load when the crash occurred."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "1d+")
+        self.assertEqual(
+            estimate.reasons,
+            ("environment/reproduction-heavy investigation",),
+        )
+
+        deterministic = scoring.estimate_effort_details(
+            issue(
+                title="macOS network extension panic",
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "I have a deterministic reproduction: start the extension and send "
+                    "the same request twice."
+                ),
+            )
+        )
+        self.assertEqual(deterministic.bucket, "3–6h")
+        self.assertEqual(deterministic.reasons, ("moderate implementation scope",))
+
     def test_report_11_android_tv_device_reproduction_raises_effort(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
