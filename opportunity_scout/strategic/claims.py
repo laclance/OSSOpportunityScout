@@ -19,6 +19,8 @@ _OWNERSHIP_PATTERNS: Final = _patterns(
     r"\bi(?:'m| am) interested in working on\b",
     r"\bi(?:'m| am) (?:taking|working on) (?:this|it|an independent pass)\b",
     r"\bi can (?:take|work on|handle|implement|fix|resolve)\b",
+    r"\bmay i take (?:this|the) issue and (?:submit|open|send) "
+    r"(?:a |the )?(?:pr|pull request)\b",
     r"\bi(?:'ll| will) (?:take|work on|handle|implement|fix|resolve)\b",
     r"\bi(?:'ll| will) take a look at implementing\b",
     r"\bbefore i (?:write|start writing) code\b",
