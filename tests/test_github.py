@@ -504,8 +504,13 @@ class GitHubResourceTests(unittest.TestCase):
             Message(),
             None,
         )
-        with patch.object(urllib.request, "urlopen", side_effect=not_found):
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=not_found),
+            io.StringIO() as output,
+            redirect_stdout(output),
+        ):
             self.assertEqual(github.issue_from_github_url_checked(url, "t"), (None, None))
+            self.assertEqual(output.getvalue(), "")
 
         unauthorized = urllib.error.HTTPError(
             "https://api.github.com/repos/a/b/issues/12",
@@ -514,8 +519,13 @@ class GitHubResourceTests(unittest.TestCase):
             Message(),
             None,
         )
-        with patch.object(urllib.request, "urlopen", side_effect=unauthorized):
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=unauthorized),
+            io.StringIO() as output,
+            redirect_stdout(output),
+        ):
             item, failure = github.issue_from_github_url_checked(url, "t")
+            self.assertIn("GitHub API Error", output.getvalue())
         self.assertIsNone(item)
         self.assertIsInstance(failure, SourceFailureReason)
         self.assertIn("authentication failure", str(failure))
