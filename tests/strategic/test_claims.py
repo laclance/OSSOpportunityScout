@@ -58,6 +58,16 @@ class StrategicClaimTextTests(unittest.TestCase):
             )
         )
 
+    def test_putting_up_pr_is_active_ownership(self) -> None:
+        self.assertTrue(
+            strategic_claim_text(
+                "Putting up a PR: route all setters through an update helper plus a regression test."
+            )
+        )
+        self.assertFalse(
+            strategic_claim_text("Putting up a PR would help once the design is agreed.")
+        )
+
     def test_multiple_claim_forms_in_one_body_remain_a_claim(self) -> None:
         self.assertTrue(
             strategic_claim_text(
