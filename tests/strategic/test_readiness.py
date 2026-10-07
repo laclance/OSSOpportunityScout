@@ -525,6 +525,90 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
                 )
 
 
+class MaintainerOpenIdeaTests(unittest.TestCase):
+    def test_controller_runtime_unsettled_maintainer_idea_is_not_ready(self) -> None:
+        controller_runtime = issue(
+            author_association="MEMBER",
+            body=(
+                "The metrics server can take a few seconds to become available.\n\n"
+                "### Just an Idea\n\n"
+                "It might be nice if controller-runtime could provide a ReadyzCheck."
+            ),
+        )
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "Not sure if a controller should be not ready because "
+                    "the metrics server is not up yet."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "But maybe it's fine to implement something similar for the metrics server. "
+                    "@another-maintainer Do you have an opinion on this?"
+                ),
+            },
+        ]
+
+        self.assertEqual(
+            readiness.maintainer_open_idea_reason(controller_runtime, comments),
+            "maintainer-authored idea still needs implementation decision",
+        )
+
+    def test_unsettled_idea_requires_trusted_author_heading_and_full_discussion(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": "Not sure if the controller should expose this.",
+            },
+            {
+                "author_association": "MEMBER",
+                "body": "Do you have an opinion on this?",
+            },
+        ]
+        self.assertIsNone(
+            readiness.maintainer_open_idea_reason(
+                issue(author_association="NONE", body="### Just an Idea\nMaybe add this."),
+                comments,
+            )
+        )
+        self.assertIsNone(
+            readiness.maintainer_open_idea_reason(
+                issue(author_association="MEMBER", body="Implement the metrics readiness check."),
+                comments,
+            )
+        )
+        self.assertIsNone(
+            readiness.maintainer_open_idea_reason(
+                issue(author_association="MEMBER", body="### Just an Idea\nMaybe add this."),
+                comments[:1],
+            )
+        )
+
+    def test_later_maintainer_ready_signal_restores_actionability(self) -> None:
+        item = issue(
+            author_association="MEMBER",
+            body="### Just an Idea\nMaybe expose this readiness check.",
+        )
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "MEMBER",
+                "body": "Not sure if the controller should expose this.",
+            },
+            {
+                "author_association": "MEMBER",
+                "body": "Do you have an opinion on this?",
+            },
+            {
+                "author_association": "MEMBER",
+                "body": "The design is settled. Contributions welcome.",
+            },
+        ]
+        self.assertIsNone(readiness.maintainer_open_idea_reason(item, comments))
+
+
 class MaintainerIssueDecisionTests(unittest.TestCase):
     def test_controller_runtime_maintainer_owned_followup_is_not_fresh_work(self) -> None:
         controller_runtime = issue(
