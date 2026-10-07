@@ -348,11 +348,20 @@ def estimate_effort_details(
         for marker in ("os-android", "os-ios", "os-macos", "os-windows")
     )
     missing_reproduction = "_no response_" in evidence.text or "no response" in evidence.text
+    specialized_device_repro = bool(
+        re.search(
+            r"\b(?:android\s*tv|androidtv|apple\s*tv|tvos|fire\s*tv|roku)\b",
+            evidence.text,
+        )
+        and re.search(r"\b(?:steps to reproduce|reproduc(?:e|tion))\b", evidence.text)
+        and re.search(r"\bdevice\b", evidence.text)
+    )
     broader = bool(
         evidence.file_refs >= 4
         or evidence.feature_signal
         or len(evidence.prose) > 6500
         or (platform_label and missing_reproduction)
+        or specialized_device_repro
         or (re.search(r"\bsuggested fix(?:es)?\b", evidence.text) and suggested_fix_bullets >= 3)
     )
     if broader:
@@ -367,6 +376,8 @@ def estimate_effort_details(
             reasons.append("multi-step suggested implementation")
         if platform_label and missing_reproduction:
             reasons.append("platform-specific reproduction is missing")
+        if specialized_device_repro:
+            reasons.append("specialized device reproduction/setup")
         return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
 
     if _trusted_history_complexity(activity_comments):
