@@ -560,6 +560,10 @@ class MaintainerOpenIdeaTests(unittest.TestCase):
     def test_unsettled_idea_requires_trusted_author_heading_and_full_discussion(self) -> None:
         comments: list[GitHubComment] = [
             {
+                "author_association": "NONE",
+                "body": "Not sure if the controller should expose this. Do you have an opinion?",
+            },
+            {
                 "author_association": "MEMBER",
                 "body": "Not sure if the controller should expose this.",
             },
