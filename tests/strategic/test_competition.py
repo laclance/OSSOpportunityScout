@@ -394,18 +394,19 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
         )
         for body in ordinary:
             with self.subTest(body=body), patch.object(github, "github_get") as getter:
-                self.assertIsNone(
-                    competition.canonical_open_issue_reason(issue(body=body), "t")
-                )
+                self.assertIsNone(competition.canonical_open_issue_reason(issue(body=body), "t"))
             getter.assert_not_called()
 
     def test_canonical_lookup_fails_closed_on_unusable_or_unknown_state(self) -> None:
         item = issue(body="An existing issue #17 requests the same feature.")
         for result in (None, [], {"state": "unknown"}):
-            with self.subTest(result=result), patch.object(
-                github,
-                "github_get",
-                return_value=result,
+            with (
+                self.subTest(result=result),
+                patch.object(
+                    github,
+                    "github_get",
+                    return_value=result,
+                ),
             ):
                 reason = competition.canonical_open_issue_reason(item, "t")
             self.assertEqual(reason, "could not verify canonical issue reference")
