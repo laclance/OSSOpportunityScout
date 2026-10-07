@@ -800,10 +800,7 @@ class LinkedPullRequestTests(unittest.TestCase):
             self.assertIsNone(
                 competition.linked_open_pr_reason(
                     issue(
-                        html_url=(
-                            "https://github.com/Nakagawa-master/"
-                            "nakagawa-theory-archive/issues/402"
-                        )
+                        html_url="https://github.com/Nakagawa-master/nakagawa-theory-archive/issues/402"
                     ),
                     "t",
                     comments,
