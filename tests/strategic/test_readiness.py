@@ -637,7 +637,7 @@ class ReporterExternalInfrastructureTests(unittest.TestCase):
 
     def test_external_flake_requires_reporter_and_explicit_no_fix_status(self) -> None:
         item = issue(user={"login": "reporter"})
-        cases: tuple[list[GitHubComment], str] = (
+        cases: tuple[tuple[list[GitHubComment], str], ...] = (
             (
                 [{"user": {"login": "reporter"}, "body": "This looks like infra flakiness."}],
                 "missing no-fix status",
