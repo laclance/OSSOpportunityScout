@@ -32,6 +32,18 @@ _ISSUE_BODY_IMPLEMENTATION_CONTEXT = re.compile(
     r"address(?:es|ed|ing)?|resolv(?:es|ed|ing)?)\b",
     re.IGNORECASE,
 )
+_ISSUE_BODY_HISTORICAL_PR_CONTEXT = re.compile(
+    r"\b(?:introduced|caused|triggered)\s+(?:(?:this|the|a)\s+)?"
+    r"(?:bug|regression|issue|problem)\b|"
+    r"\bled\b.{0,80}\b(?:(?:this|the|a)\s+)?(?:bug|regression|issue|problem)\b|"
+    r"\b(?:underlying|original)\s+(?:bug|issue|problem)\b.{0,100}"
+    r"\b(?:was(?:n['’]t| not)|is(?:n['’]t| not))\s+"
+    r"(?:addressed|fixed|resolved)\b|"
+    r"\b(?:did(?:n['’]t| not)|does(?:n['’]t| not))\s+"
+    r"(?:address|fix|resolve)\s+(?:(?:this|the|underlying|original)\s+)?"
+    r"(?:bug|issue|problem)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _COMMENT_PR_SHORTHAND = (
     re.compile(
         r"\b(?:related|implementation|opened|submitted)\s+"
@@ -325,7 +337,11 @@ def _issue_body_pr_evidence(
     for match in _same_repository_pr_pattern(identity).finditer(text):
         context_start = max(0, match.start() - 160)
         context_end = min(len(text), match.end() + 160)
-        if _ISSUE_BODY_IMPLEMENTATION_CONTEXT.search(text[context_start:context_end]):
+        context = text[context_start:context_end]
+        if (
+            _ISSUE_BODY_IMPLEMENTATION_CONTEXT.search(context)
+            and _ISSUE_BODY_HISTORICAL_PR_CONTEXT.search(context) is None
+        ):
             evidence.append(
                 _LinkedPrEvidence(match.group(1), _LinkedPrEvidenceSource.ISSUE_BODY_URL)
             )
