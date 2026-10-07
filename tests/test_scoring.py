@@ -1106,7 +1106,7 @@ class CompetitionVolumeTests(unittest.TestCase):
 
         self.assertEqual(scoring.competition(tailscale, reporter_comments), "none")
 
-        with_competitor = [
+        with_competitor: list[GitHubComment] = [
             *reporter_comments,
             {
                 "body": "I reproduced this and am investigating a client-side fix.",
