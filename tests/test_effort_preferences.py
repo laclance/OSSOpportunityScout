@@ -16,6 +16,7 @@ from opportunity_scout import (
     paid_verification,
     preferences,
     run,
+    scoring,
     selection,
     sources,
     state,
@@ -60,6 +61,28 @@ class EffortPolicyTests(unittest.TestCase):
 
 
 class FinalEstimateTests(unittest.TestCase):
+    def test_whole_surface_interface_migration_is_one_day_plus(self) -> None:
+        aws = issue(
+            title="Migrate iptables to nftables API for all rules",
+            body=(
+                "Prerouting chains already use the nftables API. IPAMD still has "
+                "Postrouting and mangle table rules using iptables-nft. Maintain a "
+                "single API interface for configuring rules on instances that support nft."
+            ),
+            labels=["enhancement", "tech debt", "priority/P2"],
+        )
+        self.assertEqual(
+            scoring.estimate_effort_details(aws),
+            scoring.EffortEstimate("1d+", ("whole-surface interface migration",)),
+        )
+
+        bounded = issue(
+            title="Migrate one parser rule to the new API",
+            body="Move the one existing parser rule and its unit test to the replacement API.",
+            labels=["enhancement"],
+        )
+        self.assertEqual(scoring.estimate_effort(bounded), "6–12h")
+
     def test_paid_acceptance_uses_refreshed_estimate_in_both_directions(self) -> None:
         small = issue(
             title="Deterministic response bug",
