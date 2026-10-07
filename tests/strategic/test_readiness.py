@@ -663,9 +663,7 @@ class ReporterExternalInfrastructureTests(unittest.TestCase):
         )
         for comments, label in cases:
             with self.subTest(label=label):
-                self.assertIsNone(
-                    readiness.reporter_external_infrastructure_reason(item, comments)
-                )
+                self.assertIsNone(readiness.reporter_external_infrastructure_reason(item, comments))
 
     def test_latest_reporter_status_can_restore_actionability(self) -> None:
         item = issue(user={"login": "reporter"})
@@ -688,9 +686,7 @@ class ReporterExternalInfrastructureTests(unittest.TestCase):
                 ),
             },
         ]
-        self.assertIsNone(
-            readiness.reporter_external_infrastructure_reason(item, comments)
-        )
+        self.assertIsNone(readiness.reporter_external_infrastructure_reason(item, comments))
 
     def test_missing_reporter_or_reporter_comments_is_not_rejected(self) -> None:
         self.assertIsNone(
