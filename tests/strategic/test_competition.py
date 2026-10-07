@@ -767,6 +767,35 @@ class LinkedPullRequestTests(unittest.TestCase):
             self.assertIsNone(competition.linked_open_pr_reason(background, "t", []))
         no_fetch.assert_not_called()
 
+    def test_issue_body_ignores_historical_pr_that_introduced_bug(self) -> None:
+        grpc_issue = issue(
+            html_url="https://github.com/grpc/grpc-go/issues/9470",
+            comments=0,
+            body=(
+                "I came across [this](https://github.com/grpc/grpc-go/pull/6799/) PR "
+                "in which mutexes were replaced by atomic pointers, which had led this bug "
+                "to creep in. Isn't this implementation actually detrimental to performance?"
+            ),
+        )
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(competition.linked_open_pr_reason(grpc_issue, "t", []))
+        getter.assert_not_called()
+
+    def test_issue_body_ignores_prior_pr_that_left_underlying_issue_unaddressed(self) -> None:
+        flux_issue = issue(
+            html_url="https://github.com/fluxcd/flux2/issues/6014",
+            comments=0,
+            body=(
+                "The memory-build default was disabled in "
+                "https://github.com/fluxcd/flux2/pull/5969. "
+                "The underlying issue of where to lock wasn't addressed however, "
+                "so the flag is still broken when used with --path."
+            ),
+        )
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(competition.linked_open_pr_reason(flux_issue, "t", []))
+        getter.assert_not_called()
+
     def test_linked_pr_ignores_flux_historical_bare_pr_reference(self) -> None:
         comments: list[GitHubComment] = [
             {"body": "PR #1625's health-check requeue is also downstream of build/apply."}
