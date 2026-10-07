@@ -122,7 +122,10 @@ def send_discord_notification(webhook_url: str, message: str) -> bool:
     """Send a notification message via Discord Webhook."""
     return _deliver_notification(
         "Discord",
-        _notification_request(webhook_url, {"content": message}),
+        _notification_request(
+            webhook_url,
+            {"content": message, "allowed_mentions": {"parse": []}},
+        ),
     )
 
 
