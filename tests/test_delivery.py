@@ -76,18 +76,22 @@ class DeliveryTests(unittest.TestCase):
         with patch.object(urllib.request, "urlopen", side_effect=OSError("telegram failed")):
             self.assertFalse(delivery.send_telegram_notification("bot", "chat", "hello"))
 
-    def test_discord_success_preserves_request(self) -> None:
+    def test_discord_success_disables_mentions_and_preserves_request(self) -> None:
+        message = "@everyone @here <@123> <@&456>"
         with patch.object(
             urllib.request,
             "urlopen",
             return_value=FakeResponse(),
         ) as opened:
-            self.assertTrue(delivery.send_discord_notification("https://hook", "hello"))
+            self.assertTrue(delivery.send_discord_notification("https://hook", message))
 
         req = cast(urllib.request.Request, opened.call_args.args[0])
         self.assertEqual(req.full_url, "https://hook")
         self.assertEqual(req.method, "POST")
-        self.assertEqual(request_json(req), {"content": "hello"})
+        self.assertEqual(
+            request_json(req),
+            {"content": message, "allowed_mentions": {"parse": []}},
+        )
         self.assertEqual(req.get_header("Content-type"), "application/json")
         self.assertEqual(opened.call_args.kwargs["timeout"], 10)
 
