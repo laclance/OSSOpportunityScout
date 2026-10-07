@@ -339,6 +339,89 @@ class ClaimCompetitionTests(unittest.TestCase):
         self.assertIsNone(competition.supplemental_claim_reason(issue(comments=0), []))
 
 
+class CanonicalIssueReferenceTests(unittest.TestCase):
+    def test_cilium_context_issue_redirects_to_open_canonical_issue(self) -> None:
+        item = issue(
+            html_url="https://github.com/cilium/cilium/issues/45712",
+            body=(
+                "We also found an existing issue "
+                "(https://github.com/cilium/cilium/issues/5051) "
+                "requesting for incremental xDS in envoy."
+            ),
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/cilium/cilium/issues/5051",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.canonical_open_issue_reason(item, "t"),
+                (
+                    "same work is already tracked by open canonical issue: "
+                    "https://github.com/cilium/cilium/issues/5051"
+                ),
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/cilium/cilium/issues/5051",
+            "t",
+        )
+
+    def test_canonical_issue_shorthand_is_verified_and_closed_target_is_allowed(self) -> None:
+        item = issue(
+            body="The canonical issue #17 tracks this feature already.",
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={"state": "closed"},
+        ) as getter:
+            self.assertIsNone(competition.canonical_open_issue_reason(item, "t"))
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/issues/17",
+            "t",
+        )
+
+    def test_ordinary_cross_references_do_not_trigger_canonical_lookup(self) -> None:
+        ordinary = (
+            "Part of #9455.",
+            "xref: #3320",
+            "See https://github.com/example/project/issues/18 for background.",
+            "We found an existing issue #19 for historical context.",
+            "The current issue #42 requests the same feature.",
+        )
+        for body in ordinary:
+            with self.subTest(body=body), patch.object(github, "github_get") as getter:
+                self.assertIsNone(
+                    competition.canonical_open_issue_reason(issue(body=body), "t")
+                )
+            getter.assert_not_called()
+
+    def test_canonical_lookup_fails_closed_on_unusable_or_unknown_state(self) -> None:
+        item = issue(body="An existing issue #17 requests the same feature.")
+        for result in (None, [], {"state": "unknown"}):
+            with self.subTest(result=result), patch.object(
+                github,
+                "github_get",
+                return_value=result,
+            ):
+                reason = competition.canonical_open_issue_reason(item, "t")
+            self.assertEqual(reason, "could not verify canonical issue reference")
+            self.assertIsInstance(reason, SourceFailureReason)
+
+    def test_canonical_lookup_ignores_unidentifiable_issue(self) -> None:
+        with patch.object(github, "github_get") as getter:
+            self.assertIsNone(
+                competition.canonical_open_issue_reason(
+                    {"html_url": "bad", "body": "Existing issue #17 tracks this feature."},
+                    "t",
+                )
+            )
+        getter.assert_not_called()
+
+
 class LinkedPullRequestTests(unittest.TestCase):
     def test_linked_pr_checks_open_state_and_deduplicates_candidates(self) -> None:
         comments: list[GitHubComment] = [

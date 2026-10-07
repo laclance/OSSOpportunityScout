@@ -49,10 +49,21 @@ _BRANCH_URL = re.compile(
     r"https://github\.com/(?P<owner>[^/\s]+)/[^/\s]+/tree/(?P<branch>[^\s)]+)",
     re.IGNORECASE,
 )
+_CANONICAL_ISSUE_LEAD_RE = re.compile(
+    r"\b(?:existing|canonical|original|earlier|previous)\s+(?:open\s+)?issue\b",
+    re.IGNORECASE,
+)
+_CANONICAL_ISSUE_PURPOSE_RE = re.compile(
+    r"\b(?:request(?:s|ed|ing)?|track(?:s|ed|ing)?|cover(?:s|ed|ing)?|"
+    r"(?:same|this)\s+(?:feature|bug|problem|work))\b",
+    re.IGNORECASE,
+)
 _LINKED_PR_FAILURE = "could not verify linked implementation PR"
+_CANONICAL_ISSUE_FAILURE = "could not verify canonical issue reference"
 _UNIDENTIFIABLE_ISSUE = "could not identify repository/issue number"
 
 LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
+CanonicalIssueChecker = Callable[[GitHubIssue, str | None], str | None]
 ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 SupplementalClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
@@ -76,6 +87,12 @@ class _IssueIdentity:
 
     def pull_web_url(self, number: str) -> str:
         return f"https://github.com/{self.repo}/pull/{number}"
+
+    def issue_api_url(self, number: int) -> str:
+        return f"https://api.github.com/repos/{self.repo}/issues/{number}"
+
+    def issue_web_url(self, number: int) -> str:
+        return f"https://github.com/{self.repo}/issues/{number}"
 
 
 class _LinkedPrEvidenceSource(Enum):
@@ -168,6 +185,52 @@ def strategic_claim_reason(
         reason = _comment_claim_reason(comment, issue_number)
         if reason is not None:
             return reason
+    return None
+
+
+def _same_repository_issue_pattern(identity: _IssueIdentity) -> re.Pattern[str]:
+    return re.compile(
+        rf"https://github\.com/{re.escape(identity.repo)}/issues/(\d+)|(?<!\w)#(\d+)\b",
+        re.IGNORECASE,
+    )
+
+
+def _canonical_issue_numbers(identity: _IssueIdentity, item: GitHubIssue) -> list[int]:
+    text = str(item.get("body", ""))
+    pattern = _same_repository_issue_pattern(identity)
+    numbers: list[int] = []
+    seen: set[int] = set()
+
+    for lead in _CANONICAL_ISSUE_LEAD_RE.finditer(text):
+        window = text[lead.start() : lead.start() + 360]
+        for reference in pattern.finditer(window):
+            number = int(reference.group(1) or reference.group(2))
+            if number == identity.number or number in seen:
+                continue
+            if _CANONICAL_ISSUE_PURPOSE_RE.search(window[reference.end() : reference.end() + 180]) is None:
+                continue
+            seen.add(number)
+            numbers.append(number)
+    return numbers
+
+
+def canonical_open_issue_reason(item: GitHubIssue, token: str | None) -> str | None:
+    """Reject reporter-described duplicate/context issues when canonical work is still open."""
+    identity = _IssueIdentity.from_issue(item)
+    if identity is None:
+        return None
+
+    for number in _canonical_issue_numbers(identity, item):
+        canonical = github.github_get(identity.issue_api_url(number), token)
+        if not isinstance(canonical, dict):
+            return SourceFailureReason(_CANONICAL_ISSUE_FAILURE)
+
+        state = canonical.get("state")
+        if state == "open":
+            url = canonical.get("html_url") or identity.issue_web_url(number)
+            return f"same work is already tracked by open canonical issue: {url}"
+        if state != "closed":
+            return SourceFailureReason(_CANONICAL_ISSUE_FAILURE)
     return None
 
 
@@ -330,6 +393,7 @@ def strategic_competition_reason(
     *,
     timeline_pr_checker: TimelinePrChecker = timeline_open_pr_reason,
     linked_pr_checker: LinkedPrChecker = linked_open_pr_reason,
+    canonical_issue_checker: CanonicalIssueChecker = canonical_open_issue_reason,
     strategic_claim_checker: ClaimChecker = strategic_claim_reason,
 ) -> str | None:
     """Apply strategic competition evidence in stable precedence order."""
@@ -337,6 +401,10 @@ def strategic_competition_reason(
         return _UNIDENTIFIABLE_ISSUE
 
     reason = strategic_claim_checker(item, comments)
+    if reason:
+        return reason
+
+    reason = canonical_issue_checker(item, token)
     if reason:
         return reason
 
