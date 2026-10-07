@@ -460,6 +460,36 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
             "t",
         )
 
+    def test_comment_canonical_references_skip_self_and_dedupe_body_target(self) -> None:
+        item = issue(body="The canonical issue #17 tracks this feature already.")
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "CONTRIBUTOR",
+                "body": (
+                    "It appears this is a duplicate of #42; move discussion to there."
+                ),
+            },
+            {
+                "author_association": "MEMBER",
+                "body": (
+                    "It appears this is a duplicate of #17; move discussion to there. "
+                    "#17 is the target."
+                ),
+            },
+        ]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={"state": "closed"},
+        ) as getter:
+            self.assertIsNone(
+                competition.canonical_open_issue_reason(item, "t", comments)
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/issues/17",
+            "t",
+        )
+
     def test_canonical_issue_shorthand_is_verified_and_closed_target_is_allowed(self) -> None:
         item = issue(
             body="The canonical issue #17 tracks this feature already.",
