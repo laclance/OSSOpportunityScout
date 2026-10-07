@@ -427,9 +427,7 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
         )
         for comment, should_fetch in cases:
             with self.subTest(comment=comment), patch.object(github, "github_get") as getter:
-                self.assertIsNone(
-                    competition.canonical_open_issue_reason(item, "t", [comment])
-                )
+                self.assertIsNone(competition.canonical_open_issue_reason(item, "t", [comment]))
             self.assertEqual(getter.called, should_fetch)
 
         with patch.object(
