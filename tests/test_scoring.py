@@ -216,6 +216,36 @@ class EffortCalibrationTests(unittest.TestCase):
                 self.assertEqual(estimate.bucket, "3–6h")
                 self.assertEqual(estimate.reasons, ("moderate implementation scope",))
 
+    def test_report_11_android_tv_device_reproduction_raises_effort(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="AndroidTV: weird state when Subnet routing is enabled",
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "1. Configure a machine with subnets.\n"
+                    "2. Add a new AndroidTV device.\n"
+                    "3. Try to connect with Subnet routes enabled.\n\n"
+                    "OS version: AndroidTV 11"
+                ),
+                labels=[{"name": "bug"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(estimate.reasons, ("specialized device reproduction/setup",))
+
+        ordinary_android = scoring.estimate_effort_details(
+            issue(
+                title="Android client reconnect regression",
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "Open the Android app on a smartphone and reconnect twice."
+                ),
+                labels=[{"name": "bug"}],
+            )
+        )
+        self.assertEqual(ordinary_android.bucket, "3–6h")
+        self.assertEqual(ordinary_android.reasons, ("moderate implementation scope",))
+
     def test_contextual_bounded_scope_still_gets_quick_bug_bucket(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
