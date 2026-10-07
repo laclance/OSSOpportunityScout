@@ -713,10 +713,9 @@ def reporter_design_discussion_reason(
             reporter_comments.append(comment_evidence)
             if _explicit_ready_signal(body):
                 implementation_decision_pending = False
-            elif (
-                _REPORTER_WITHDRAWN_IMPLEMENTATION_RE.search(body)
-                and _REPORTER_MAINTAINER_DECISION_RE.search(body)
-            ):
+            elif _REPORTER_WITHDRAWN_IMPLEMENTATION_RE.search(
+                body
+            ) and _REPORTER_MAINTAINER_DECISION_RE.search(body):
                 implementation_decision_pending = True
             continue
 
