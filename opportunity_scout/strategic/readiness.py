@@ -601,10 +601,7 @@ def reporter_external_infrastructure_reason(
         return None
 
     latest = reporter_comments[-1].normalized_body_lower
-    if (
-        _REPORTER_EXTERNAL_INFRA_RE.search(latest)
-        and _REPORTER_NO_CODE_FIX_RE.search(latest)
-    ):
+    if _REPORTER_EXTERNAL_INFRA_RE.search(latest) and _REPORTER_NO_CODE_FIX_RE.search(latest):
         return "issue reporter says failure is external infrastructure with no repository fix"
     return None
 
