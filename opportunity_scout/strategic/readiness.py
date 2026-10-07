@@ -222,6 +222,19 @@ _MAINTAINER_FUTURE_OWNERSHIP_RE: Final = re.compile(
     r"(?:make|implement|add|land|finish)\b",
     re.IGNORECASE,
 )
+_MAINTAINER_IDEA_HEADING_RE: Final = re.compile(
+    r"(?m)^\s*#{1,6}\s+just\s+an\s+idea\s*$",
+    re.IGNORECASE,
+)
+_MAINTAINER_IDEA_UNCERTAINTY_RE: Final = re.compile(
+    r"\bnot\s+sure\s+if\b.{0,180}\bshould\b|"
+    r"\bmaybe\s+(?:it(?:'s| is)|this(?: is)?)\s+fine\s+to\s+implement\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_MAINTAINER_OPINION_REQUEST_RE: Final = re.compile(
+    r"\bdo\s+you\s+have\s+an\s+opinion\s+on\s+this\b",
+    re.IGNORECASE,
+)
 _SUBMISSION_CLOSED_RE: Final = re.compile(
     r"\b(?:a |the )?(?:pr|pull request).{0,80}\bwill be closed\b",
     re.DOTALL,
@@ -579,6 +592,39 @@ def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
         return "maintainer-authored issue is still deciding implementation semantics"
     if _MAINTAINER_FUTURE_OWNERSHIP_RE.search(body):
         return "maintainer-authored issue is planned as related project follow-up"
+    return None
+
+
+def maintainer_open_idea_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Reject maintainer-authored ideas while trusted maintainers are still deciding."""
+    evidence = _issue_evidence(item)
+    if evidence.author_association not in TRUSTED_ASSOCIATIONS:
+        return None
+    if _MAINTAINER_IDEA_HEADING_RE.search(evidence.body) is None:
+        return None
+
+    uncertain = False
+    opinion_requested = False
+    for comment in comments or []:
+        comment_evidence = _comment_evidence(comment)
+        if comment_evidence.author_association not in TRUSTED_ASSOCIATIONS:
+            continue
+
+        body = comment_evidence.normalized_body_lower
+        if _explicit_ready_signal(body):
+            uncertain = False
+            opinion_requested = False
+            continue
+        if _MAINTAINER_IDEA_UNCERTAINTY_RE.search(body):
+            uncertain = True
+        if _MAINTAINER_OPINION_REQUEST_RE.search(body):
+            opinion_requested = True
+
+    if uncertain and opinion_requested:
+        return "maintainer-authored idea still needs implementation decision"
     return None
 
 
