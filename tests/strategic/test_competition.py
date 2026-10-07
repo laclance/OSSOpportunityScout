@@ -808,6 +808,32 @@ class LinkedPullRequestTests(unittest.TestCase):
             )
         getter.assert_not_called()
 
+    def test_same_repo_qualified_pr_does_not_suppress_matching_shorthand(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "body": (
+                    "Implementation PR #12: "
+                    "https://github.com/example/project/pull/12"
+                )
+            }
+        ]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/example/project/pull/12",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.linked_open_pr_reason(issue(), "t", comments),
+                "existing open implementation PR: https://github.com/example/project/pull/12",
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/pulls/12",
+            "t",
+        )
+
     def test_external_pr_echo_only_suppresses_nearby_matching_number(self) -> None:
         comments: list[GitHubComment] = [
             {
