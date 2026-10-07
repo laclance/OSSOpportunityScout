@@ -657,6 +657,84 @@ class RewardHistoryTests(unittest.TestCase):
         )
 
 
+class ReporterDesignDiscussionTests(unittest.TestCase):
+    def test_opentelemetry_reporter_open_design_discussion_is_not_ready(self) -> None:
+        item = issue(
+            user={"login": "trentm"},
+            body=(
+                "It isn't obvious to me how best to pass default_histogram_aggregation. "
+                "Is having an aggregationPreference argument reasonable? "
+                "Would it be better to have both exporters accept the same option? "
+                "Do we need a breaking change to sdk-metrics?"
+            ),
+        )
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "trentm"},
+                "body": (
+                    "There is still open discussion on what the config options to "
+                    "ConsoleMetricExporter should be and where the preference should live."
+                ),
+            }
+        ]
+
+        self.assertEqual(
+            readiness.reporter_design_discussion_reason(item, comments),
+            "issue reporter says implementation design is still under discussion",
+        )
+
+    def test_open_design_discussion_requires_reporter_and_multiple_choices(self) -> None:
+        item = issue(
+            user={"login": "reporter"},
+            body=(
+                "Would it be better to rename this option? "
+                "The implementation otherwise has a defined code path."
+            ),
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                item,
+                [
+                    {
+                        "user": {"login": "someone-else"},
+                        "body": "There is still open discussion about this design.",
+                    }
+                ],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                item,
+                [
+                    {
+                        "user": {"login": "reporter"},
+                        "body": "There is still open discussion about this design.",
+                    }
+                ],
+            )
+        )
+
+    def test_latest_reporter_ready_signal_restores_actionability(self) -> None:
+        item = issue(
+            user={"login": "reporter"},
+            body=(
+                "Would it be better to share the selector? "
+                "Do we need to move the enum first?"
+            ),
+        )
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "reporter"},
+                "body": "There is still open discussion about the implementation.",
+            },
+            {
+                "user": {"login": "reporter"},
+                "body": "The design is settled now; ready for implementation.",
+            },
+        ]
+        self.assertIsNone(readiness.reporter_design_discussion_reason(item, comments))
+
+
 class ReporterExternalInfrastructureTests(unittest.TestCase):
     def test_moby_reporter_marks_external_flake_as_non_actionable(self) -> None:
         moby = issue(user={"login": "GordonTheTurtle"})

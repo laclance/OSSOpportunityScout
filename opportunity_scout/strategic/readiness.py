@@ -253,6 +253,16 @@ _REPORTER_DESIGN_QUESTION_RE: Final = re.compile(
     r"whether we should|won't know|will not know)\b",
     re.IGNORECASE,
 )
+_REPORTER_OPEN_DESIGN_RE: Final = re.compile(
+    r"\bstill\s+open\s+discussion\b",
+    re.IGNORECASE,
+)
+_REPORTER_IMPLEMENTATION_CHOICE_RE: Final = re.compile(
+    r"\b(?:it\s+isn['’]t\s+obvious\s+to\s+me\s+how\s+best|"
+    r"is\s+having\b.{0,140}\breasonable|would\s+it\s+be\s+better|"
+    r"do\s+we\s+need|should\s+(?:the|this|we)\b|what\s+happens\s+when)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _TRACKING_CONTAINER_RE: Final = re.compile(
     r"\b(?:use|using)\s+(?:this|the)\s+issue\s+for\s+tracking\b"
 )
@@ -591,6 +601,35 @@ def maintainer_submission_hold_reason(item: GitHubIssue) -> str | None:
         ),
     ) or _SUBMISSION_CLOSED_RE.search(body):
         return "maintainer explicitly says not to open a PR for this issue"
+    return None
+
+
+def reporter_design_discussion_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Reject when the reporter says multiple implementation choices remain under discussion."""
+    evidence = _issue_evidence(item)
+    reporter = evidence.reporter_login
+    if not reporter:
+        return None
+
+    reporter_comments = [
+        _comment_evidence(comment)
+        for comment in comments or []
+        if _comment_evidence(comment).login == reporter
+    ]
+    if not reporter_comments:
+        return None
+
+    latest = reporter_comments[-1].normalized_body_lower
+    if _explicit_ready_signal(latest):
+        return None
+    if (
+        _REPORTER_OPEN_DESIGN_RE.search(latest)
+        and len(_REPORTER_IMPLEMENTATION_CHOICE_RE.findall(evidence.normalized_body_lower)) >= 2
+    ):
+        return "issue reporter says implementation design is still under discussion"
     return None
 
 
