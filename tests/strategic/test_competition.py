@@ -397,6 +397,30 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
                 self.assertIsNone(competition.canonical_open_issue_reason(issue(body=body), "t"))
             getter.assert_not_called()
 
+    def test_canonical_issue_fallback_url_and_duplicate_references(self) -> None:
+        item = issue(
+            body=(
+                "The canonical issue #42 tracks this feature. "
+                "An existing issue #17 tracks this feature, and #17 tracks the same work."
+            ),
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={"state": "open"},
+        ) as getter:
+            self.assertEqual(
+                competition.canonical_open_issue_reason(item, "t"),
+                (
+                    "same work is already tracked by open canonical issue: "
+                    "https://github.com/example/project/issues/17"
+                ),
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/issues/17",
+            "t",
+        )
+
     def test_canonical_lookup_fails_closed_on_unusable_or_unknown_state(self) -> None:
         item = issue(body="An existing issue #17 requests the same feature.")
         unusable_results: tuple[object, ...] = (None, [], {"state": "unknown"})
@@ -645,6 +669,21 @@ class CompetitionOrchestrationTests(unittest.TestCase):
                 linked_pr_checker=lambda *_: None,
                 strategic_claim_checker=lambda *_: None,
             )
+        )
+
+    def test_strategic_competition_short_circuits_on_canonical_issue(self) -> None:
+        reason = "same work is already tracked by open canonical issue: canonical"
+        self.assertEqual(
+            competition.strategic_competition_reason(
+                issue(),
+                "t",
+                [],
+                canonical_issue_checker=lambda *_: reason,
+                strategic_claim_checker=lambda *_: None,
+                linked_pr_checker=lambda *_: self.fail("linked PR check should not be reached"),
+                timeline_pr_checker=lambda *_: self.fail("timeline PR check should not be reached"),
+            ),
+            reason,
         )
 
     def test_extended_competition_preserves_paid_claim_rules_then_supplemental(self) -> None:
