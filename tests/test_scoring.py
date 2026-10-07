@@ -279,6 +279,41 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(ordinary_network.bucket, "3–6h")
         self.assertEqual(ordinary_network.reasons, ("moderate implementation scope",))
 
+    def test_report_11_api_memory_tradeoff_raises_effort(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title=(
+                    "xds/clients: cache raw resource bytes internally for CSDS "
+                    "and remove Bytes() from ResourceData"
+                ),
+                body=(
+                    "Remove Bytes() from the ResourceData interface and retain the raw resource "
+                    "bytes internally. The downside of removing Bytes() is a memory trade-off "
+                    "for external consumers that do not use CSDS, because raw bytes may remain "
+                    "in memory alongside decoded ResourceData."
+                ),
+                labels=[{"name": "P2"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            ("API/interface change with explicit memory trade-off",),
+        )
+
+        api_without_tradeoff = scoring.estimate_effort_details(
+            issue(
+                title="Change client metadata type",
+                body=(
+                    "Change the client API field from any to map[string]any and validate it "
+                    "during initialization."
+                ),
+                labels=[{"name": "P2"}],
+            )
+        )
+        self.assertEqual(api_without_tradeoff.bucket, "3–6h")
+        self.assertEqual(api_without_tradeoff.reasons, ("moderate implementation scope",))
+
     def test_contextual_bounded_scope_still_gets_quick_bug_bucket(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(

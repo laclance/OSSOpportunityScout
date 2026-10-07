@@ -365,6 +365,17 @@ def estimate_effort_details(
         and re.search(r"\bdirect connection\b", evidence.text)
         and re.search(r"\b(?:steps to reproduce|reproduc(?:e|tion))\b", evidence.text)
     )
+    api_memory_tradeoff = bool(
+        re.search(
+            r"\b(?:remove|change)\b.{0,180}\b(?:interface|api)\b",
+            evidence.text,
+        )
+        and re.search(
+            r"\b(?:memory trade-off|memory impact|retain(?:ed|ing)? raw (?:resource )?bytes)\b",
+            evidence.text,
+        )
+        and re.search(r"\bexternal consumers?\b", evidence.text)
+    )
     broader = bool(
         evidence.file_refs >= 4
         or evidence.feature_signal
@@ -372,6 +383,7 @@ def estimate_effort_details(
         or (platform_label and missing_reproduction)
         or specialized_device_repro
         or constrained_network_repro
+        or api_memory_tradeoff
         or (re.search(r"\bsuggested fix(?:es)?\b", evidence.text) and suggested_fix_bullets >= 3)
     )
     if broader:
@@ -390,6 +402,8 @@ def estimate_effort_details(
             reasons.append("specialized device reproduction/setup")
         if constrained_network_repro:
             reasons.append("constrained network reproduction/setup")
+        if api_memory_tradeoff:
+            reasons.append("API/interface change with explicit memory trade-off")
         return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
 
     if _trusted_history_complexity(activity_comments):
