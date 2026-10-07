@@ -7,6 +7,7 @@ It does not rank final candidates or decide implementation readiness.
 from __future__ import annotations
 
 import re
+import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -63,6 +64,49 @@ _DOLLAR_AMOUNT_RE = re.compile(r"\$\s*\d[\d,]*(?:\.\d+)?")
 _OPIRE_BOUNTY_RE = re.compile(r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b", re.IGNORECASE)
 _PLATFORM_REQUEST_LOCK = Lock()
 _PLATFORM_REQUEST_COUNT = 0
+
+
+def _https_origin(url: str) -> tuple[str, str, int] | None:
+    """Return the normalized HTTPS origin used for platform redirect checks."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return None
+    if parsed.scheme.lower() != "https" or hostname is None:
+        return None
+    if parsed.username is not None or parsed.password is not None:
+        return None
+    return ("https", hostname.lower(), port or 443)
+
+
+class _SameOriginHTTPSRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Allow public-platform redirects only within the request's HTTPS origin."""
+
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        hdrs: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        source_origin = _https_origin(req.full_url)
+        target_origin = _https_origin(newurl)
+        if source_origin is None or target_origin != source_origin:
+            raise urllib.error.HTTPError(
+                newurl,
+                code,
+                "blocked platform redirect outside original HTTPS origin",
+                hdrs,
+                fp,
+            )
+        return super().redirect_request(req, fp, code, msg, hdrs, newurl)
+
+
+_PLATFORM_OPENER = urllib.request.build_opener(_SameOriginHTTPSRedirectHandler())
 
 
 def platform_request_count_snapshot() -> int:
@@ -149,7 +193,7 @@ def fetch_text(url: str, timeout: int = 12) -> TextFetchResult:
     _record_platform_request()
     request = urllib.request.Request(url, headers={"User-Agent": "OSSOpportunityScout"})
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with _PLATFORM_OPENER.open(request, timeout=timeout) as response:
             body = cast(bytes, response.read())
         return TextFetchResult(text=body.decode("utf-8", errors="replace"))
     except Exception as exc:

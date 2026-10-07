@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import urllib.error
 import urllib.request
 from typing import Any, cast
 from unittest.mock import patch
@@ -128,26 +129,99 @@ class GenericSourceTests(unittest.TestCase):
             self.assertIsNone(sources.github_get_optional("https://api.github.com/x", None))
 
     def test_public_text_fetch_success_and_failure(self) -> None:
-        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
+        with patch.object(
+            sources._PLATFORM_OPENER,
+            "open",
+            return_value=FakeResponse(b"hello"),
+        ) as opened:
             success = sources.fetch_text("https://example.test")
         self.assertEqual(success.text, "hello")
         self.assertIsNone(success.failure)
+        request = opened.call_args.args[0]
+        self.assertEqual(request.headers["User-agent"], "OSSOpportunityScout")
+        self.assertEqual(opened.call_args.kwargs["timeout"], 12)
 
-        with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
+        with patch.object(sources._PLATFORM_OPENER, "open", side_effect=OSError("boom")):
             failure = sources.fetch_text("https://example.test")
         self.assertEqual(failure.text, "")
         self.assertEqual(failure.failure, "boom")
 
     def test_public_text_fetch_counts_success_and_failure_attempts(self) -> None:
         before = sources.platform_request_count_snapshot()
-        with patch.object(urllib.request, "urlopen", return_value=FakeResponse(b"hello")):
+        with patch.object(
+            sources._PLATFORM_OPENER,
+            "open",
+            return_value=FakeResponse(b"hello"),
+        ):
             sources.fetch_text("https://example.test/success")
-        with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
+        with patch.object(sources._PLATFORM_OPENER, "open", side_effect=OSError("boom")):
             sources.fetch_text("https://example.test/failure")
         self.assertEqual(sources.platform_request_count_snapshot(), before + 2)
 
+    def test_platform_redirect_handler_allows_same_origin_https(self) -> None:
+        handler = sources._SameOriginHTTPSRedirectHandler()
+        request = urllib.request.Request(
+            "https://app.opire.dev/home",
+            headers={"User-Agent": "OSSOpportunityScout"},
+        )
+
+        redirected = handler.redirect_request(
+            request,
+            None,
+            302,
+            "Found",
+            {},
+            "https://APP.OPIRE.DEV:443/home/",
+        )
+
+        self.assertIsNotNone(redirected)
+        assert redirected is not None
+        self.assertEqual(redirected.full_url, "https://APP.OPIRE.DEV:443/home/")
+        self.assertEqual(redirected.headers["User-agent"], "OSSOpportunityScout")
+
+    def test_platform_redirect_handler_rejects_untrusted_origins(self) -> None:
+        handler = sources._SameOriginHTTPSRedirectHandler()
+        request = urllib.request.Request("https://app.opire.dev/home")
+        blocked_targets = (
+            "https://evil.example/capture",
+            "http://app.opire.dev/home",
+            "https://app.opire.dev:444/home",
+            "https://app.opire.dev.evil.test/home",
+            "https://user@app.opire.dev/home",
+        )
+
+        for target in blocked_targets:
+            with self.subTest(target=target):
+                with self.assertRaises(urllib.error.HTTPError):
+                    handler.redirect_request(request, None, 302, "Found", {}, target)
+
+    def test_public_text_fetch_returns_failure_when_redirect_policy_rejects(self) -> None:
+        handler = sources._SameOriginHTTPSRedirectHandler()
+
+        def redirecting_open(
+            request: urllib.request.Request,
+            *,
+            timeout: int,
+        ) -> Any:
+            self.assertEqual(timeout, 12)
+            return handler.redirect_request(
+                request,
+                None,
+                302,
+                "Found",
+                {},
+                "https://evil.example/capture",
+            )
+
+        with patch.object(sources._PLATFORM_OPENER, "open", side_effect=redirecting_open):
+            result = sources.fetch_text("https://app.opire.dev/home")
+
+        self.assertEqual(result.text, "")
+        self.assertIsNotNone(result.failure)
+        self.assertIn("blocked platform redirect", str(result.failure))
+
     def test_issuehunt_fetch_failure_records_discovery_failure(self) -> None:
-        with patch.object(urllib.request, "urlopen", side_effect=OSError("boom")):
+        with patch.object(sources._PLATFORM_OPENER, "open", side_effect=OSError("boom")):
             result = sources.issuehunt_platform_refs(pages=1)
 
         self.assertEqual(result.refs, {})
