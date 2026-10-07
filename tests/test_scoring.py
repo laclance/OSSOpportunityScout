@@ -1311,7 +1311,7 @@ class ScoringRegressionTests(unittest.TestCase):
     def test_external_links_and_normal_workarounds_still_count_as_activity(self) -> None:
         now = datetime.now(timezone.utc)
         recent = now - timedelta(days=5)
-        cases = (
+        cases: tuple[GitHubComment, ...] = (
             {
                 "body": (
                     "I reproduced this and documented logs in "
@@ -1344,8 +1344,11 @@ class ScoringRegressionTests(unittest.TestCase):
         )
         for comment_data in cases:
             with self.subTest(body=comment_data["body"]):
-                comment_data["created_at"] = recent.isoformat()
-                comment_data["updated_at"] = recent.isoformat()
+                activity_comment: GitHubComment = {
+                    **comment_data,
+                    "created_at": recent.isoformat(),
+                    "updated_at": recent.isoformat(),
+                }
                 result = scoring.build_candidate(
                     issue(
                         html_url="https://github.com/fluxcd/flux2/issues/1420",
@@ -1359,7 +1362,7 @@ class ScoringRegressionTests(unittest.TestCase):
                     None,
                     repo_meta(),
                     None,
-                    [comment_data],
+                    [activity_comment],
                     target_repos={"fluxcd/flux2"},
                     amount_pattern=AMOUNT_RE,
                 )
