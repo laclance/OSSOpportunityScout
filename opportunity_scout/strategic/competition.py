@@ -51,7 +51,7 @@ _BRANCH_URL = re.compile(
 )
 _REPORTER_IMPLEMENTATION_FORK_RE = re.compile(
     r"\bimplementation\s+(?:pr|pull request)\s+will\s+follow\s+from\s+fork\s+"
-    r"[\x60'"]?(?P<owner>[A-Za-z0-9-]+)/",
+    r'[\x60"]?(?P<owner>[A-Za-z0-9-]+)/',
     re.IGNORECASE,
 )
 _CANONICAL_ISSUE_LEAD_RE = re.compile(
