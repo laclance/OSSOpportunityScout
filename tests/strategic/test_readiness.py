@@ -618,6 +618,50 @@ class RewardHistoryTests(unittest.TestCase):
 
 
 class ReporterSupportTriageTests(unittest.TestCase):
+    def test_moby_lifecycle_planning_issue_is_not_implementation_ready(self) -> None:
+        moby = issue(
+            title="extpoints/storage: Figure out lifecycle / gc",
+            body=(
+                "We need a plan for the lifecycle / bookkeeping of this data.\n\n"
+                "What if an extension doesn't properly cleanup, and when is it safe to purge? "
+                "We probably can't unconditionally purge data if an extension is missing during "
+                "startup, but we also won't know if the extension is temporarily missing or "
+                "uninstalled."
+            ),
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(moby),
+            "reporter issue is still defining design/lifecycle semantics",
+        )
+
+    def test_generic_investigation_and_defined_lifecycle_work_remain_actionable(self) -> None:
+        actionable = (
+            issue(
+                title="Figure out why the parser crashes",
+                body=(
+                    "The crash reproduces with this fixture. Update parseHeader and add a "
+                    "regression test."
+                ),
+            ),
+            issue(
+                title="Implement storage lifecycle cleanup",
+                body=(
+                    "Implementation plan: remove orphaned records after the extension is "
+                    "confirmed uninstalled. Add unit tests for the cleanup path."
+                ),
+            ),
+            issue(
+                title="Storage lifecycle edge case",
+                body=(
+                    "We need a plan for the migration rollout. What if an old record remains? "
+                    "The implementation is already defined in the migration helper."
+                ),
+            ),
+        )
+        for item in actionable:
+            with self.subTest(title=item.get("title")):
+                self.assertIsNone(readiness.reporter_support_triage_reason(item))
+
     def test_terraform_reporter_waiting_for_design_review_is_not_ready(self) -> None:
         terraform = issue(
             body=(

@@ -227,6 +227,17 @@ _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
     r"(?:preferred|right)\s+(?:design|approach|direction))\b",
     re.IGNORECASE | re.DOTALL,
 )
+_REPORTER_DESIGN_PLANNING_RE: Final = re.compile(
+    r"\b(?:we\s+)?need\s+a\s+plan\s+for\b|"
+    r"\bfigure\s+out\s+(?:the\s+)?(?:lifecycle|gc|garbage collection|"
+    r"bookkeeping|ownership|semantics)\b",
+    re.IGNORECASE,
+)
+_REPORTER_DESIGN_QUESTION_RE: Final = re.compile(
+    r"\b(?:what if|when is it safe|how should|who should|should we|"
+    r"whether we should|won't know|will not know)\b",
+    re.IGNORECASE,
+)
 _TRACKING_CONTAINER_RE: Final = re.compile(
     r"\b(?:use|using)\s+(?:this|the)\s+issue\s+for\s+tracking\b"
 )
@@ -613,12 +624,19 @@ def reward_history_reason(item: GitHubIssue) -> str | None:
 
 
 def reporter_support_triage_reason(item: GitHubIssue) -> str | None:
-    """Reject reporter-authored support or explicit pre-implementation approval requests."""
+    """Reject reporter-authored support or unresolved pre-implementation planning."""
     evidence = _issue_evidence(item)
     body = evidence.normalized_body_lower
 
     if _REPORTER_IMPLEMENTATION_APPROVAL_RE.search(body):
         return "reporter is awaiting maintainer design approval before implementation"
+
+    design_planning_text = f"{evidence.title}\n{evidence.body}"
+    if (
+        _REPORTER_DESIGN_PLANNING_RE.search(design_planning_text)
+        and len(_REPORTER_DESIGN_QUESTION_RE.findall(body)) >= 2
+    ):
+        return "reporter issue is still defining design/lifecycle semantics"
 
     guidance_request = (
         "would like to determine whether" in body
