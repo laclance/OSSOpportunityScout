@@ -390,7 +390,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         )
 
     def test_not_a_task_for_now_requires_maintainer_authority_and_can_be_revived(self) -> None:
-        hold = {
+        hold: GitHubComment = {
             "body": "This is not a task for now.",
             "author_association": "NONE",
         }
