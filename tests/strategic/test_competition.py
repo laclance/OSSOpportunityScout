@@ -399,7 +399,8 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
 
     def test_canonical_lookup_fails_closed_on_unusable_or_unknown_state(self) -> None:
         item = issue(body="An existing issue #17 requests the same feature.")
-        for result in (None, [], {"state": "unknown"}):
+        unusable_results: tuple[object, ...] = (None, [], {"state": "unknown"})
+        for result in unusable_results:
             with (
                 self.subTest(result=result),
                 patch.object(
