@@ -619,10 +619,9 @@ def maintainer_current_behavior_reason(
             continue
 
         body = evidence.normalized_body_lower
-        if (
-            _MAINTAINER_CURRENT_DEFAULT_RE.search(body)
-            and _MAINTAINER_SAVE_LOAD_RESOLUTION_RE.search(body)
-        ):
+        if _MAINTAINER_CURRENT_DEFAULT_RE.search(
+            body
+        ) and _MAINTAINER_SAVE_LOAD_RESOLUTION_RE.search(body):
             return "trusted maintainer demonstrates current default behavior already resolves issue"
     return None
 
