@@ -50,11 +50,11 @@ belongs to the private instance and requires a deliberate operational decision.
 Forks remain optional for code customization; instances consume reviewed immutable
 upstream or fork SHAs.
 
-### Establish a release baseline
+### Maintain the release baseline
 
-Consider tagging the current project state as the first stable OSS release once the desired public release/versioning convention is chosen.
+The stable OSS release baseline is established; `v1.0.3` records the reviewed hardened `main` state after the repository cleanup.
 
-A release should describe the current ownership model, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
+Future releases should describe the current ownership model, private-reporting model, and GitHub API contract. Private deployments select deliberate scanner versions; upstream merges must not silently upgrade their instances.
 
 ## Product improvements
 
