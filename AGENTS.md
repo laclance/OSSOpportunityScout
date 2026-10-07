@@ -20,6 +20,7 @@ For deployment/configuration/state-ownership work, additionally read [docs/PRIVA
 - Do not merge any pull request without explicit human authorization.
 - The administrator PR-only bypass is not general merge permission. For a maintainer-authored pull request, only the human maintainer may explicitly choose to use it after review and required CI.
 - A `dev → main` promotion pull request is the only normal path to `main`, and agents may open one only when explicitly requested.
+- `dev` is linear/squash-only while `main` promotions use merge commits. After promotion, GitHub may report `dev` behind `main` even when the trees are identical. Do not merge `main` back into `dev`, reset branches, or force-update refs just to clear that ancestry count; reconcile only actual content differences through a focused pull request.
 
 ## Project constraints
 
