@@ -372,7 +372,7 @@ class MaintainerReadinessTests(unittest.TestCase):
     def test_prometheus_not_a_task_for_now_blocks_implementation(self) -> None:
         comments: list[GitHubComment] = [
             {
-                "body": ("This is an issue for when we will release 4.0, not a task for now."),
+                "body": "This is an issue for when we will release 4.0, not a task for now.",
                 "author_association": "MEMBER",
             },
             {
