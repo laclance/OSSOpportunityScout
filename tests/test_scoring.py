@@ -219,9 +219,7 @@ class EffortCalibrationTests(unittest.TestCase):
     def test_report_13_nondeterministic_reproduction_raises_effort(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
-                title=(
-                    'macOS network extension aborts with "panic: invalid return from write"'
-                ),
+                title=('macOS network extension aborts with "panic: invalid return from write"'),
                 body=(
                     "### Steps to reproduce\n\n"
                     "I don't have a deterministic reproduction. The machine was under "
@@ -245,8 +243,8 @@ class EffortCalibrationTests(unittest.TestCase):
                 ),
             )
         )
-        self.assertEqual(deterministic.bucket, "3–6h")
-        self.assertEqual(deterministic.reasons, ("moderate implementation scope",))
+        self.assertEqual(deterministic.bucket, "1–3h")
+        self.assertEqual(deterministic.reasons, ("bounded deterministic bug signal",))
 
     def test_report_11_android_tv_device_reproduction_raises_effort(self) -> None:
         estimate = scoring.estimate_effort_details(
