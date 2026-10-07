@@ -207,7 +207,10 @@ def _canonical_issue_numbers(identity: _IssueIdentity, item: GitHubIssue) -> lis
             number = int(reference.group(1) or reference.group(2))
             if number == identity.number or number in seen:
                 continue
-            if _CANONICAL_ISSUE_PURPOSE_RE.search(window[reference.end() : reference.end() + 180]) is None:
+            if (
+                _CANONICAL_ISSUE_PURPOSE_RE.search(window[reference.end() : reference.end() + 180])
+                is None
+            ):
                 continue
             seen.add(number)
             numbers.append(number)
