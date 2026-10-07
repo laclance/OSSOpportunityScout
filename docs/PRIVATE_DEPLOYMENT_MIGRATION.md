@@ -1,7 +1,9 @@
 # Private deployment migration — completed record
 
 This is the authoritative completed migration and acceptance record for separating
-the public scanner distribution from private scout instances.
+the public scanner distribution from private scout instances. It is historical
+reference, not the normal setup guide; use [PRIVATE_INSTANCE.md](PRIVATE_INSTANCE.md)
+for current private-instance setup, operation, and recovery.
 
 Slices 1–7 are complete and merged. Private Slice 6 operational acceptance was
 verified privately, with operational evidence kept out of this public repository.
