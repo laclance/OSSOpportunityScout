@@ -442,13 +442,28 @@ def estimate_effort_details(
             evidence.text[:4500],
         )
     )
-    bounded_bug = bounded_scope or deterministic_local_failure
-    if (localized_todo or bounded_bug) and len(evidence.prose) < 4500 and evidence.file_refs <= 2:
-        reason = (
-            "localized TODO/code-path change"
-            if localized_todo
-            else "bounded deterministic bug signal"
+    diagnosed_local_bug = bool(
+        evidence.file_refs == 1
+        and re.search(
+            r"\b(?:handles?|gets?)\s+this\s+correctly\b|"
+            r"\b(?:same|peer|existing)\s+(?:loop|code path|implementation)\b.{0,100}"
+            r"\b(?:correct|preferred|expected)\b",
+            evidence.text[:4500],
         )
+        and re.search(
+            r"\b(?:overwrit(?:e|es|ten)|drops?|silently|incorrectly|"
+            r"doesn't|does not|fails? to)\b",
+            evidence.text[:4500],
+        )
+    )
+    bounded_bug = bounded_scope or deterministic_local_failure or diagnosed_local_bug
+    if (localized_todo or bounded_bug) and len(evidence.prose) < 4500 and evidence.file_refs <= 2:
+        if localized_todo:
+            reason = "localized TODO/code-path change"
+        elif diagnosed_local_bug:
+            reason = "diagnosed one-file code-path fix"
+        else:
+            reason = "bounded deterministic bug signal"
         return EffortEstimate("1–3h", (reason,))
 
     return EffortEstimate("3–6h", ("moderate implementation scope",))
