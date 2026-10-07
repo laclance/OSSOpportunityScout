@@ -37,6 +37,28 @@ class StrategicClaimTextTests(unittest.TestCase):
         self.assertTrue(strategic_claim_text("I’M GOING TO FIX THIS."))
         self.assertTrue(strategic_claim_text("I’D LIKE TO WORK ON THIS."))
 
+    def test_ignores_unchecked_markdown_claim_options(self) -> None:
+        self.assertFalse(
+            strategic_claim_text(
+                "Contribution Intention (Optional)\n\n"
+                "- [ ] Yes, I am willing to contribute a PR to implement this feature\n"
+                "- [x] No, I cannot work on a PR at this time"
+            )
+        )
+        self.assertTrue(
+            strategic_claim_text(
+                "Contribution Intention (Optional)\n\n"
+                "- [x] Yes, I am willing to contribute a PR to implement this feature\n"
+                "- [ ] No, I cannot work on a PR at this time"
+            )
+        )
+        self.assertTrue(
+            strategic_claim_text(
+                "- [ ] Yes, I am willing to contribute a PR\n"
+                "I'm working on a fix now."
+            )
+        )
+
     def test_multiple_claim_forms_in_one_body_remain_a_claim(self) -> None:
         self.assertTrue(
             strategic_claim_text(

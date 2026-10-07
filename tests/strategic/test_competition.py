@@ -133,6 +133,20 @@ class ClaimCompetitionTests(unittest.TestCase):
 
         self.assertIsNone(
             competition.strategic_claim_reason(
+                issue(
+                    body=(
+                        "Contribution Intention (Optional)\n\n"
+                        "- [ ] Yes, I am willing to contribute a PR to implement this feature\n"
+                        "- [x] No, I cannot work on a PR at this time"
+                    ),
+                    created_at=recent,
+                ),
+                [],
+            )
+        )
+
+        self.assertIsNone(
+            competition.strategic_claim_reason(
                 issue(body=""),
                 [
                     {
