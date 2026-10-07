@@ -388,14 +388,24 @@ def estimate_effort_details(
         and re.search(r"\btodo\b", evidence.text)
         and re.search(r"\b(?:method|function|handler|header|path|codebase)\b", evidence.text)
     )
-    bounded_bug = bool(
+    bounded_scope = bool(
         re.search(
-            r"\b(?:regression|deterministic|panics?|segfault|nil pointer|"
-            r"leaks?|incorrect|failing tests?|unit tests?|single|small|narrow|"
-            r"no-op|stale)\b|\bnever closes\b|\bevery sync\b",
-            f"{evidence.title.lower()} {evidence.labels} {evidence.text[:4500]}",
+            r"\b(?:small|narrow|bounded|localized)\s+"
+            r"(?:bug|fix|change|scope|patch|implementation)\b|"
+            r"\b(?:one|single)[ -]line\s+(?:fix|change|patch)\b|"
+            r"\bsingle\s+(?:code path|function|method|handler|file|test|assertion)\b",
+            evidence.text[:4500],
         )
     )
+    deterministic_local_failure = bool(
+        re.search(r"\bdeterministic(?:ally)?\b", evidence.text[:4500])
+        and re.search(
+            r"\b(?:panics?|segfault|nil pointer|leaks?|incorrect|failing tests?|"
+            r"unit tests?|no-op)\b|\bnever closes\b|\bevery sync\b",
+            evidence.text[:4500],
+        )
+    )
+    bounded_bug = bounded_scope or deterministic_local_failure
     if (localized_todo or bounded_bug) and len(evidence.prose) < 4500 and evidence.file_refs <= 2:
         reason = (
             "localized TODO/code-path change"

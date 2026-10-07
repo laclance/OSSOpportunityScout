@@ -169,6 +169,63 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(scoring.estimate_effort(item), "1–3h")
         self.assertEqual(scoring.competition(item), "high")
 
+    def test_report_10_generic_scope_words_do_not_create_quick_bug_signal(self) -> None:
+        cases = (
+            (
+                "single network observation",
+                issue(
+                    title="Intermittent public TLS EOF",
+                    body=(
+                        "This is a single-network observation. The source of the "
+                        "failure is not yet known."
+                    ),
+                ),
+            ),
+            (
+                "narrow diagnostic wording",
+                issue(
+                    title="Control-plane handshake resets behind enterprise DPI",
+                    body=(
+                        "The reporter can run packet captures to help narrow down "
+                        "the exact network fingerprint."
+                    ),
+                ),
+            ),
+            (
+                "stale lifecycle label",
+                issue(
+                    title="Gateway traffic misses the proxy redirect",
+                    body="External traffic times out while local traffic still works.",
+                    labels=[{"name": "kind/bug"}, {"name": "stale"}],
+                ),
+            ),
+            (
+                "flaky test without bounded implementation evidence",
+                issue(
+                    title="Flaky test: TestImagePullNonExisting",
+                    body=(
+                        "The failing test saw a transient registry connection reset "
+                        "instead of the expected not-found response."
+                    ),
+                ),
+            ),
+        )
+        for label, item in cases:
+            with self.subTest(case=label):
+                estimate = scoring.estimate_effort_details(item)
+                self.assertEqual(estimate.bucket, "3–6h")
+                self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
+    def test_contextual_bounded_scope_still_gets_quick_bug_bucket(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Cache response regression",
+                body="This is a narrow fix in one handler with a focused regression test.",
+            )
+        )
+        self.assertEqual(estimate.bucket, "1–3h")
+        self.assertEqual(estimate.reasons, ("bounded deterministic bug signal",))
+
     def test_stale_closed_pr_history_does_not_inflate_effort(self) -> None:
         item = issue(
             title="Reduce response buffering",
