@@ -36,6 +36,7 @@ from opportunity_scout.strategic.readiness import (
     issue_label_set as issue_label_set,
     maintainer_comment_authority as maintainer_comment_authority,
     maintainer_issue_decision_reason as maintainer_issue_decision_reason,
+    maintainer_open_idea_reason as maintainer_open_idea_reason,
     maintainer_submission_hold_reason as maintainer_submission_hold_reason,
     manual_tracking_issue_reason as manual_tracking_issue_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
@@ -561,6 +562,7 @@ def _strategic_classification_rejection(
         automated_tracking_issue_reason(item),
         release_tracking_reason(item, comments),
         maintainer_issue_decision_reason(item),
+        maintainer_open_idea_reason(item, comments),
         maintainer_submission_hold_reason(item),
     ):
         if reason:
