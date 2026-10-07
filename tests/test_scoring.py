@@ -1369,7 +1369,7 @@ class ScoringRegressionTests(unittest.TestCase):
                 expected_reason = (
                     "recent maintainer activity"
                     if str(comment_data.get("author_association", "")).upper()
-                    in scoring.TRUSTED_ASSOCIATIONS
+                    in {"OWNER", "MEMBER", "COLLABORATOR"}
                     else "recent active discussion"
                 )
                 self.assertIn(expected_reason, result["career_reasons"])
