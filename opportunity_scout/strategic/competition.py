@@ -58,12 +58,25 @@ _CANONICAL_ISSUE_PURPOSE_RE = re.compile(
     r"(?:same|this)\s+(?:feature|bug|problem|work))\b",
     re.IGNORECASE,
 )
+_COMMENT_DUPLICATE_RE = re.compile(
+    r"\b(?:seems?|appears?)\s+(?:possible\s+|likely\s+)?(?:that\s+)?"
+    r"(?:this\s+)?(?:is\s+)?(?:a\s+)?duplicate\s+of\b",
+    re.IGNORECASE,
+)
+_COMMENT_DUPLICATE_REDIRECT_RE = re.compile(
+    r"\b(?:move|continue)\s+(?:the\s+)?discussion\s+(?:to|in)\s+"
+    r"(?:there|that\s+issue|#\d+)\b",
+    re.IGNORECASE,
+)
+_CANONICAL_COMMENT_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"}
 _LINKED_PR_FAILURE = "could not verify linked implementation PR"
 _CANONICAL_ISSUE_FAILURE = "could not verify canonical issue reference"
 _UNIDENTIFIABLE_ISSUE = "could not identify repository/issue number"
 
 LinkedPrChecker = Callable[[GitHubIssue, str | None, list[GitHubComment]], str | None]
-CanonicalIssueChecker = Callable[[GitHubIssue, str | None], str | None]
+CanonicalIssueChecker = Callable[
+    [GitHubIssue, str | None, list[GitHubComment]], str | None
+]
 ClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 SupplementalClaimChecker = Callable[[GitHubIssue, list[GitHubComment]], str | None]
 TimelinePrChecker = Callable[[GitHubIssue, str | None], str | None]
@@ -217,13 +230,53 @@ def _canonical_issue_numbers(identity: _IssueIdentity, item: GitHubIssue) -> lis
     return numbers
 
 
-def canonical_open_issue_reason(item: GitHubIssue, token: str | None) -> str | None:
-    """Reject reporter-described duplicate/context issues when canonical work is still open."""
+def _comment_canonical_issue_numbers(
+    identity: _IssueIdentity,
+    comments: list[GitHubComment],
+) -> list[int]:
+    pattern = _same_repository_issue_pattern(identity)
+    numbers: list[int] = []
+    seen: set[int] = set()
+
+    for comment in comments:
+        association = str(comment.get("author_association", "")).upper()
+        if association not in _CANONICAL_COMMENT_ASSOCIATIONS:
+            continue
+
+        text = str(comment.get("body", ""))
+        duplicate = _COMMENT_DUPLICATE_RE.search(text)
+        if duplicate is None or "not a duplicate" in text.lower():
+            continue
+
+        window = text[duplicate.start() : duplicate.start() + 420]
+        if _COMMENT_DUPLICATE_REDIRECT_RE.search(window) is None:
+            continue
+
+        for reference in pattern.finditer(window):
+            number = int(reference.group(1) or reference.group(2))
+            if number == identity.number or number in seen:
+                continue
+            seen.add(number)
+            numbers.append(number)
+    return numbers
+
+
+def canonical_open_issue_reason(
+    item: GitHubIssue,
+    token: str | None,
+    comments: list[GitHubComment] | None = None,
+) -> str | None:
+    """Reject explicit canonical redirects when the referenced issue is still open."""
     identity = _IssueIdentity.from_issue(item)
     if identity is None:
         return None
 
-    for number in _canonical_issue_numbers(identity, item):
+    numbers = _canonical_issue_numbers(identity, item)
+    for number in _comment_canonical_issue_numbers(identity, comments or []):
+        if number not in numbers:
+            numbers.append(number)
+
+    for number in numbers:
         canonical = github.github_get(identity.issue_api_url(number), token)
         if not isinstance(canonical, dict):
             return SourceFailureReason(_CANONICAL_ISSUE_FAILURE)
@@ -413,7 +466,7 @@ def strategic_competition_reason(
     if reason:
         return reason
 
-    reason = canonical_issue_checker(item, token)
+    reason = canonical_issue_checker(item, token, comments)
     if reason:
         return reason
 

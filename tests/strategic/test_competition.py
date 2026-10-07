@@ -369,6 +369,94 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
             "t",
         )
 
+    def test_cilium_contributor_duplicate_redirect_verifies_open_canonical_issue(self) -> None:
+        item = issue(html_url="https://github.com/cilium/cilium/issues/47400", body="")
+        comments: list[GitHubComment] = [
+            {
+                "author_association": "CONTRIBUTOR",
+                "body": (
+                    "I should note that it seems likely that this is a duplicate of #46260; "
+                    "it may be more fruitful to move discussion to there."
+                ),
+            }
+        ]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "open",
+                "html_url": "https://github.com/cilium/cilium/issues/46260",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.canonical_open_issue_reason(item, "t", comments),
+                (
+                    "same work is already tracked by open canonical issue: "
+                    "https://github.com/cilium/cilium/issues/46260"
+                ),
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/cilium/cilium/issues/46260",
+            "t",
+        )
+
+    def test_comment_duplicate_redirect_requires_authority_redirect_and_open_target(self) -> None:
+        item = issue(body="")
+        cases: tuple[tuple[GitHubComment, bool], ...] = (
+            (
+                {
+                    "author_association": "NONE",
+                    "body": "This seems likely a duplicate of #17; move discussion to there.",
+                },
+                False,
+            ),
+            (
+                {
+                    "author_association": "CONTRIBUTOR",
+                    "body": "This seems likely a duplicate of #17.",
+                },
+                False,
+            ),
+            (
+                {
+                    "author_association": "CONTRIBUTOR",
+                    "body": "This is not a duplicate of #17; move discussion to there.",
+                },
+                False,
+            ),
+        )
+        for comment, should_fetch in cases:
+            with self.subTest(comment=comment), patch.object(github, "github_get") as getter:
+                self.assertIsNone(
+                    competition.canonical_open_issue_reason(item, "t", [comment])
+                )
+            self.assertEqual(getter.called, should_fetch)
+
+        with patch.object(
+            github,
+            "github_get",
+            return_value={"state": "closed"},
+        ) as getter:
+            self.assertIsNone(
+                competition.canonical_open_issue_reason(
+                    item,
+                    "t",
+                    [
+                        {
+                            "author_association": "MEMBER",
+                            "body": (
+                                "It appears this is a duplicate of #17; "
+                                "please move discussion to there."
+                            ),
+                        }
+                    ],
+                )
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/example/project/issues/17",
+            "t",
+        )
+
     def test_canonical_issue_shorthand_is_verified_and_closed_target_is_allowed(self) -> None:
         item = issue(
             body="The canonical issue #17 tracks this feature already.",
