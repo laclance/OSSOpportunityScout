@@ -717,10 +717,7 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
     def test_latest_reporter_ready_signal_restores_actionability(self) -> None:
         item = issue(
             user={"login": "reporter"},
-            body=(
-                "Would it be better to share the selector? "
-                "Do we need to move the enum first?"
-            ),
+            body=("Would it be better to share the selector? Do we need to move the enum first?"),
         )
         comments: list[GitHubComment] = [
             {
