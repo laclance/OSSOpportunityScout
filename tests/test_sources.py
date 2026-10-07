@@ -186,6 +186,7 @@ class GenericSourceTests(unittest.TestCase):
             "https://evil.example/capture",
             "http://app.opire.dev/home",
             "https://app.opire.dev:444/home",
+            "https://app.opire.dev:not-a-port/home",
             "https://app.opire.dev.evil.test/home",
             "https://user@app.opire.dev/home",
         )
