@@ -24,6 +24,12 @@ class MarkdownFormattingTests(unittest.TestCase):
             r"Fix \[parser\] C:\\tmp",
         )
 
+    def test_github_report_mention_helper_inserts_invisible_separator(self) -> None:
+        self.assertEqual(
+            reporting._inert_github_mentions("@user @org/team"),
+            "@\u200buser @\u200borg/team",
+        )
+
     def test_strategic_candidate_explains_ranking_delta(self) -> None:
         rendered = reporting.markdown_candidate(candidate(), 1)
         self.assertIn("**Career score:** 80/100", rendered)
@@ -228,11 +234,67 @@ class ReportAssemblyTests(unittest.TestCase):
         self.assertIn("career score measures long-term value", body)
         self.assertIn("### Verification summary", body)
         self.assertIn("**Filtered candidates:** 4", body)
-        self.assertIn("active claim by @dev ×3", body)
+        self.assertIn("active claim by @\u200bdev ×3", body)
         self.assertIn("### Verification rejects", body)
         self.assertIn("### Potential scanner misses / tuning candidates", body)
         self.assertIn("**Audit summary:** outside adaptive pool ×2", body)
         self.assertIn("**Execution adjustment:** +13", body)
+
+    def test_github_report_body_neutralizes_mentions_across_report_content(self) -> None:
+        body = reporting.github_report_body(
+            [
+                candidate(
+                    title="Fix [parser] with @user",
+                    labels=["needs @org/team"],
+                    career_reasons=["reviewed by @maintainer"],
+                )
+            ],
+            "now",
+            verification_examples=[
+                {
+                    "title": "Rejected @reviewer",
+                    "url": "https://github.com/a/b/issues/1",
+                    "reason": "active claim by @org/team",
+                }
+            ],
+            strategic_audit=[
+                {
+                    "title": "Audit @auditor",
+                    "url": "https://github.com/c/d/issues/2",
+                    "reason": "near miss by @triage/team",
+                }
+            ],
+            reject_counts={"active claim by @dev": 1},
+        )
+
+        for active_mention in (
+            "@user",
+            "@org/team",
+            "@maintainer",
+            "@reviewer",
+            "@auditor",
+            "@triage/team",
+            "@dev",
+        ):
+            self.assertNotIn(active_mention, body)
+
+        for inert_mention in (
+            "@\u200buser",
+            "@\u200borg/team",
+            "@\u200bmaintainer",
+            "@\u200breviewer",
+            "@\u200bauditor",
+            "@\u200btriage/team",
+            "@\u200bdev",
+        ):
+            self.assertIn(inert_mention, body)
+
+        self.assertIn("Fix \\[parser\\] with @\u200buser", body)
+        self.assertIn("**Labels:** needs @\u200borg/team", body)
+        self.assertIn("https://redirect.github.com/a/b/issues/1", body)
+        self.assertIn("**Priority score:** 93/100", body)
+        self.assertIn("### Verification rejects", body)
+        self.assertIn("### Potential scanner misses / tuning candidates", body)
 
     def test_report_surfaces_coverage_warning_before_candidates(self) -> None:
         warning = "Strategic verification coverage is incomplete."
