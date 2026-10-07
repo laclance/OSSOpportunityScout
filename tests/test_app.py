@@ -618,7 +618,7 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
-        maintainer_reopen = [
+        maintainer_reopen: list[GitHubComment] = [
             {
                 "body": "/remove-lifecycle rotten\n/lifecycle frozen\n/reopen",
                 "author_association": "MEMBER",
