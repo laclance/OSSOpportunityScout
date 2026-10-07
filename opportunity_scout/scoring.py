@@ -35,6 +35,10 @@ LIFECYCLE_ADMIN_COMMAND_RE = re.compile(
     r"(?:remove-)?label\s+\S.*)",
     re.IGNORECASE,
 )
+EXTERNAL_REPO_URL_RE = re.compile(
+    r"https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)",
+    re.IGNORECASE,
+)
 
 _DOCS_RE = re.compile(r"\b(?:docs?|documentation|readme)\b", re.IGNORECASE)
 _DOC_MICRO_PATTERN = (
@@ -858,6 +862,35 @@ def _career_assessment(
     return _CareerAssessment(score, tuple(reasons), maintainer_ready, language)
 
 
+def _external_self_promotion_comment(
+    item: GitHubIssue,
+    comment: GitHubComment,
+) -> bool:
+    """Return whether a comment is external self-promotion rather than issue activity."""
+    association = str(comment.get("author_association") or "").upper()
+    if association in TRUSTED_ASSOCIATIONS:
+        return False
+
+    body = str(comment.get("body") or "")
+    lowered = body.lower()
+    if not re.search(r"\bi\s+(?:built|created|wrote|maintain)\b", lowered):
+        return False
+    if not re.search(
+        r"\bworkaround\b|\b(?:doesn['’]t|does not|won['’]t|will not)\s+fix\b",
+        lowered,
+    ):
+        return False
+
+    issue_repo, _ = github.issue_repo_and_number(item)
+    if not issue_repo:
+        return False
+    linked_repos = {
+        f"{match.group('owner')}/{match.group('repo')}".lower()
+        for match in EXTERNAL_REPO_URL_RE.finditer(body)
+    }
+    return any(linked_repo != issue_repo.lower() for linked_repo in linked_repos)
+
+
 def _strategic_activity_adjustment(
     item: GitHubIssue,
     activity_comments: list[GitHubComment] | None,
@@ -868,8 +901,8 @@ def _strategic_activity_adjustment(
     updated = github.parse_github_datetime(item.get("updated_at"))
     created_days = max(0, (now - created).days) if created else None
 
-    latest_bot: datetime | None = None
-    latest_human: datetime | None = None
+    latest_ignored: datetime | None = None
+    latest_activity: datetime | None = None
     recent_comment_days: int | None = None
     recent_maintainer_days: int | None = None
 
@@ -878,13 +911,16 @@ def _strategic_activity_adjustment(
         if not stamp:
             continue
         login = str((comment.get("user") or {}).get("login", "")).lower()
-        if login.endswith("[bot]"):
-            if latest_bot is None or stamp > latest_bot:
-                latest_bot = stamp
+        ignored_for_activity = login.endswith("[bot]") or _external_self_promotion_comment(
+            item, comment
+        )
+        if ignored_for_activity:
+            if latest_ignored is None or stamp > latest_ignored:
+                latest_ignored = stamp
             continue
 
-        if latest_human is None or stamp > latest_human:
-            latest_human = stamp
+        if latest_activity is None or stamp > latest_activity:
+            latest_activity = stamp
         age = max(0, (now - stamp).days)
         if recent_comment_days is None or age < recent_comment_days:
             recent_comment_days = age
@@ -897,11 +933,11 @@ def _strategic_activity_adjustment(
     effective_updated = updated
     if (
         updated is not None
-        and latest_bot is not None
-        and abs((updated - latest_bot).total_seconds()) <= 300
-        and (latest_human is None or latest_human < latest_bot)
+        and latest_ignored is not None
+        and abs((updated - latest_ignored).total_seconds()) <= 300
+        and (latest_activity is None or latest_activity < latest_ignored)
     ):
-        effective_updated = latest_human or created
+        effective_updated = latest_activity or created
     updated_days = max(0, (now - effective_updated).days) if effective_updated else None
 
     adjustment = 0
