@@ -40,6 +40,7 @@ from opportunity_scout.strategic.readiness import (
     manual_tracking_issue_reason as manual_tracking_issue_reason,
     maintainer_readiness_comment_state as maintainer_readiness_comment_state,
     proposal_stage_signal as proposal_stage_signal,
+    reporter_external_infrastructure_reason as reporter_external_infrastructure_reason,
     reporter_resolution_reason as reporter_resolution_reason,
     reporter_support_triage_reason as reporter_support_triage_reason,
     reward_history_reason as reward_history_reason,
@@ -553,6 +554,7 @@ def _strategic_classification_rejection(
     for reason in (
         security_disclosure_reason(item),
         reporter_support_triage_reason(item),
+        reporter_external_infrastructure_reason(item, comments),
         manual_tracking_issue_reason(item, comments),
         automated_tracking_issue_reason(item),
         release_tracking_reason(item, comments),

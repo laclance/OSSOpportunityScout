@@ -147,6 +147,16 @@ _REPORTER_RESOLVED_MARKERS: Final = (
     "can't reproduce anymore",
     "cannot reproduce anymore",
 )
+_REPORTER_EXTERNAL_INFRA_RE: Final = re.compile(
+    r"\b(?:infra(?:structure)?\s+flakiness|external\s+infrastructure|"
+    r"registry/network-side\s+transient\s+flakiness|network-side\s+transient\s+flakiness)\b",
+    re.IGNORECASE,
+)
+_REPORTER_NO_CODE_FIX_RE: Final = re.compile(
+    r"\bno\s+code\s+fix\s+is\s+being\s+attempted\b|"
+    r"\bnothing\s+we\s+can\s+fix(?:\s+really)?\b",
+    re.IGNORECASE,
+)
 _PAYOUT_SUMMARY_MARKERS: Final = (
     "total bounty distributed",
     "top contributors",
@@ -570,6 +580,32 @@ def maintainer_submission_hold_reason(item: GitHubIssue) -> str | None:
         ),
     ) or _SUBMISSION_CLOSED_RE.search(body):
         return "maintainer explicitly says not to open a PR for this issue"
+    return None
+
+
+def reporter_external_infrastructure_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Reject when the reporter's latest status says the failure is external and has no code fix."""
+    reporter = _issue_evidence(item).reporter_login
+    if not reporter:
+        return None
+
+    reporter_comments = [
+        _comment_evidence(comment)
+        for comment in comments or []
+        if _comment_evidence(comment).login == reporter
+    ]
+    if not reporter_comments:
+        return None
+
+    latest = reporter_comments[-1].normalized_body_lower
+    if (
+        _REPORTER_EXTERNAL_INFRA_RE.search(latest)
+        and _REPORTER_NO_CODE_FIX_RE.search(latest)
+    ):
+        return "issue reporter says failure is external infrastructure with no repository fix"
     return None
 
 

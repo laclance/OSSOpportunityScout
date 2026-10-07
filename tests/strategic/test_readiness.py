@@ -617,6 +617,96 @@ class RewardHistoryTests(unittest.TestCase):
         )
 
 
+class ReporterExternalInfrastructureTests(unittest.TestCase):
+    def test_moby_reporter_marks_external_flake_as_non_actionable(self) -> None:
+        moby = issue(user={"login": "GordonTheTurtle"})
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "GordonTheTurtle"},
+                "body": (
+                    "Classification: still flaky — this is registry/network-side transient "
+                    "flakiness rather than something fixable in moby itself; no code fix is "
+                    "being attempted for this one."
+                ),
+            }
+        ]
+        self.assertEqual(
+            readiness.reporter_external_infrastructure_reason(moby, comments),
+            "issue reporter says failure is external infrastructure with no repository fix",
+        )
+
+    def test_external_flake_requires_reporter_and_explicit_no_fix_status(self) -> None:
+        item = issue(user={"login": "reporter"})
+        cases: tuple[list[GitHubComment], str] = (
+            (
+                [{"user": {"login": "reporter"}, "body": "This looks like infra flakiness."}],
+                "missing no-fix status",
+            ),
+            (
+                [
+                    {
+                        "user": {"login": "someone-else"},
+                        "body": "It is infra flakiness; nothing we can fix really.",
+                    }
+                ],
+                "non-reporter status",
+            ),
+            (
+                [
+                    {
+                        "user": {"login": "reporter"},
+                        "body": "No code fix is being attempted while we redesign the API.",
+                    }
+                ],
+                "missing external-infra evidence",
+            ),
+        )
+        for comments, label in cases:
+            with self.subTest(label=label):
+                self.assertIsNone(
+                    readiness.reporter_external_infrastructure_reason(item, comments)
+                )
+
+    def test_latest_reporter_status_can_restore_actionability(self) -> None:
+        item = issue(user={"login": "reporter"})
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "reporter"},
+                "body": (
+                    "This is external infrastructure flakiness; no code fix is being attempted."
+                ),
+            },
+            {
+                "user": {"login": "someone-else"},
+                "body": "I agree it looks external.",
+            },
+            {
+                "user": {"login": "reporter"},
+                "body": (
+                    "We found a repository-side retry bug after all. "
+                    "The implementation is now ready."
+                ),
+            },
+        ]
+        self.assertIsNone(
+            readiness.reporter_external_infrastructure_reason(item, comments)
+        )
+
+    def test_missing_reporter_or_reporter_comments_is_not_rejected(self) -> None:
+        self.assertIsNone(
+            readiness.reporter_external_infrastructure_reason(
+                issue(user={}),
+                [{"user": {"login": "someone"}, "body": "Infra flakiness; nothing we can fix."}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_external_infrastructure_reason(
+                issue(user={"login": "reporter"}),
+                [{"user": {"login": "someone"}, "body": "Infra flakiness; nothing we can fix."}],
+            )
+        )
+
+
 class ReporterSupportTriageTests(unittest.TestCase):
     def test_moby_lifecycle_planning_issue_is_not_implementation_ready(self) -> None:
         moby = issue(
