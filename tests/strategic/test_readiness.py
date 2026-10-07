@@ -919,6 +919,73 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
             )
         )
 
+    def test_etcd_reporter_withdraws_pr_pending_maintainer_decision(self) -> None:
+        item = issue(user={"login": "srebb"})
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "srebb"},
+                "body": (
+                    "End-to-end numbers show no clear benefit. I closed #22501 for now, "
+                    "leaving this open for the maintainers to decide."
+                ),
+            }
+        ]
+
+        self.assertEqual(
+            readiness.reporter_design_discussion_reason(item, comments),
+            "issue reporter withdrew implementation pending maintainer decision",
+        )
+
+    def test_withdrawn_implementation_requires_both_reporter_signals(self) -> None:
+        item = issue(user={"login": "reporter"})
+        cases: tuple[list[GitHubComment], ...] = (
+            [
+                {
+                    "user": {"login": "reporter"},
+                    "body": (
+                        "I closed PR #42 because its benchmark failed. "
+                        "I will rework it and send a replacement."
+                    ),
+                }
+            ],
+            [
+                {
+                    "user": {"login": "reporter"},
+                    "body": "Leaving this open for the maintainers to decide.",
+                }
+            ],
+            [
+                {
+                    "user": {"login": "someone-else"},
+                    "body": (
+                        "I closed PR #42 for now, leaving this open for the maintainers to decide."
+                    ),
+                }
+            ],
+        )
+
+        for comments in cases:
+            with self.subTest(comments=comments):
+                self.assertIsNone(readiness.reporter_design_discussion_reason(item, comments))
+
+    def test_maintainer_ready_signal_revives_withdrawn_implementation(self) -> None:
+        item = issue(user={"login": "reporter"})
+        comments: list[GitHubComment] = [
+            {
+                "user": {"login": "reporter"},
+                "body": (
+                    "I closed my PR for now, leaving this open for the maintainers to decide."
+                ),
+            },
+            {
+                "user": {"login": "maintainer"},
+                "author_association": "MEMBER",
+                "body": "The direction is decided now; contributions welcome.",
+            },
+        ]
+
+        self.assertIsNone(readiness.reporter_design_discussion_reason(item, comments))
+
     def test_latest_reporter_ready_signal_restores_actionability(self) -> None:
         item = issue(
             user={"login": "reporter"},
