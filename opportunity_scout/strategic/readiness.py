@@ -108,6 +108,7 @@ _REPRODUCTION_MARKERS: Final = (
 _IMPLEMENTATION_WAIT_MARKERS: Final = (
     "not ready for implementation",
     "not ready to implement",
+    "not a task for now",
     "please wait before implementing",
     "please wait to implement",
     "hold off on implementation",

@@ -369,6 +369,52 @@ class MaintainerReadinessTests(unittest.TestCase):
             (True, None),
         )
 
+    def test_prometheus_not_a_task_for_now_blocks_implementation(self) -> None:
+        comments: list[GitHubComment] = [
+            {
+                "body": (
+                    "This is an issue for when we will release 4.0, "
+                    "not a task for now."
+                ),
+                "author_association": "MEMBER",
+            },
+            {
+                "body": (
+                    "We're open to it, but need a bit more motivation. "
+                    "How breaking is this for users?"
+                ),
+                "author_association": "MEMBER",
+            },
+        ]
+
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), comments),
+            (False, "maintainer asked contributors to wait before implementation"),
+        )
+
+    def test_not_a_task_for_now_requires_maintainer_authority_and_can_be_revived(self) -> None:
+        hold = {
+            "body": "This is not a task for now.",
+            "author_association": "NONE",
+        }
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), [hold]),
+            (None, None),
+        )
+
+        trusted_hold: GitHubComment = {
+            "body": "This is not a task for now.",
+            "author_association": "MEMBER",
+        }
+        ready: GitHubComment = {
+            "body": "This is active again; contributions welcome.",
+            "author_association": "MEMBER",
+        }
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), [trusted_hold, ready]),
+            (True, None),
+        )
+
     def test_feedback_language_only_blocks_proposal_stage(self) -> None:
         comment: list[GitHubComment] = [
             {
