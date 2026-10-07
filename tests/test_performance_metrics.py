@@ -97,8 +97,8 @@ class PlatformRequestStatsTests(unittest.TestCase):
     def test_fetch_text_counts_platform_request_attempt(self) -> None:
         before = sources.platform_request_count_snapshot()
         with patch.object(
-            urllib.request,
-            "urlopen",
+            sources._PLATFORM_OPENER,
+            "open",
             return_value=FakeResponse(b"<html></html>"),
         ):
             result = sources.fetch_text("https://example.test/platform")
