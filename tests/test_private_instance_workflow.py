@@ -18,7 +18,7 @@ TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
 DEPENDABOT_EXAMPLE = ROOT / "examples" / "private-instance" / "dependabot.yml"
 ACTION = ROOT / "action.yml"
 
-APPROVED_DISTRIBUTED_SCANNER_SHA = "ad6cdb085bc18a2e6f1229f1a3469d2d695a0db0"
+APPROVED_DISTRIBUTED_SCANNER_SHA = "86d757ee42479b9a48f4b8700d30860e81d526e6"
 
 
 def document(path: Path) -> dict[str, Any]:
