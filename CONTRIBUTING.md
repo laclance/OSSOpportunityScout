@@ -30,6 +30,8 @@ make setup
 6. Promote accumulated reviewed work from `dev` to `main` through a dedicated `dev → main` pull request. The same CI, approval/CODEOWNER, and review-thread requirements apply; use a merge commit.
 7. Do not use `main` as an ordinary feature-branch target.
 
+Because `dev` requires linear history and squash merges while `main` promotions use merge commits, GitHub may show `dev` as behind `main` after a successful promotion even when their trees are identical. Do not merge `main` back into `dev`, reset branches, or force-update refs merely to clear that ancestry count. Continue ordinary work from the latest `dev`; reconcile only real content differences through a focused pull request.
+
 All paths are currently owned by `@laclance`. GitHub does not allow a pull-request author to satisfy their own required approval. For a pull request authored by `@laclance`, the configured administrator PR-only bypass may be used only after required CI has passed and the change has been reviewed. It does not permit direct pushes or skipping the pull-request or CI process.
 
 ## Before changing code
