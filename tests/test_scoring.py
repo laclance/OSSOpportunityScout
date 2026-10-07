@@ -1235,6 +1235,7 @@ class ScoringRegressionTests(unittest.TestCase):
         cases = (
             (150, 75.0, 81),
             (90, 45.0, 72),
+            (30, 15.0, 66),
             (15, 7.5, 56),
         )
         for amount, expected_hourly, expected_cash in cases:
