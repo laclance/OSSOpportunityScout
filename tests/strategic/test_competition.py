@@ -465,9 +465,7 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
         comments: list[GitHubComment] = [
             {
                 "author_association": "CONTRIBUTOR",
-                "body": (
-                    "It appears this is a duplicate of #42; move discussion to there."
-                ),
+                "body": ("It appears this is a duplicate of #42; move discussion to there."),
             },
             {
                 "author_association": "MEMBER",
@@ -482,9 +480,7 @@ class CanonicalIssueReferenceTests(unittest.TestCase):
             "github_get",
             return_value={"state": "closed"},
         ) as getter:
-            self.assertIsNone(
-                competition.canonical_open_issue_reason(item, "t", comments)
-            )
+            self.assertIsNone(competition.canonical_open_issue_reason(item, "t", comments))
         getter.assert_called_once_with(
             "https://api.github.com/repos/example/project/issues/17",
             "t",
