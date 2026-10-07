@@ -547,9 +547,7 @@ class MaintainerIssueDecisionTests(unittest.TestCase):
             "with the multi-namespace cache."
         )
         self.assertIsNone(
-            readiness.maintainer_issue_decision_reason(
-                issue(author_association="NONE", body=body)
-            )
+            readiness.maintainer_issue_decision_reason(issue(author_association="NONE", body=body))
         )
         self.assertIsNone(
             readiness.maintainer_issue_decision_reason(
