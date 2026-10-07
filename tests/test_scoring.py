@@ -1366,7 +1366,13 @@ class ScoringRegressionTests(unittest.TestCase):
                     target_repos={"fluxcd/flux2"},
                     amount_pattern=AMOUNT_RE,
                 )
-                self.assertIn("recent active discussion", result["career_reasons"])
+                expected_reason = (
+                    "recent maintainer activity"
+                    if str(comment_data.get("author_association", "")).upper()
+                    in scoring.TRUSTED_ASSOCIATIONS
+                    else "recent active discussion"
+                )
+                self.assertIn(expected_reason, result["career_reasons"])
 
     def test_bot_only_activity_does_not_revive_old_issue(self) -> None:
         now = datetime.now(timezone.utc)
