@@ -85,6 +85,12 @@ def repo_meta(**overrides: Any) -> RepositoryMetadata:
     return cast(RepositoryMetadata, data)
 
 
+class MaintainerReadySignalTests(unittest.TestCase):
+    def test_contributor_wanted_is_contributor_ready(self) -> None:
+        self.assertTrue(scoring.maintainer_ready_signal("kind/bug/possible contributor/wanted"))
+        self.assertFalse(scoring.maintainer_ready_signal("kind/bug/possible"))
+
+
 class EffortCalibrationTests(unittest.TestCase):
     def test_type_feature_dialect_no_longer_falls_into_quick_bug_bucket(self) -> None:
         estimate = scoring.estimate_effort_details(

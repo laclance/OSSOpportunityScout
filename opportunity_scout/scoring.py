@@ -173,7 +173,13 @@ def maintainer_ready_signal(labels_text: str) -> bool:
     normalized = re.sub(r"[-_]+", " ", labels_text.lower())
     return any(
         marker in normalized
-        for marker in ("help wanted", "good first issue", "triage/accepted", "refined")
+        for marker in (
+            "help wanted",
+            "good first issue",
+            "triage/accepted",
+            "contributor/wanted",
+            "refined",
+        )
     )
 
 

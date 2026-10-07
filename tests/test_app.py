@@ -618,6 +618,21 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(
+                        labels=[
+                            {"name": "kind/bug/possible"},
+                            {"name": "contributor/wanted"},
+                        ],
+                        comments=1,
+                    ),
+                    "t",
+                    [],
+                )
+            )
+
         maintainer_reopen: list[GitHubComment] = [
             {
                 "body": "/remove-lifecycle rotten\n/lifecycle frozen\n/reopen",
@@ -1528,6 +1543,17 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIsNone(
             scout.strategic_preflight_rejection(
                 issue(labels=[{"name": "needs-triage"}], comments=1)
+            )
+        )
+        self.assertIsNone(
+            scout.strategic_preflight_rejection(
+                issue(
+                    labels=[
+                        {"name": "kind/bug/possible"},
+                        {"name": "contributor/wanted"},
+                    ],
+                    comments=0,
+                )
             )
         )
 
