@@ -54,8 +54,7 @@ class StrategicClaimTextTests(unittest.TestCase):
         )
         self.assertTrue(
             strategic_claim_text(
-                "- [ ] Yes, I am willing to contribute a PR\n"
-                "I'm working on a fix now."
+                "- [ ] Yes, I am willing to contribute a PR\nI'm working on a fix now."
             )
         )
 
