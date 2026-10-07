@@ -538,10 +538,7 @@ class LinkedPullRequestTests(unittest.TestCase):
     def test_closed_unmerged_and_generic_merged_comment_links_remain_available(self) -> None:
         item = issue(
             comments=0,
-            body=(
-                "Implementation patch: "
-                "https://github.com/example/project/pull/13"
-            ),
+            body=("Implementation patch: https://github.com/example/project/pull/13"),
         )
         with patch.object(
             github,
