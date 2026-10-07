@@ -217,6 +217,11 @@ _DECISION_STAGE_RE: Final = re.compile(
     r"\bwe (?:still )?need to decide\b|"
     r"\bdecision (?:is|remains) (?:open|pending)\b"
 )
+_MAINTAINER_FUTURE_OWNERSHIP_RE: Final = re.compile(
+    r"\bwe(?:'ll| will)\s+(?:probably\s+)?look\s+into\s+this\s+when\s+we\s+"
+    r"(?:make|implement|add|land|finish)\b",
+    re.IGNORECASE,
+)
 _SUBMISSION_CLOSED_RE: Final = re.compile(
     r"\b(?:a |the )?(?:pr|pull request).{0,80}\bwill be closed\b",
     re.DOTALL,
@@ -552,12 +557,18 @@ def abandoned_lifecycle_reason(
 
 
 def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
-    """Reject trusted maintainer-authored issues that explicitly remain in decision stage."""
+    """Reject trusted maintainer-authored issues that remain unready or project-owned."""
     evidence = _issue_evidence(item)
     if evidence.author_association not in TRUSTED_ASSOCIATIONS:
         return None
+
+    body = evidence.normalized_body_lower
+    if _explicit_ready_signal(body):
+        return None
     if _DECISION_STAGE_RE.search(evidence.body_lower):
         return "maintainer-authored issue is still deciding implementation semantics"
+    if _MAINTAINER_FUTURE_OWNERSHIP_RE.search(body):
+        return "maintainer-authored issue is planned as related project follow-up"
     return None
 
 

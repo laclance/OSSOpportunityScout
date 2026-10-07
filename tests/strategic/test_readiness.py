@@ -526,6 +526,48 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
 
 
 class MaintainerIssueDecisionTests(unittest.TestCase):
+    def test_controller_runtime_maintainer_owned_followup_is_not_fresh_work(self) -> None:
+        controller_runtime = issue(
+            author_association="MEMBER",
+            body=(
+                "With a multiNamespaceCache it's not possible to retrieve the last "
+                "resourceVersion from the right underlying store. "
+                "We'll probably look into this when we make the ReadYourWritesConsistency "
+                "feature work with multiNamespaceCache/multiNamespaceInformer."
+            ),
+        )
+        self.assertEqual(
+            readiness.maintainer_issue_decision_reason(controller_runtime),
+            "maintainer-authored issue is planned as related project follow-up",
+        )
+
+    def test_future_ownership_requires_trusted_author_and_no_ready_override(self) -> None:
+        body = (
+            "We'll probably look into this when we make the consistency feature work "
+            "with the multi-namespace cache."
+        )
+        self.assertIsNone(
+            readiness.maintainer_issue_decision_reason(
+                issue(author_association="NONE", body=body)
+            )
+        )
+        self.assertIsNone(
+            readiness.maintainer_issue_decision_reason(
+                issue(
+                    author_association="MEMBER",
+                    body=f"{body} Contributions welcome.",
+                )
+            )
+        )
+        self.assertIsNone(
+            readiness.maintainer_issue_decision_reason(
+                issue(
+                    author_association="MEMBER",
+                    body="We'll look into this soon. The implementation is otherwise defined.",
+                )
+            )
+        )
+
     def test_trusted_issue_author_can_mark_semantics_as_still_undecided(self) -> None:
         deciding = issue(
             author_association="MEMBER",
