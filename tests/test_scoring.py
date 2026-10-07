@@ -1310,6 +1310,21 @@ class ScoringRegressionTests(unittest.TestCase):
 
     def test_external_links_and_normal_workarounds_still_count_as_activity(self) -> None:
         now = datetime.now(timezone.utc)
+        self.assertFalse(
+            scoring._external_self_promotion_comment(
+                issue(html_url="not-a-github-issue"),
+                cast(
+                    GitHubComment,
+                    {
+                        "body": (
+                            "I built https://github.com/example/helper as a workaround. "
+                            "This does not fix the original project."
+                        ),
+                        "author_association": "NONE",
+                    },
+                ),
+            )
+        )
         recent = now - timedelta(days=5)
         cases: tuple[GitHubComment, ...] = (
             {
