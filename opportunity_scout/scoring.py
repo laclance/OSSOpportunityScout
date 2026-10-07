@@ -522,8 +522,16 @@ def competition(
     activity_comments: Collection[GitHubComment] | None = None,
 ) -> CompetitionLevel:
     """Classify visible implementation competition."""
+    reporter = str((item.get("user") or {}).get("login", "")).lower()
     count = (
-        sum(comment_contributes_to_competition(comment) for comment in activity_comments)
+        sum(
+            comment_contributes_to_competition(comment)
+            and (
+                not reporter
+                or str((comment.get("user") or {}).get("login", "")).lower() != reporter
+            )
+            for comment in activity_comments
+        )
         if activity_comments is not None
         else int(item.get("comments") or 0)
     )

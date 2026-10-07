@@ -1091,6 +1091,36 @@ class CompetitionVolumeTests(unittest.TestCase):
             )
         )
 
+    def test_report_14_reporter_self_comments_do_not_create_competition(self) -> None:
+        tailscale = issue(
+            user={"login": "HypeLaser"},
+            comments=9,
+        )
+        reporter_comments: list[GitHubComment] = [
+            {
+                "body": f"Diagnostic follow-up {index}",
+                "user": {"login": "HypeLaser"},
+            }
+            for index in range(9)
+        ]
+
+        self.assertEqual(scoring.competition(tailscale, reporter_comments), "none")
+
+        with_competitor = [
+            *reporter_comments,
+            {
+                "body": "I reproduced this and am investigating a client-side fix.",
+                "user": {"login": "another-contributor"},
+            },
+        ]
+        self.assertEqual(scoring.competition(tailscale, with_competitor), "low")
+
+    def test_reporter_filter_requires_known_reporter_login(self) -> None:
+        comments: list[GitHubComment] = [
+            {"body": "Diagnostic follow-up", "user": {"login": "reporter"}}
+        ]
+        self.assertEqual(scoring.competition(issue(user=None, comments=1), comments), "low")
+
     def test_multiple_substantive_comments_still_reach_medium_and_high(self) -> None:
         medium: list[GitHubComment] = [
             {"body": f"Implementation discussion {index}", "user": {"login": f"dev-{index}"}}
