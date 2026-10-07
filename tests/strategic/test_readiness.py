@@ -61,7 +61,7 @@ class ReadinessLabelTests(unittest.TestCase):
         ]
         self.assertTrue(readiness.maintainer_reopened_frozen_signal(preserved))
 
-        for comments in (
+        cases: tuple[list[GitHubComment], ...] = (
             [
                 {
                     "body": "/lifecycle frozen\n/reopen",
@@ -71,7 +71,8 @@ class ReadinessLabelTests(unittest.TestCase):
             [{"body": "/lifecycle frozen", "author_association": "MEMBER"}],
             [{"body": "/reopen", "author_association": "MEMBER"}],
             [],
-        ):
+        )
+        for comments in cases:
             with self.subTest(comments=comments):
                 self.assertFalse(readiness.maintainer_reopened_frozen_signal(comments))
 
