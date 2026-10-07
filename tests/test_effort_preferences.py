@@ -61,7 +61,11 @@ class EffortPolicyTests(unittest.TestCase):
 
 class FinalEstimateTests(unittest.TestCase):
     def test_paid_acceptance_uses_refreshed_estimate_in_both_directions(self) -> None:
-        small = issue(body="Bounty $500", comments=0)
+        small = issue(
+            title="Deterministic response bug",
+            body="Bounty $500. The response is incorrect.",
+            comments=0,
+        )
         moderate = issue(title="Reduce response buffering", body="Bounty $500", comments=0)
         for source, fresh in ((small, moderate), (moderate, small)):
             for allowed in (("1–3h",), ("3–6h",), ()):
@@ -151,7 +155,14 @@ class FinalEstimateTests(unittest.TestCase):
                 labels=["help wanted"],
             )
             fresh = issue(
-                body="Bounty $500" if final_paid else "", comments=0, labels=["help wanted"]
+                title="Deterministic response bug",
+                body=(
+                    "Bounty $500. The response is incorrect."
+                    if final_paid
+                    else "The response is incorrect."
+                ),
+                comments=0,
+                labels=["help wanted"],
             )
             preview = app.build_candidate(
                 source,
@@ -284,10 +295,15 @@ class EffortOrchestrationTests(unittest.TestCase):
 
     def test_explicit_effort_and_default_config_keep_request_budgets(self) -> None:
         paid_source = issue(
-            html_url="https://github.com/example/project/issues/1", body="Bounty $500", comments=0
+            html_url="https://github.com/example/project/issues/1",
+            title="Deterministic response bug",
+            body="Bounty $500. The response is incorrect.",
+            comments=0,
         )
         strategic_source = issue(
             html_url="https://github.com/example/project/issues/2",
+            title="Deterministic response bug",
+            body="The response is incorrect.",
             labels=["help wanted"],
             comments=0,
         )
