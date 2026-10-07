@@ -246,6 +246,39 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(ordinary_android.bucket, "3–6h")
         self.assertEqual(ordinary_android.reasons, ("moderate implementation scope",))
 
+    def test_report_11_constrained_network_reproduction_raises_effort(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title=(
+                    "DERP server is blocked on a restrictive network but direct connection works"
+                ),
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "1. Connect from an open network.\n"
+                    "2. Move to a restrictive network that blocks the Tailscale coordination "
+                    "server and DERP relays.\n"
+                    "3. Direct connection should work, but the client keeps trying the blocked "
+                    "relay path."
+                ),
+                labels=[{"name": "bug"}],
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(estimate.reasons, ("constrained network reproduction/setup",))
+
+        ordinary_network = scoring.estimate_effort_details(
+            issue(
+                title="Connection fails on restrictive network",
+                body=(
+                    "### Steps to reproduce\n\n"
+                    "Connect through the office firewall and observe a timeout."
+                ),
+                labels=[{"name": "bug"}],
+            )
+        )
+        self.assertEqual(ordinary_network.bucket, "3–6h")
+        self.assertEqual(ordinary_network.reasons, ("moderate implementation scope",))
+
     def test_contextual_bounded_scope_still_gets_quick_bug_bucket(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(

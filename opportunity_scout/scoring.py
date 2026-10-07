@@ -356,12 +356,22 @@ def estimate_effort_details(
         and re.search(r"\b(?:steps to reproduce|reproduc(?:e|tion))\b", evidence.text)
         and re.search(r"\bdevice\b", evidence.text)
     )
+    constrained_network_repro = bool(
+        re.search(r"\brestrictive network\b", evidence.text)
+        and re.search(
+            r"\b(?:blocks?|blocked)\b.{0,120}\b(?:coordination server|derp(?: servers?| relays?))\b",
+            evidence.text,
+        )
+        and re.search(r"\bdirect connection\b", evidence.text)
+        and re.search(r"\b(?:steps to reproduce|reproduc(?:e|tion))\b", evidence.text)
+    )
     broader = bool(
         evidence.file_refs >= 4
         or evidence.feature_signal
         or len(evidence.prose) > 6500
         or (platform_label and missing_reproduction)
         or specialized_device_repro
+        or constrained_network_repro
         or (re.search(r"\bsuggested fix(?:es)?\b", evidence.text) and suggested_fix_bullets >= 3)
     )
     if broader:
@@ -378,6 +388,8 @@ def estimate_effort_details(
             reasons.append("platform-specific reproduction is missing")
         if specialized_device_repro:
             reasons.append("specialized device reproduction/setup")
+        if constrained_network_repro:
+            reasons.append("constrained network reproduction/setup")
         return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
 
     if _trusted_history_complexity(activity_comments):
