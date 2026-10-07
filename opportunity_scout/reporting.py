@@ -51,6 +51,11 @@ def markdown_label(text: object | None) -> str:
     return value
 
 
+def _inert_github_mentions(text: str) -> str:
+    """Make GitHub mention syntax inert without changing the visible report text."""
+    return text.replace("@", "@\u200b")
+
+
 def strategic_priority_delta(candidate: Candidate) -> int:
     """Return the execution adjustment applied on top of career score."""
     return int(candidate["priority_score"]) - int(candidate["career_score"])
@@ -274,7 +279,7 @@ def github_report_body(
         sections.append(f"**Audit summary:** {audit_summary(strategic_audit)}\n\n")
         sections.extend(f"{_linked_record(item)}\n" for item in strategic_audit[:12])
 
-    return "".join(sections)
+    return _inert_github_mentions("".join(sections))
 
 
 def github_report_title(queue_size: int) -> str:
