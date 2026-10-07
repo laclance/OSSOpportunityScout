@@ -215,6 +215,18 @@ _SUPPORT_QUESTION_RE: Final = re.compile(
     r"(?m)^\s*\d+\.\s+(?:is|are|could|would|should|can|do|does)\b.*\?\s*$",
     re.IGNORECASE,
 )
+_REPORTER_GUIDANCE_REQUEST_RE: Final = re.compile(
+    r"\b(?:seeking|looking for|requesting)\s+guidance\s+(?:on|about|for)\b"
+    r".{0,180}\b(?:how\s+to|configur(?:e|ation)|use|using|supply|provide|add|set\s*up)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
+    r"\bbefore\s+(?:another\s+|an?\s+)?(?:implementation\s+)?(?:pr|pull request)\b"
+    r".{0,260}\b(?:maintainers?\b.{0,100}\b(?:review|approve)|"
+    r"guidance\b.{0,100}\b(?:design|scope|direction)|"
+    r"(?:preferred|right)\s+(?:design|approach|direction))\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _TRACKING_CONTAINER_RE: Final = re.compile(
     r"\b(?:use|using)\s+(?:this|the)\s+issue\s+for\s+tracking\b"
 )
@@ -601,14 +613,23 @@ def reward_history_reason(item: GitHubIssue) -> str | None:
 
 
 def reporter_support_triage_reason(item: GitHubIssue) -> str | None:
-    """Reject reporter-authored diagnostic/support requests without defined implementation."""
+    """Reject reporter-authored support or explicit pre-implementation approval requests."""
     evidence = _issue_evidence(item)
+    body = evidence.normalized_body_lower
+
+    if _REPORTER_IMPLEMENTATION_APPROVAL_RE.search(body):
+        return "reporter is awaiting maintainer design approval before implementation"
+
     guidance_request = (
-        "would like to determine whether" in evidence.normalized_body_lower
-        or "would particularly appreciate guidance" in evidence.normalized_body_lower
-        or "would appreciate guidance" in evidence.normalized_body_lower
+        "would like to determine whether" in body
+        or "would particularly appreciate guidance" in body
+        or "would appreciate guidance" in body
     )
-    if guidance_request and len(_SUPPORT_QUESTION_RE.findall(evidence.body)) >= 3:
+    if (
+        guidance_request
+        and len(_SUPPORT_QUESTION_RE.findall(evidence.body)) >= 3
+        or _REPORTER_GUIDANCE_REQUEST_RE.search(body)
+    ):
         return "support/triage issue rather than a contributor task"
     return None
 

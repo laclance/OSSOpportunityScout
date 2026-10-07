@@ -618,6 +618,61 @@ class RewardHistoryTests(unittest.TestCase):
 
 
 class ReporterSupportTriageTests(unittest.TestCase):
+    def test_terraform_reporter_waiting_for_design_review_is_not_ready(self) -> None:
+        terraform = issue(
+            body=(
+                "PR #39328 explored a targeted instance lookup and was closed before technical "
+                "review because the required proposal discussion had not happened first.\n\n"
+                "Before another implementation PR, would the Terraform Core maintainers be open "
+                "to reviewing a narrowly-scoped optimization? If this is not the right direction, "
+                "guidance on the preferred design or whether this case is in scope would be "
+                "appreciated."
+            )
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(terraform),
+            "reporter is awaiting maintainer design approval before implementation",
+        )
+
+    def test_flux_configuration_guidance_request_is_support_not_implementation(self) -> None:
+        flux = issue(
+            body=(
+                "We are encountering an issue because the Vault URL operates over HTTPS. "
+                "We are seeking guidance on how to add our custom CA certificate to the "
+                "kustomize-controller. Your assistance in resolving this matter would be "
+                "greatly appreciated."
+            )
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(flux),
+            "support/triage issue rather than a contributor task",
+        )
+
+    def test_pre_pr_workflow_instruction_does_not_imply_approval_gate(self) -> None:
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                issue(
+                    body=(
+                        "The implementation is defined: update the parser and add regression tests. "
+                        "Before an implementation PR, run the focused unit tests locally."
+                    )
+                )
+            )
+        )
+
+    def test_guidance_wording_with_explicit_implementation_remains_actionable(self) -> None:
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                issue(
+                    body=(
+                        "Implement retries for reusable request bodies. The code path is known and "
+                        "the regression test is specified. Guidance for users should be added to "
+                        "the documentation after the fix."
+                    )
+                )
+            )
+        )
+
     def test_guidance_questionnaire_is_support_triage_not_implementation(self) -> None:
         support = issue(
             body=(
