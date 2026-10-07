@@ -314,6 +314,12 @@ def _verify_linked_pr_evidence(
             return f"existing open implementation PR: {url}"
         if state != "closed":
             return SourceFailureReason(_LINKED_PR_FAILURE)
+        if (
+            candidate.source is _LinkedPrEvidenceSource.ISSUE_BODY_URL
+            and pull.get("merged") is True
+        ):
+            url = pull.get("html_url") or identity.pull_web_url(candidate.number)
+            return f"linked implementation PR is already merged: {url}"
     return None
 
 

@@ -505,6 +505,69 @@ class LinkedPullRequestTests(unittest.TestCase):
                 "existing open implementation PR: https://github.com/example/project/pull/13",
             )
 
+    def test_tailscale_issue_body_rejects_merged_linked_implementation(self) -> None:
+        item = issue(
+            html_url="https://github.com/tailscale/tailscale/issues/21617",
+            comments=0,
+            body=(
+                "Opt-out patch and tests. Want a local opt-out so people without permissions "
+                "can opt out. https://github.com/tailscale/tailscale/pull/21616"
+            ),
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "closed",
+                "merged": True,
+                "html_url": "https://github.com/tailscale/tailscale/pull/21616",
+            },
+        ) as getter:
+            self.assertEqual(
+                competition.linked_open_pr_reason(item, "t", []),
+                (
+                    "linked implementation PR is already merged: "
+                    "https://github.com/tailscale/tailscale/pull/21616"
+                ),
+            )
+        getter.assert_called_once_with(
+            "https://api.github.com/repos/tailscale/tailscale/pulls/21616",
+            "t",
+        )
+
+    def test_closed_unmerged_and_generic_merged_comment_links_remain_available(self) -> None:
+        item = issue(
+            comments=0,
+            body=(
+                "Implementation patch: "
+                "https://github.com/example/project/pull/13"
+            ),
+        )
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "closed",
+                "merged": False,
+                "html_url": "https://github.com/example/project/pull/13",
+            },
+        ):
+            self.assertIsNone(competition.linked_open_pr_reason(item, "t", []))
+
+        comments: list[GitHubComment] = [
+            {"body": "See https://github.com/example/project/pull/14 for related context."}
+        ]
+        with patch.object(
+            github,
+            "github_get",
+            return_value={
+                "state": "closed",
+                "merged": True,
+                "html_url": "https://github.com/example/project/pull/14",
+            },
+        ):
+            self.assertIsNone(competition.linked_open_pr_reason(issue(), "t", comments))
+
     def test_linked_pr_detects_implementation_link_in_issue_body_without_comments(self) -> None:
         item = issue(
             comments=0,
