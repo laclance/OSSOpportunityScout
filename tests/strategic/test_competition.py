@@ -324,6 +324,47 @@ class ClaimCompetitionTests(unittest.TestCase):
         self.assertFalse(
             competition.strategic_open_pr_is_superseded(stale_pull, reopen_timeline[:1])
         )
+        self.assertFalse(
+            competition.strategic_open_pr_is_superseded(
+                {"user": {}, "updated_at": "2026-09-23T17:25:07Z"},
+                reopen_timeline,
+            )
+        )
+        self.assertTrue(
+            competition.strategic_open_pr_is_superseded(
+                stale_pull,
+                [
+                    {
+                        "event": "unassigned",
+                        "created_at": "2026-10-08T12:00:00Z",
+                        "assignee": {"login": "isumitsolanki"},
+                    },
+                    {
+                        "event": "unassigned",
+                        "created_at": "2026-10-07T17:31:16Z",
+                        "assignee": {"login": "isumitsolanki"},
+                    },
+                    {
+                        "event": "labeled",
+                        "created_at": "2026-10-08T16:03:50Z",
+                        "label": {"name": "help wanted"},
+                    },
+                ],
+            )
+        )
+        self.assertFalse(
+            competition.strategic_open_pr_is_superseded(
+                stale_pull,
+                [
+                    reopen_timeline[0],
+                    {
+                        "event": "labeled",
+                        "created_at": "2026-10-08T16:03:50Z",
+                        "label": {"name": "triage/accepted"},
+                    },
+                ],
+            )
+        )
 
     def test_taking_this_one_is_active_ownership(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
