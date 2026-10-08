@@ -1250,6 +1250,21 @@ class VerificationTests(unittest.TestCase):
                 "created_at": "2026-10-08T16:03:50Z",
                 "label": {"name": "help wanted"},
             },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/kubernetes/kubernetes/pull/138248",
+                        "repository_url": "https://api.github.com/repos/kubernetes/kubernetes",
+                        "title": "e2e_node: fix swap LimitedSwap stress flake",
+                        "body": "Fixes #42",
+                        "user": {"login": "isumitsolanki"},
+                        "updated_at": "2026-09-23T17:25:07Z",
+                    }
+                },
+            },
         ]
         stale_pull = {
             "user": {"login": "isumitsolanki"},
