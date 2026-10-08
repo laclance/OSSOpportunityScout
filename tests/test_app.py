@@ -583,6 +583,19 @@ class VerificationTests(unittest.TestCase):
         )
         self.assertEqual(
             scout.strategic_rejection(
+                issue(
+                    title="Hive Advisory Report",
+                    body=(
+                        "This issue collects advisory findings from agents. "
+                        "Do not close this issue. It is a living document."
+                    ),
+                ),
+                "t",
+            ),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertEqual(
+            scout.strategic_rejection(
                 {"html_url": "bad", "title": "x", "body": "", "labels": []}, "t"
             ),
             "could not identify repository/issue number",
