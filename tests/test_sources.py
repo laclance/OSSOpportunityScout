@@ -490,6 +490,44 @@ class PlatformAdapterTests(unittest.TestCase):
         )
         self.assertEqual(detail.failures, ())
 
+    def test_bountyhub_slugged_detail_links_are_fetched_once(self) -> None:
+        # Current public BountyHub links include both a UUID and a readable slug.
+        detail_path = (
+            "/en/bounty/view/521afa31-6c6f-4d2c-becc-c6b14318d2b4/"
+            "bounty-rcs-support-14999dollar"
+        )
+        detail_url = "https://www.bountyhub.dev" + detail_path
+        requests: list[str] = []
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            requests.append(url)
+            if url == "https://www.bountyhub.dev/en/bounties":
+                return sources.TextFetchResult(
+                    f'<a href="{detail_path}">View</a>'
+                    f'<a href="{detail_path}">Duplicate</a>'
+                    '<a href="/en/bounty/claim/new/other">Claim</a>'
+                )
+            if url == detail_url:
+                return sources.TextFetchResult(
+                    "Reward $14,999.00 https://github.com/microg/GmsCore/issues/2994"
+                )
+            return sources.TextFetchResult("", failure="unexpected detail URL")
+
+        result = sources.bountyhub_platform_refs(
+            r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?", fetcher
+        )
+
+        self.assertEqual(
+            result.refs,
+            {
+                "https://github.com/microg/GmsCore/issues/2994": (
+                    "confirmed bounty platform feed (BountyHub): $14,999.00"
+                )
+            },
+        )
+        self.assertEqual(result.failures, ())
+        self.assertEqual(requests.count(detail_url), 1)
+
     def test_bountyhub_empty_or_unrecognized_listing_is_incomplete(self) -> None:
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
         # No verified BountyHub empty-state contract exists for any of these responses.
