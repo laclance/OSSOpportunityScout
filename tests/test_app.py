@@ -723,6 +723,51 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
+    def test_stale_strategic_issue_requires_trusted_readiness_confirmation(self) -> None:
+        # Regression: Cilium #45913 was ranked while marked stale by automation.
+        stale = issue(
+            html_url="https://github.com/cilium/cilium/issues/45913",
+            title="Gateway API hostNetwork TLS Passthrough regression",
+            labels=[{"name": "kind/bug"}, {"name": "stale"}],
+            comments=4,
+        )
+        reason = "stale issue awaiting maintainer re-triage"
+        bot_comment: list[GitHubComment] = [
+            {
+                "body": "This issue has been automatically marked as stale.",
+                "author_association": "NONE",
+            }
+        ]
+        contributor_comment: list[GitHubComment] = [
+            {
+                "body": "Contributions welcome; I think this still needs fixing.",
+                "author_association": "NONE",
+            }
+        ]
+        maintainer_ready: list[GitHubComment] = [
+            {
+                "body": "Confirmed still reproducible; contributions welcome.",
+                "author_association": "MEMBER",
+            }
+        ]
+
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertEqual(scout.strategic_rejection(stale, "t", bot_comment), reason)
+            self.assertEqual(scout.strategic_rejection(stale, "t", contributor_comment), reason)
+            check.assert_not_called()
+            self.assertIsNone(scout.strategic_rejection(stale, "t", maintainer_ready))
+            check.assert_called_once()
+
+            # Generic readiness labels are not evidence that a stale issue was revived.
+            stale_with_help = issue(labels=["help wanted", "stale"], comments=2)
+            self.assertEqual(
+                scout.strategic_rejection(stale_with_help, "t", bot_comment),
+                reason,
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(issue(labels=["bug"], comments=2), "t", bot_comment)
+            )
+
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])
         ready_comments: list[GitHubComment] = [
@@ -1786,6 +1831,15 @@ class DiscoveryTests(unittest.TestCase):
                 issue(labels=[{"name": "needs reproduction"}], comments=0)
             ),
             "awaiting reproduction confirmation",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "stale"}, {"name": "help wanted"}], comments=0)
+            ),
+            "stale issue awaiting maintainer re-triage",
+        )
+        self.assertIsNone(
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "stale"}], comments=1))
         )
         self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
         self.assertEqual(

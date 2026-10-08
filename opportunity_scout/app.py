@@ -49,6 +49,7 @@ from opportunity_scout.strategic.readiness import (
     reporter_support_triage_reason as reporter_support_triage_reason,
     reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
+    stale_lifecycle_reason as stale_lifecycle_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
@@ -606,6 +607,9 @@ def strategic_preflight_rejection(item: GitHubIssue) -> str | None:
         abandoned_reason = abandoned_lifecycle_reason(item, False)
         if abandoned_reason:
             return abandoned_reason
+        stale_reason = stale_lifecycle_reason(item)
+        if stale_reason:
+            return stale_reason
         readiness_reason = readiness_pending_label_reason(item, accepted)
         if readiness_reason:
             return readiness_reason
@@ -642,6 +646,10 @@ def strategic_rejection(
     abandoned_reason = abandoned_lifecycle_reason(item, comment_ready is True)
     if abandoned_reason:
         return abandoned_reason
+
+    stale_reason = stale_lifecycle_reason(item, comment_ready is True)
+    if stale_reason:
+        return stale_reason
 
     accepted = (
         bool(TRIAGE_ACCEPTED_LABELS & label_set)

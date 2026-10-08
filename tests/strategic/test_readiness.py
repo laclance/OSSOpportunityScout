@@ -86,6 +86,20 @@ class ReadinessLabelTests(unittest.TestCase):
     def test_stale_label_is_not_abandoned_lifecycle(self) -> None:
         self.assertIsNone(readiness.abandoned_lifecycle_reason(issue(labels=[{"name": "stale"}])))
 
+    def test_stale_lifecycle_requires_explicit_maintainer_revival(self) -> None:
+        for label in ("stale", "lifecycle/stale"):
+            with self.subTest(label=label):
+                item = issue(labels=[{"name": label}])
+                self.assertEqual(
+                    readiness.stale_lifecycle_reason(item),
+                    "stale issue awaiting maintainer re-triage",
+                )
+                self.assertIsNone(readiness.stale_lifecycle_reason(item, ready_override=True))
+
+        for label in ("lifecycle/rotten", "not-stale", "stale-review", "bug"):
+            with self.subTest(label=label):
+                self.assertIsNone(readiness.stale_lifecycle_reason(issue(labels=[label])))
+
     def test_label_set_handles_dict_string_and_empty_labels(self) -> None:
         self.assertEqual(
             readiness.issue_label_set(
