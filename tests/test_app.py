@@ -1287,6 +1287,63 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+    def test_zero_comment_strategic_competition_loads_lifecycle_timeline(
+        self,
+    ) -> None:
+        fresh = issue(
+            body="Reopened work",
+            title="Reopened work",
+            comments=0,
+            labels=[{"name": "help wanted"}],
+        )
+        timeline = [
+            {
+                "event": "unassigned",
+                "created_at": "2026-10-07T17:31:16Z",
+                "assignee": {"login": "old-dev"},
+            },
+            {
+                "event": "labeled",
+                "created_at": "2026-10-08T16:03:50Z",
+                "label": {"name": "help wanted"},
+            },
+        ]
+        stale_pull = {
+            "user": {"login": "old-dev"},
+            "updated_at": "2026-09-23T17:25:07Z",
+            "html_url": "https://github.com/example/project/pull/43",
+            "title": "Old fix",
+            "body": "Fixes #42",
+        }
+
+        def repository_check(
+            repository: str,
+            issue_number: int,
+            token: str | None,
+            *,
+            ignore_open_pull: Any,
+        ) -> str | None:
+            self.assertEqual((repository, issue_number, token), ("example/project", 42, "t"))
+            self.assertTrue(ignore_open_pull(stale_pull))
+            return None
+
+        with (
+            patch.object(
+                scout,
+                "_strategic_timeline_evidence",
+                return_value=([], timeline),
+            ) as timeline_fetch,
+            patch.object(
+                paid_verification,
+                "repository_open_implementation_pr_reason",
+                side_effect=repository_check,
+            ),
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+        ):
+            self.assertIsNone(scout.strategic_competition_reason(fresh, "t", []))
+
+        timeline_fetch.assert_called_once_with(fresh, "t")
+
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
         with (
