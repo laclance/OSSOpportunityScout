@@ -726,11 +726,20 @@ class VerificationTests(unittest.TestCase):
             title="Per-request metrics",
             labels=[{"name": "kind/proposal"}],
         )
+        no_decision = issue(
+            title="Add config update command",
+            labels=[{"name": "no decision"}],
+        )
 
         with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertIsNone(scout.strategic_rejection(pending, "t", ready_comments))
             self.assertIsNone(scout.strategic_rejection(feature, "t", []))
             self.assertIsNone(scout.strategic_rejection(proposal_without_hold, "t", []))
+            self.assertEqual(
+                scout.strategic_rejection(no_decision, "t", []),
+                "awaiting maintainer decision",
+            )
+            self.assertIsNone(scout.strategic_rejection(no_decision, "t", ready_comments))
 
         self.assertIsNone(
             scout.readiness_pending_label_reason(
