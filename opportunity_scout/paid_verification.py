@@ -19,6 +19,7 @@ from opportunity_scout.types import GitHubIssue, SourceFailureReason
 FetchJson = Callable[[str, str | None], Any]
 ExistingPrChecker = Callable[[str, int, str | None], str | None]
 ActiveClaimChecker = Callable[[str, int, int, str | None], str | None]
+OpenPullRequestIgnore = Callable[[dict[str, Any]], bool]
 
 _TIMELINE_FAILURE: Final = "could not verify open implementation PR timeline"
 _OPEN_PULL_REQUEST_FAILURE: Final = "could not verify repository open implementation PRs"
