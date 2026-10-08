@@ -1839,9 +1839,7 @@ class DiscoveryTests(unittest.TestCase):
             "stale issue awaiting maintainer re-triage",
         )
         self.assertIsNone(
-            scout.strategic_preflight_rejection(
-                issue(labels=[{"name": "stale"}], comments=1)
-            )
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "stale"}], comments=1))
         )
         self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
         self.assertEqual(
