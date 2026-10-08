@@ -449,7 +449,8 @@ class ExistingImplementationPrTests(unittest.TestCase):
         )
 
     def test_repository_fallback_fails_closed_on_unusable_open_pr_listing(self) -> None:
-        for value in (None, {}, ["bad"]):
+        values: tuple[object, ...] = (None, {}, ["bad"])
+        for value in values:
             with self.subTest(value=value):
                 reason = paid_verification.has_existing_implementation_pr(
                     "acme/widget",
