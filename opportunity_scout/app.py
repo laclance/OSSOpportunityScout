@@ -669,7 +669,7 @@ def strategic_rejection(
         return diagnostic_reason
 
     if timeline_events is None:
-        return strategic_competition_reason(item, token, comments)
+        _, timeline_events = _strategic_timeline_evidence(item, token)
     return strategic_competition_reason(
         item,
         token,
