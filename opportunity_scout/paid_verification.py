@@ -188,10 +188,7 @@ class _OpenPullRequestEvidence:
         )
 
     def implements_from_repository_listing(self, target: _TargetIssue) -> bool:
-        """Recognize same-repository PR associations that GitHub may not cross-reference."""
-        if not target.same_repository(self.repository_url):
-            return False
-
+        """Recognize PR associations omitted from same-repository issue timelines."""
         text = f"{self.title}\n{self.body or ''}"
         for pattern in target.reference_patterns(allow_bare=True):
             for match in pattern.finditer(text):
@@ -262,8 +259,6 @@ def repository_open_implementation_pr_reason(
     for raw_pull in open_pulls:
         if not isinstance(raw_pull, dict):
             return SourceFailureReason(_OPEN_PULL_REQUEST_FAILURE)
-        if raw_pull.get("state") != "open":
-            continue
 
         html_url = raw_pull.get("html_url")
         title = raw_pull.get("title")
