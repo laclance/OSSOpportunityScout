@@ -34,6 +34,9 @@ class ReadinessLabelTests(unittest.TestCase):
             "awaiting maintainer decision",
         )
         self.assertIsNone(
+            readiness.readiness_pending_label_reason(issue(labels=["no decision needed"]))
+        )
+        self.assertIsNone(
             readiness.readiness_pending_label_reason(
                 issue(labels=["needs-investigation"]),
                 ready_override=True,
