@@ -69,7 +69,9 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ],
         )
 
-    def test_timeline_pr_filter_can_ignore_superseded_match_and_keep_scanning(self) -> None:
+    def test_timeline_pr_filter_can_ignore_superseded_match_and_keep_scanning(
+        self,
+    ) -> None:
         timeline = [
             {
                 "event": "cross-referenced",
