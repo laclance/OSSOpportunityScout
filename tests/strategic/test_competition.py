@@ -302,9 +302,7 @@ class ClaimCompetitionTests(unittest.TestCase):
             },
         ]
 
-        self.assertTrue(
-            competition.strategic_open_pr_is_superseded(stale_pull, reopen_timeline)
-        )
+        self.assertTrue(competition.strategic_open_pr_is_superseded(stale_pull, reopen_timeline))
         self.assertFalse(
             competition.strategic_open_pr_is_superseded(
                 {
