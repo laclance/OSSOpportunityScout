@@ -1125,6 +1125,54 @@ class VerificationTests(unittest.TestCase):
         timeline_network_check.assert_not_called()
         repository_pr_check.assert_called_once_with("example/project", 42, "t")
 
+    def test_verify_strategic_prefetched_timeline_keeps_direct_pr_evidence(self) -> None:
+        fresh = issue(
+            body="Parser task",
+            title="Parser task",
+            comments=1,
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        timeline = [
+            {
+                "event": "commented",
+                "body": "Thanks for the report.",
+                "author_association": "NONE",
+                "user": {"login": "observer"},
+                "created_at": "2026-10-01T00:00:00Z",
+                "updated_at": "2026-10-01T00:00:00Z",
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/example/project/pull/43",
+                        "repository_url": "https://api.github.com/repos/example/project",
+                        "title": "Fix parser task",
+                        "body": "Fixes #42",
+                    }
+                },
+            },
+        ]
+        reason = "existing open implementation PR: https://github.com/example/project/pull/43"
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(paid_policy, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(github, "github_collection", return_value=timeline),
+            patch.object(
+                paid_verification,
+                "repository_open_implementation_pr_reason",
+            ) as repository_pr_check,
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+            patch.object(scout, "fetch_repo_metadata") as fetch_meta,
+        ):
+            self.assertEqual(scout.verify(fresh, "t", {}, {}), (None, reason))
+
+        repository_pr_check.assert_not_called()
+        fetch_meta.assert_not_called()
+
     def test_verify_strategic_prefetched_timeline_uses_repository_pr_fallback(self) -> None:
         fresh = issue(
             body="Parser task",
