@@ -285,10 +285,17 @@ def strategic_competition_reason(
             repo, number = github.issue_repo_and_number(_item)
             repository = cast(str, repo)
             issue_number = cast(int, number)
+            def ignore_open_pull(raw_pull: dict[str, Any]) -> bool:
+                return competition_policy.strategic_open_pr_is_superseded(
+                    raw_pull,
+                    timeline_events,
+                )
+
             reason = paid_verification.existing_implementation_pr_reason(
                 timeline_events,
                 repository,
                 issue_number,
+                ignore_open_pull=ignore_open_pull,
             )
             if reason is not None:
                 return reason
@@ -296,12 +303,7 @@ def strategic_competition_reason(
                 repository,
                 issue_number,
                 _token,
-                ignore_open_pull=lambda raw_pull: (
-                    competition_policy.strategic_open_pr_is_superseded(
-                        raw_pull,
-                        timeline_events,
-                    )
-                ),
+                ignore_open_pull=ignore_open_pull,
             )
 
         timeline_pr_checker = prefetched_timeline_pr_checker
