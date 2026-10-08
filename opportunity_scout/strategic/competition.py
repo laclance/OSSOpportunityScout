@@ -92,6 +92,14 @@ _COMMENT_DUPLICATE_REDIRECT_RE = re.compile(
     re.IGNORECASE,
 )
 _CANONICAL_COMMENT_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"}
+_SHARED_WORK_OVERRIDE_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+_SHARED_WORK_OVERRIDE_RE = re.compile(
+    r"\b(?:general|tracking)\s+issue\b"
+    r".{0,240}\ball\s+contributions?\b"
+    r".{0,240}\bremaining\s+tasks?\b"
+    r".{0,120}\bwelcome\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _LINKED_PR_FAILURE = "could not verify linked implementation PR"
 _CANONICAL_ISSUE_FAILURE = "could not verify canonical issue reference"
 _UNIDENTIFIABLE_ISSUE = "could not identify repository/issue number"
@@ -214,6 +222,21 @@ def _comment_claim_reason(comment: GitHubComment, issue_number: int | None) -> s
     return None
 
 
+def _comments_after_shared_work_override(
+    comments: list[GitHubComment],
+) -> list[GitHubComment]:
+    """Ignore claims made before a maintainer explicitly reopens a shared tracker."""
+    latest_override = -1
+    for index, comment in enumerate(comments):
+        association = str(comment.get("author_association") or "").upper()
+        body = str(comment.get("body") or "")
+        if association in _SHARED_WORK_OVERRIDE_ASSOCIATIONS and _SHARED_WORK_OVERRIDE_RE.search(
+            body
+        ):
+            latest_override = index
+    return comments[latest_override + 1 :]
+
+
 def strategic_claim_reason(
     item: GitHubIssue,
     comments: list[GitHubComment],
@@ -225,7 +248,7 @@ def strategic_claim_reason(
 
     identity = _IssueIdentity.from_issue(item)
     issue_number = identity.number if identity is not None else None
-    for comment in comments:
+    for comment in _comments_after_shared_work_override(comments):
         reason = _comment_claim_reason(comment, issue_number)
         if reason is not None:
             return reason

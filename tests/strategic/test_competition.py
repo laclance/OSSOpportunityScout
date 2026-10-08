@@ -231,6 +231,59 @@ class ClaimCompetitionTests(unittest.TestCase):
             "active claim by @elevasyncsolutions-jpg",
         )
 
+    def test_maintainer_shared_tracker_override_clears_only_earlier_claims(self) -> None:
+        recent = datetime.now(timezone.utc).isoformat()
+        old_claim: GitHubComment = {
+            "body": "I can work on these two annotations.",
+            "updated_at": recent,
+            "author_association": "CONTRIBUTOR",
+            "user": {"login": "ris-tlp"},
+        }
+        shared_override: GitHubComment = {
+            "body": (
+                "I won't assign you to this task, as it's a general issue, "
+                "but all contributions to the remaining tasks are welcome!"
+            ),
+            "updated_at": recent,
+            "author_association": "MEMBER",
+            "user": {"login": "maintainer"},
+        }
+
+        self.assertIsNone(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [old_claim, shared_override],
+            )
+        )
+
+        untrusted_override: GitHubComment = {
+            "body": shared_override["body"],
+            "updated_at": recent,
+            "author_association": "NONE",
+            "user": {"login": "maintainer"},
+        }
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [old_claim, untrusted_override],
+            ),
+            "active claim by @ris-tlp",
+        )
+
+        later_claim: GitHubComment = {
+            "body": "I'll work on the remaining annotation.",
+            "updated_at": recent,
+            "author_association": "NONE",
+            "user": {"login": "new-dev"},
+        }
+        self.assertEqual(
+            competition.strategic_claim_reason(
+                issue(body=""),
+                [old_claim, shared_override, later_claim],
+            ),
+            "active claim by @new-dev",
+        )
+
     def test_taking_this_one_is_active_ownership(self) -> None:
         recent = datetime.now(timezone.utc).isoformat()
         self.assertEqual(
