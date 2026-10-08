@@ -71,7 +71,7 @@ jobs:
 
       - name: Run pinned scanner source
         id: scan
-        uses: laclance/OSSOpportunityScout@73e7d7d498239707bab7f9d3f1bed6c09b14f9a4 # v1.0.4 reviewed scanner baseline
+        uses: laclance/OSSOpportunityScout@7f84de934b248fb085df2007945e77d4ef7cb35f # v1.0.10 reviewed scanner baseline
         timeout-minutes: 25
         with:
           config-path: scout.toml
