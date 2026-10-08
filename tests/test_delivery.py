@@ -228,6 +228,7 @@ class DeliveryTests(unittest.TestCase):
             result = delivery._perform_github_mutation(request_spec)
 
         self.assertFalse(result.succeeded)
+        self.assertEqual(result.failure, "untrusted destination")
         opened.assert_not_called()
 
     def test_github_report_rejects_untrusted_created_issue_url_without_close(self) -> None:
@@ -423,3 +424,250 @@ class DeliveryTests(unittest.TestCase):
                 )
             )
         self.assertEqual(opened.call_count, 2)
+    def test_http_error_reports_status_without_telegram_token(self) -> None:
+        secret = "telegram-url-secret"
+        error = urllib.error.HTTPError(
+            f"https://api.telegram.org/bot{secret}/sendMessage",
+            403,
+            f"unauthorized {secret}",
+            None,
+            None,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=error) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(delivery.send_telegram_notification(secret, "chat", "payload-secret"))
+        opened.assert_called_once()
+        self.assertEqual(output.getvalue(), "Failed to send Telegram notification (HTTP 403).\n")
+        self.assertNotIn(secret, output.getvalue())
+        self.assertNotIn("payload-secret", output.getvalue())
+
+    def test_http_error_reports_status_without_discord_webhook_secret(self) -> None:
+        secret = "discord-webhook-secret"
+        error = urllib.error.HTTPError(
+            f"https://discord.example/api/webhooks/{secret}",
+            429,
+            f"rate-limited {secret}",
+            None,
+            None,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(urllib.request, "urlopen", side_effect=error),
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.send_discord_notification(
+                    f"https://discord.example/api/webhooks/{secret}", "private-payload"
+                )
+            )
+        self.assertEqual(output.getvalue(), "Failed to send Discord notification (HTTP 429).\n")
+        self.assertNotIn(secret, output.getvalue())
+        self.assertNotIn("private-payload", output.getvalue())
+
+    def test_invalid_http_status_does_not_echo_untrusted_status(self) -> None:
+        for status in (0, cast(int, "http-status-secret")):
+            with self.subTest(status=status):
+                error = urllib.error.HTTPError(
+                    "https://api.telegram.org/bottoken-secret/sendMessage",
+                    status,
+                    "server-text-secret",
+                    None,
+                    None,
+                )
+                output = io.StringIO()
+                with (
+                    patch.object(urllib.request, "urlopen", side_effect=error),
+                    redirect_stdout(output),
+                ):
+                    self.assertFalse(
+                        delivery.send_telegram_notification("token-secret", "chat", "hi")
+                    )
+                self.assertEqual(
+                    output.getvalue(), "Failed to send Telegram notification (HTTP error).\n"
+                )
+
+    def test_network_errors_do_not_echo_urls_or_exception_messages(self) -> None:
+        for error in (
+            urllib.error.URLError("https://api.telegram.org/botnetwork-secret/sendMessage"),
+            OSError("https://api.telegram.org/botnetwork-secret/sendMessage"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                output = io.StringIO()
+                with (
+                    patch.object(urllib.request, "urlopen", side_effect=error),
+                    redirect_stdout(output),
+                ):
+                    self.assertFalse(
+                        delivery.send_telegram_notification(
+                            "network-secret", "chat", "message-secret"
+                        )
+                    )
+                self.assertEqual(
+                    output.getvalue(), "Failed to send Telegram notification (network error).\n"
+                )
+                self.assertNotIn("network-secret", output.getvalue())
+                self.assertNotIn("message-secret", output.getvalue())
+
+    def test_unexpected_transport_exception_does_not_leak_content(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(
+                urllib.request,
+                "urlopen",
+                side_effect=RuntimeError("unexpected transport-secret with payload-secret"),
+            ),
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.send_discord_notification(
+                    "https://discord.example/transport-secret", "text"
+                )
+            )
+        self.assertEqual(
+            output.getvalue(), "Failed to send Discord notification (transport error).\n"
+        )
+        self.assertNotIn("transport-secret", output.getvalue())
+        self.assertNotIn("payload-secret", output.getvalue())
+
+    def test_request_construction_failure_is_safe_and_skips_network(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(
+                delivery._JsonRequest, "materialize", side_effect=ValueError("request-secret")
+            ),
+            patch.object(urllib.request, "urlopen") as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(delivery.send_telegram_notification("request-secret", "chat", "hi"))
+        opened.assert_not_called()
+        self.assertEqual(
+            output.getvalue(), "Failed to send Telegram notification (request error).\n"
+        )
+
+    def test_github_create_http_error_does_not_echo_bearer_token(self) -> None:
+        secret = "bearer-token-secret"
+        error = urllib.error.HTTPError(
+            "https://api.github.com/repos/me/repo/issues",
+            401,
+            f"Bearer {secret} and source-payload-secret",
+            None,
+            None,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(delivery, "_github_mutation_open", side_effect=error) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(delivery.create_github_issue("me/repo", secret, "title", "body"))
+        opened.assert_called_once()
+        self.assertEqual(
+            output.getvalue(), "Failed to create GitHub Issue notification (HTTP 401).\n"
+        )
+        self.assertNotIn(secret, output.getvalue())
+        self.assertNotIn("source-payload-secret", output.getvalue())
+
+    def test_github_close_network_error_is_failure_without_retry_or_leaks(self) -> None:
+        created = FakeResponse(b'{"url": "https://api.github.com/repos/me/repo/issues/42"}')
+        output = io.StringIO()
+        with (
+            patch.object(
+                delivery,
+                "_github_mutation_open",
+                side_effect=[created, urllib.error.URLError("Bearer close-token-secret")],
+            ) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.create_github_issue("me/repo", "close-token-secret", "title", "body")
+            )
+        self.assertEqual(opened.call_count, 2)
+        self.assertEqual(
+            output.getvalue(), "Failed to auto-close GitHub Issue notification (network error).\n"
+        )
+        self.assertNotIn("close-token-secret", output.getvalue())
+
+    def test_private_report_http_failure_does_not_echo_bearer_token(self) -> None:
+        secret = "private-report-token-secret"
+        error = urllib.error.HTTPError(
+            "https://api.github.com/repos/me/private/issues",
+            403,
+            f"Bearer {secret}",
+            None,
+            None,
+        )
+        output = io.StringIO()
+        with (
+            patch.object(github, "github_get", return_value={"private": True}),
+            patch.object(delivery, "_github_mutation_open", side_effect=error) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.create_private_github_issue("me/private", secret, "title", "secret-body")
+            )
+        opened.assert_called_once()
+        self.assertEqual(output.getvalue(), "Failed to create private GitHub report (HTTP 403).\n")
+        self.assertNotIn(secret, output.getvalue())
+        self.assertNotIn("secret-body", output.getvalue())
+
+    def test_github_unexpected_failure_uses_generic_category(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(
+                delivery, "_github_mutation_open", side_effect=RuntimeError("Bearer github-secret")
+            ) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.create_github_issue("me/repo", "github-secret", "title", "body")
+            )
+        opened.assert_called_once()
+        self.assertEqual(
+            output.getvalue(), "Failed to create GitHub Issue notification (transport error).\n"
+        )
+        self.assertNotIn("github-secret", output.getvalue())
+
+    def test_github_request_construction_failure_skips_mutation(self) -> None:
+        request = delivery._github_request(
+            "https://api.github.com/repos/me/repo/issues",
+            "github-secret",
+            method="POST",
+            payload={"title": "hi"},
+        )
+        with (
+            patch.object(delivery._JsonRequest, "materialize", side_effect=ValueError("secret")),
+            patch.object(delivery, "_github_mutation_open") as opened,
+        ):
+            result = delivery._perform_github_mutation(request)
+        opened.assert_not_called()
+        self.assertFalse(result.succeeded)
+        self.assertEqual(result.failure, "request error")
+
+    def test_github_refused_redirect_stays_single_attempt_and_safe(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(
+                delivery,
+                "_github_mutation_open",
+                side_effect=urllib.error.URLError("redirect-to-bearer-secret"),
+            ) as opened,
+            redirect_stdout(output),
+        ):
+            self.assertFalse(
+                delivery.create_github_issue("me/repo", "bearer-secret", "title", "body")
+            )
+        opened.assert_called_once()
+        self.assertEqual(
+            output.getvalue(), "Failed to create GitHub Issue notification (network error).\n"
+        )
+        self.assertNotIn("bearer-secret", output.getvalue())
+
+    def test_missing_failure_detail_uses_safe_fallback(self) -> None:
+        self.assertEqual(
+            delivery._failure_message(
+                "Failed to send notification", delivery._TransportResult(False)
+            ),
+            "Failed to send notification (transport error).",
+        )
