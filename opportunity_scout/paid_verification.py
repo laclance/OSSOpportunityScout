@@ -21,8 +21,11 @@ ExistingPrChecker = Callable[[str, int, str | None], str | None]
 ActiveClaimChecker = Callable[[str, int, int, str | None], str | None]
 
 _TIMELINE_FAILURE: Final = "could not verify open implementation PR timeline"
+_OPEN_PULL_REQUEST_FAILURE: Final = "could not verify repository open implementation PRs"
 _CLAIM_FAILURE: Final = "could not verify active claim comments"
 _MAX_RELATIONSHIP_GAP: Final = 120
+_OPEN_PULL_REQUESTS_CACHE: dict[str, object] = {}
+_OPEN_PULL_REQUESTS_LOCKS = github.KeyedLockPool()
 
 CLAIM_PATTERNS: Final[tuple[str, ...]] = (
     r"/attempt\b",
@@ -65,6 +68,12 @@ _RELATIONSHIP_TERM: Final = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_BOUNDARIES: Final = ".!?\n"
+_ASSOCIATED_ISSUE_CONTEXT: Final = re.compile(
+    r"\b(?:which\s+issue\(s\)\s+this\s+pr\s+is\s+related\s+to|"
+    r"related\s+issues?|associated\s+issues?|as\s+i\s+mentioned\s+in)\b",
+    re.IGNORECASE,
+)
+_ASSOCIATED_ISSUE_CONTEXT_GAP: Final = 900
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,6 +187,21 @@ class _OpenPullRequestEvidence:
             for match in pattern.finditer(text)
         )
 
+    def implements_from_repository_listing(self, target: _TargetIssue) -> bool:
+        """Recognize same-repository PR associations that GitHub may not cross-reference."""
+        if not target.same_repository(self.repository_url):
+            return False
+
+        text = f"{self.title}\n{self.body or ''}"
+        for pattern in target.reference_patterns(allow_bare=True):
+            for match in pattern.finditer(text):
+                if _relationship_precedes_reference(text, match.start()):
+                    return True
+                context_start = max(0, match.start() - _ASSOCIATED_ISSUE_CONTEXT_GAP)
+                if _ASSOCIATED_ISSUE_CONTEXT.search(text[context_start : match.start()]):
+                    return True
+        return False
+
 
 def _relationship_precedes_reference(text: str, reference_start: int) -> bool:
     sentence_start = 0
@@ -211,19 +235,82 @@ def existing_implementation_pr_reason(
     return None
 
 
+def repository_open_implementation_pr_reason(
+    repo: str,
+    issue_number: int,
+    token: str | None,
+    *,
+    fetch_open_pulls: FetchJson | None = None,
+) -> str | None:
+    """Check cached same-repository open PRs when issue timelines omit relationships."""
+    url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100"
+    if fetch_open_pulls is None:
+        open_pulls = github.cached_value(
+            _OPEN_PULL_REQUESTS_CACHE,
+            repo,
+            lambda: github.github_collection(url, token),
+            _OPEN_PULL_REQUESTS_LOCKS,
+            namespace="open-pulls",
+        )
+    else:
+        open_pulls = fetch_open_pulls(url, token)
+
+    if not isinstance(open_pulls, list):
+        return SourceFailureReason(_OPEN_PULL_REQUEST_FAILURE)
+
+    target = _TargetIssue(repo=repo, number=issue_number)
+    for raw_pull in open_pulls:
+        if not isinstance(raw_pull, dict):
+            return SourceFailureReason(_OPEN_PULL_REQUEST_FAILURE)
+        if raw_pull.get("state") != "open":
+            continue
+
+        html_url = raw_pull.get("html_url")
+        title = raw_pull.get("title")
+        body = raw_pull.get("body")
+        if not isinstance(html_url, str) or not html_url or not isinstance(title, str):
+            return SourceFailureReason(_OPEN_PULL_REQUEST_FAILURE)
+        if body is not None and not isinstance(body, str):
+            return SourceFailureReason(_OPEN_PULL_REQUEST_FAILURE)
+
+        evidence = _OpenPullRequestEvidence(
+            url=html_url,
+            repository_url=target.repository_api_url,
+            title=title,
+            body=body,
+        )
+        if evidence.implements_from_repository_listing(target):
+            return f"existing open implementation PR: {html_url}"
+    return None
+
+
 def has_existing_implementation_pr(
     repo: str,
     issue_number: int,
     token: str | None,
     *,
     fetch_json: FetchJson | None = None,
+    fetch_open_pulls: FetchJson | None = None,
 ) -> str | None:
-    """Fetch complete timeline evidence and evaluate implementation competition."""
+    """Verify implementation competition from timeline and repository PR evidence."""
     url = f"https://api.github.com/repos/{repo}/issues/{issue_number}/timeline?per_page=100"
     timeline = (
         github.github_collection(url, token) if fetch_json is None else fetch_json(url, token)
     )
-    return existing_implementation_pr_reason(timeline, repo, issue_number)
+    reason = existing_implementation_pr_reason(timeline, repo, issue_number)
+    if reason is not None:
+        return reason
+
+    # Existing timeline-only test/injection callers stay bounded unless they
+    # explicitly provide the repository fallback transport as well.
+    if fetch_json is not None and fetch_open_pulls is None:
+        return None
+    return repository_open_implementation_pr_reason(
+        repo,
+        issue_number,
+        token,
+        fetch_open_pulls=fetch_open_pulls,
+    )
 
 
 def _claim_reason(raw_comment: object) -> str | None:
