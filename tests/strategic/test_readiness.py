@@ -29,6 +29,10 @@ class ReadinessLabelTests(unittest.TestCase):
             readiness.readiness_pending_label_reason(issue(labels=["needs/design"])),
             "awaiting maintainer design decision",
         )
+        self.assertEqual(
+            readiness.readiness_pending_label_reason(issue(labels=["no decision"])),
+            "awaiting maintainer decision",
+        )
         self.assertIsNone(
             readiness.readiness_pending_label_reason(
                 issue(labels=["needs-investigation"]),
