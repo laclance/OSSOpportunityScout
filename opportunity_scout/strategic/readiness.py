@@ -624,6 +624,18 @@ def abandoned_lifecycle_reason(
     return None
 
 
+def stale_lifecycle_reason(
+    item: GitHubIssue,
+    ready_override: bool = False,
+) -> str | None:
+    """Hold explicitly stale issues unless a trusted maintainer revives implementation."""
+    if ready_override:
+        return None
+    if issue_label_set(item) & {"stale", "lifecycle/stale"}:
+        return "stale issue awaiting maintainer re-triage"
+    return None
+
+
 def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
     """Reject trusted maintainer-authored issues that remain unready or project-owned."""
     evidence = _issue_evidence(item)
