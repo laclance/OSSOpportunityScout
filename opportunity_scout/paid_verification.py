@@ -286,6 +286,7 @@ def repository_open_implementation_pr_reason(
             repository_url=target.repository_api_url,
             title=title,
             body=body,
+            raw_pull=raw_pull,
         )
         if evidence.implements_from_repository_listing(target):
             if ignore_open_pull is not None and ignore_open_pull(raw_pull):
