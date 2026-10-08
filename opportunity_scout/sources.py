@@ -367,6 +367,9 @@ def bountyhub_platform_refs(
         base_url="https://www.bountyhub.dev",
         limit=fetch_limit,
     )
+    if not refs and not detail_urls:
+        return PlatformDiscoveryResult(refs={}, failures=(_platform_failure("BountyHub"),))
+
     detail_refs, detail_failed = _bountyhub_detail_refs(
         _fetch_detail_pages(detail_urls, fetcher, network_workers=network_workers),
         amount_pattern=amount_pattern,
