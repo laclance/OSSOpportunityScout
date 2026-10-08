@@ -619,9 +619,7 @@ class PlatformAdapterTests(unittest.TestCase):
             sources.TextFetchResult(json.dumps([])),
             sources.TextFetchResult(json.dumps({"data": None, "hasNextPage": False})),
             sources.TextFetchResult(json.dumps({"data": [], "hasNextPage": "false"})),
-            sources.TextFetchResult(
-                json.dumps({"data": [{}, {}], "hasNextPage": False})
-            ),
+            sources.TextFetchResult(json.dumps({"data": [{}, {}], "hasNextPage": False})),
             sources.TextFetchResult(json.dumps({"data": [], "hasNextPage": True})),
         ]
         for response in bad_responses:
