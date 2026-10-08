@@ -270,9 +270,7 @@ def strategic_open_pr_is_superseded(
         if not isinstance(event, dict) or event.get("event") != "labeled":
             continue
         label = event.get("label")
-        label_name = (
-            str(label.get("name") or "").casefold() if isinstance(label, dict) else ""
-        )
+        label_name = str(label.get("name") or "").casefold() if isinstance(label, dict) else ""
         event_at = github.parse_github_datetime(event.get("created_at"))
         if (
             label_name in _STRATEGIC_REOPEN_LABELS
