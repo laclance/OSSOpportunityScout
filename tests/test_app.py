@@ -1832,6 +1832,17 @@ class DiscoveryTests(unittest.TestCase):
             ),
             "awaiting reproduction confirmation",
         )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "stale"}, {"name": "help wanted"}], comments=0)
+            ),
+            "stale issue awaiting maintainer re-triage",
+        )
+        self.assertIsNone(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "stale"}], comments=1)
+            )
+        )
         self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
         self.assertEqual(
             scout.strategic_preflight_rejection(issue(labels=[{"name": "claimed"}], comments=2)),
