@@ -84,7 +84,7 @@ Do not move scanner discovery onto the private-report credential.
 Consider these only when they produce a concrete maintenance benefit:
 
 - immutable result objects for selected mapping-heavy internal results
-- remaining application compatibility-wrapper cleanup
+- revisit remaining app compatibility wrappers only when their production, injection, and external consumers are established; three unused strategic-discovery delegates were removed
 - lightweight dependency-direction checks if architectural drift becomes recurring
 
 Do not perform broad type/model rewrites or custom architecture tooling merely for stylistic consistency.

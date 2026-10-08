@@ -1601,27 +1601,9 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_possible_miss_signal_delegates_to_strategic_discovery(self) -> None:
-        item = issue()
-        with patch(
-            "opportunity_scout.strategic.discovery.possible_miss_signal",
-            return_value=True,
-        ) as signal:
-            self.assertTrue(scout.possible_miss_signal(item))
-        signal.assert_called_once_with(item)
-
-    def test_strategic_discovery_audit_wrappers_delegate(self) -> None:
+    def test_add_audit_binds_configured_limit(self) -> None:
         item = issue()
         audit: list[RejectionRecord] = []
-        provisional: list[sources.IssueRow] = []
-
-        with patch(
-            "opportunity_scout.strategic.discovery.basic_rejection_audit_reason",
-            return_value="reason",
-        ) as reason:
-            self.assertEqual(scout.basic_rejection_audit_reason(item), "reason")
-        reason.assert_called_once_with(item)
-
         with patch("opportunity_scout.strategic.discovery.add_audit") as add:
             scout.add_audit(audit, item, "reason")
         add.assert_called_once_with(
@@ -1629,17 +1611,6 @@ class DiscoveryTests(unittest.TestCase):
             item,
             "reason",
             limit=scout.STRATEGIC_AUDIT_LIMIT,
-        )
-
-        with patch(
-            "opportunity_scout.strategic.discovery.strategic_inspection_items",
-            return_value={"a/a": [item]},
-        ) as inspect:
-            self.assertEqual(scout.strategic_inspection_items(provisional), {"a/a": [item]})
-        inspect.assert_called_once_with(
-            provisional,
-            base_per_repo=scout.STRATEGIC_INSPECT_PER_REPO,
-            adaptive_budget=scout.STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         )
 
     def test_detection_tracker_rejection_does_not_reach_near_miss_audit(self) -> None:
