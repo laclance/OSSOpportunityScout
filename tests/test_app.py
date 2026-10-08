@@ -1123,7 +1123,9 @@ class VerificationTests(unittest.TestCase):
         )
         comments_fetch.assert_not_called()
         timeline_network_check.assert_not_called()
-        repository_pr_check.assert_called_once_with("example/project", 42, "t")
+        repository_pr_check.assert_called_once()
+        self.assertEqual(repository_pr_check.call_args.args, ("example/project", 42, "t"))
+        self.assertIn("ignore_open_pull", repository_pr_check.call_args.kwargs)
 
     def test_verify_strategic_prefetched_timeline_keeps_direct_pr_evidence(self) -> None:
         fresh = issue(
