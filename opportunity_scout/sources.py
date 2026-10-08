@@ -6,6 +6,7 @@ It does not rank final candidates or decide implementation readiness.
 
 from __future__ import annotations
 
+import json
 import re
 import urllib.error
 import urllib.parse
@@ -345,6 +346,81 @@ def _bountyhub_detail_refs(
     return refs, failed
 
 
+def _bountyhub_api_refs(
+    fetcher: FetchText, *, page_size: int, max_pages: int = 5
+) -> PlatformDiscoveryResult:
+    """Read BountyHub's public paginated JSON feed, failing closed on changed pages."""
+    refs: dict[str, str] = {}
+    incomplete = False
+    for page_number in range(1, max_pages + 1):
+        url = (
+            "https://api.bountyhub.dev/api/bounties"
+            f"?page={page_number}&limit={page_size}"
+        )
+        fetched = fetcher(url)
+        if fetched.failure is not None:
+            return PlatformDiscoveryResult(
+                refs=refs, failures=(_platform_failure("BountyHub"),)
+            )
+
+        try:
+            payload = json.loads(fetched.text)
+        except (ValueError, TypeError):
+            return PlatformDiscoveryResult(
+                refs=refs, failures=(_platform_failure("BountyHub"),)
+            )
+        if not isinstance(payload, dict):
+            break
+        rows = payload.get("data")
+        has_next = payload.get("hasNextPage")
+        if (
+            not isinstance(rows, list)
+            or not isinstance(has_next, bool)
+            or len(rows) > page_size
+            or (has_next and not rows)
+        ):
+            break
+
+        for item in rows:
+            if not isinstance(item, dict):
+                incomplete = True
+                continue
+            issue_state = item.get("issueState")
+            solved = item.get("solved")
+            retracted = item.get("retracted")
+            if (
+                issue_state not in ("open", "closed")
+                or not isinstance(solved, bool)
+                or not isinstance(retracted, bool)
+            ):
+                incomplete = True
+                continue
+            if issue_state == "closed" or solved or retracted:
+                continue
+
+            source = item.get("htmlURL")
+            amount = item.get("totalAmount")
+            if (
+                not isinstance(source, str)
+                or _ISSUE_URL_RE.fullmatch(source) is None
+                or not isinstance(amount, str)
+                or re.fullmatch(r"\\d+(?:\\.\\d{1,2})?", amount) is None
+            ):
+                incomplete = True
+                continue
+            refs[source] = f"confirmed bounty platform feed (BountyHub): ${amount}"
+
+        if not has_next:
+            return PlatformDiscoveryResult(
+                refs=refs,
+                failures=(_platform_failure("BountyHub"),) if incomplete else (),
+            )
+
+    return PlatformDiscoveryResult(
+        refs=refs, failures=(_platform_failure("BountyHub"),)
+    )
+
+
 def bountyhub_platform_refs(
     amount_pattern: str,
     fetcher: FetchText = fetch_text,
@@ -354,23 +430,26 @@ def bountyhub_platform_refs(
 ) -> PlatformDiscoveryResult:
     """Read public BountyHub listings when the site exposes them in HTML."""
     listing = fetcher("https://www.bountyhub.dev/en/bounties")
-    if listing.failure is not None:
-        return PlatformDiscoveryResult(refs={}, failures=(_platform_failure("BountyHub"),))
+    if listing.failure is None:
+        normalized = _normalized_platform_text(listing.text)
+        refs = _direct_issue_refs(
+            normalized,
+            signal="confirmed bounty platform feed (BountyHub)",
+            limit=fetch_limit,
+        )
+        detail_urls = _detail_urls(
+            normalized,
+            _BOUNTYHUB_DETAIL_RE,
+            base_url="https://www.bountyhub.dev",
+            limit=fetch_limit,
+        )
+    else:
+        refs, detail_urls = {}, []
 
-    normalized = _normalized_platform_text(listing.text)
-    refs = _direct_issue_refs(
-        normalized,
-        signal="confirmed bounty platform feed (BountyHub)",
-        limit=fetch_limit,
-    )
-    detail_urls = _detail_urls(
-        normalized,
-        _BOUNTYHUB_DETAIL_RE,
-        base_url="https://www.bountyhub.dev",
-        limit=fetch_limit,
-    )
+    # The live page is a client-rendered shell. Use its public JSON feed when
+    # there are no server-visible references; never mistake the shell for emptiness.
     if not refs and not detail_urls:
-        return PlatformDiscoveryResult(refs={}, failures=(_platform_failure("BountyHub"),))
+        return _bountyhub_api_refs(fetcher, page_size=max(1, fetch_limit))
 
     detail_refs, detail_failed = _bountyhub_detail_refs(
         _fetch_detail_pages(detail_urls, fetcher, network_workers=network_workers),
