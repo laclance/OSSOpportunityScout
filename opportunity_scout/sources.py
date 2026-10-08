@@ -346,27 +346,22 @@ def _bountyhub_detail_refs(
     return refs, failed
 
 
-def _bountyhub_api_refs(fetcher: FetchText, *, page_size: int, max_pages: int = 5) -> PlatformDiscoveryResult:
+def _bountyhub_api_refs(
+    fetcher: FetchText, *, page_size: int, max_pages: int = 5
+) -> PlatformDiscoveryResult:
     """Read BountyHub's public paginated JSON feed, failing closed on changed pages."""
     refs: dict[str, str] = {}
     incomplete = False
     for page_number in range(1, max_pages + 1):
-        url = (
-            "https://api.bountyhub.dev/api/bounties"
-            f"?page={page_number}&limit={page_size}"
-        )
+        url = f"https://api.bountyhub.dev/api/bounties?page={page_number}&limit={page_size}"
         fetched = fetcher(url)
         if fetched.failure is not None:
-            return PlatformDiscoveryResult(
-                refs=refs, failures=(_platform_failure("BountyHub"),)
-            )
+            return PlatformDiscoveryResult(refs=refs, failures=(_platform_failure("BountyHub"),))
 
         try:
             payload = json.loads(fetched.text)
         except (ValueError, TypeError):
-            return PlatformDiscoveryResult(
-                refs=refs, failures=(_platform_failure("BountyHub"),)
-            )
+            return PlatformDiscoveryResult(refs=refs, failures=(_platform_failure("BountyHub"),))
         if not isinstance(payload, dict):
             break
         rows = payload.get("data")
@@ -414,9 +409,7 @@ def _bountyhub_api_refs(fetcher: FetchText, *, page_size: int, max_pages: int = 
                 failures=(_platform_failure("BountyHub"),) if incomplete else (),
             )
 
-    return PlatformDiscoveryResult(
-        refs=refs, failures=(_platform_failure("BountyHub"),)
-    )
+    return PlatformDiscoveryResult(refs=refs, failures=(_platform_failure("BountyHub"),))
 
 
 def bountyhub_platform_refs(
