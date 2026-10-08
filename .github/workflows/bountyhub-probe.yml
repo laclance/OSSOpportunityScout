@@ -72,7 +72,7 @@ jobs:
               if "bount" not in js.lower() and "api.bountyhub" not in js:continue
               print("SCRIPT:",src,len(js))
               for pattern in (r'api\\.bountyhub',r'bounties',r'fetch\\(',r'/bounty',r'\\.get\\('):
-                  hits=list(re.finditer(pattern,js,re.I))
+                  hits=list(re.finditer(re.escape(pattern),js,re.I))
                   print("  ",pattern,"hits",len(hits))
                   for m in hits[:6]:
                       left=max(0,m.start()-150);right=min(len(js),m.end()+230)
