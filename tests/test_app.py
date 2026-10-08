@@ -1206,8 +1206,84 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.verify(fresh, "t", {}, {}), (None, reason))
 
-        repository_pr_check.assert_called_once_with("example/project", 42, "t")
+        repository_pr_check.assert_called_once()
+        self.assertEqual(repository_pr_check.call_args.args, ("example/project", 42, "t"))
+        ignore_open_pull = repository_pr_check.call_args.kwargs["ignore_open_pull"]
+        self.assertFalse(
+            ignore_open_pull(
+                {
+                    "user": {"login": "developer"},
+                    "updated_at": "2026-10-01T00:00:00Z",
+                }
+            )
+        )
         fetch_meta.assert_not_called()
+
+    def test_prefetched_strategic_competition_ignores_explicitly_superseded_pr(
+        self,
+    ) -> None:
+        fresh = issue(
+            body="Swap stress flake",
+            title="Swap stress flake",
+            comments=1,
+            labels=[{"name": "help wanted"}, {"name": "kind/flake"}],
+        )
+        comment_event: dict[str, Any] = {
+            "event": "commented",
+            "body": "Still flaking.",
+            "author_association": "CONTRIBUTOR",
+            "user": {"login": "harche"},
+            "created_at": "2026-10-08T16:03:46Z",
+            "updated_at": "2026-10-08T16:03:46Z",
+        }
+        timeline = [
+            comment_event,
+            {
+                "event": "unassigned",
+                "created_at": "2026-10-07T17:31:16Z",
+                "assignee": {"login": "isumitsolanki"},
+            },
+            {
+                "event": "labeled",
+                "created_at": "2026-10-08T16:03:50Z",
+                "label": {"name": "help wanted"},
+            },
+        ]
+        stale_pull = {
+            "user": {"login": "isumitsolanki"},
+            "updated_at": "2026-09-23T17:25:07Z",
+            "html_url": "https://github.com/kubernetes/kubernetes/pull/138248",
+            "title": "e2e_node: fix swap LimitedSwap stress flake",
+            "body": "https://github.com/kubernetes/kubernetes/issues/138226",
+        }
+
+        def repository_check(
+            repository: str,
+            issue_number: int,
+            token: str | None,
+            *,
+            ignore_open_pull: Any,
+        ) -> str | None:
+            self.assertEqual((repository, issue_number, token), ("example/project", 42, "t"))
+            self.assertTrue(ignore_open_pull(stale_pull))
+            return None
+
+        with (
+            patch.object(
+                paid_verification,
+                "repository_open_implementation_pr_reason",
+                side_effect=repository_check,
+            ),
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+        ):
+            self.assertIsNone(
+                scout.strategic_competition_reason(
+                    fresh,
+                    "t",
+                    [cast(GitHubComment, comment_event)],
+                    timeline_events=timeline,
+                )
+            )
 
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
