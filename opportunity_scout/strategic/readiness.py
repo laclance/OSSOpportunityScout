@@ -307,6 +307,13 @@ _TRACKING_INTENT_RE: Final = re.compile(
     r"\b(?:track and resolve|track the following|tracking issue for)\b",
     re.IGNORECASE,
 )
+_LIVING_FINDINGS_TRACKER_RE: Final = re.compile(
+    r"\b(?:collects?|aggregates?)\b.{0,160}\b(?:advisory\s+)?findings\b"
+    r".{0,240}\b(?:living\s+(?:document|report))\b|"
+    r"\b(?:living\s+(?:document|report))\b.{0,240}"
+    r"\b(?:collects?|aggregates?)\b.{0,160}\b(?:advisory\s+)?findings\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _CHILD_CHECKBOX_RE: Final = re.compile(r"(?m)^\s*[-*]\s*\[[ xX]\]\s*#\d+\b")
 _DEPENDENCY_TRACKING_RE: Final = re.compile(
     r"\b(?:dependency|dependencies)\s+(?:dashboard|tracker|tracking)\b"
@@ -867,6 +874,9 @@ def manual_tracking_issue_reason(
 ) -> str | None:
     """Reject explicit umbrella issues that track multiple child implementation tasks."""
     evidence = _issue_evidence(item)
+    if _LIVING_FINDINGS_TRACKER_RE.search(evidence.normalized_body_lower):
+        return _REASON_UMBRELLA
+
     if (
         evidence.author_association in TRUSTED_ASSOCIATIONS
         and "umbrella issue" in evidence.normalized_body_lower
