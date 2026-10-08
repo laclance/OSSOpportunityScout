@@ -94,9 +94,7 @@ class ReadinessLabelTests(unittest.TestCase):
                     readiness.stale_lifecycle_reason(item),
                     "stale issue awaiting maintainer re-triage",
                 )
-                self.assertIsNone(
-                    readiness.stale_lifecycle_reason(item, ready_override=True)
-                )
+                self.assertIsNone(readiness.stale_lifecycle_reason(item, ready_override=True))
 
         for label in ("lifecycle/rotten", "not-stale", "stale-review", "bug"):
             with self.subTest(label=label):
