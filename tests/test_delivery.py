@@ -6,6 +6,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from contextlib import redirect_stdout
+from email.message import Message
 from typing import Any, cast
 import unittest
 from unittest.mock import patch
@@ -431,7 +432,7 @@ class DeliveryTests(unittest.TestCase):
             f"https://api.telegram.org/bot{secret}/sendMessage",
             403,
             f"unauthorized {secret}",
-            None,
+            Message(),
             None,
         )
         output = io.StringIO()
@@ -451,7 +452,7 @@ class DeliveryTests(unittest.TestCase):
             f"https://discord.example/api/webhooks/{secret}",
             429,
             f"rate-limited {secret}",
-            None,
+            Message(),
             None,
         )
         output = io.StringIO()
@@ -475,7 +476,7 @@ class DeliveryTests(unittest.TestCase):
                     "https://api.telegram.org/bottoken-secret/sendMessage",
                     status,
                     "server-text-secret",
-                    None,
+                    Message(),
                     None,
                 )
                 output = io.StringIO()
@@ -554,7 +555,7 @@ class DeliveryTests(unittest.TestCase):
             "https://api.github.com/repos/me/repo/issues",
             401,
             f"Bearer {secret} and source-payload-secret",
-            None,
+            Message(),
             None,
         )
         output = io.StringIO()
@@ -596,7 +597,7 @@ class DeliveryTests(unittest.TestCase):
             "https://api.github.com/repos/me/private/issues",
             403,
             f"Bearer {secret}",
-            None,
+            Message(),
             None,
         )
         output = io.StringIO()
