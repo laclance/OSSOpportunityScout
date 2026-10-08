@@ -454,14 +454,64 @@ class PlatformAdapterTests(unittest.TestCase):
         )
         self.assertEqual(result.failures, ())
 
-        empty = sources.bountyhub_platform_refs(
+    def test_bountyhub_direct_only_and_detail_only_listings(self) -> None:
+        amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
+        direct = sources.bountyhub_platform_refs(
             amount_pattern,
-            lambda _: sources.TextFetchResult(""),
-            fetch_limit=20,
-            network_workers=2,
+            lambda _: sources.TextFetchResult(
+                r"https:\/\/github.com\/direct\/repo\/issues\/1"
+            ),
         )
-        self.assertEqual(empty.refs, {})
-        self.assertEqual(empty.failures, ())
+        self.assertEqual(
+            direct.refs,
+            {
+                "https://github.com/direct/repo/issues/1": (
+                    "confirmed bounty platform feed (BountyHub)"
+                )
+            },
+        )
+        self.assertEqual(direct.failures, ())
+
+        pages = {
+            "https://www.bountyhub.dev/en/bounties": (
+                '<a href="/en/bounty/view/A">bounty</a>'
+            ),
+            "https://www.bountyhub.dev/en/bounty/view/A": (
+                "Reward $125 https://github.com/acme/widget/issues/2"
+            ),
+        }
+        detail = sources.bountyhub_platform_refs(
+            amount_pattern,
+            lambda url: sources.TextFetchResult(pages[url]),
+        )
+        self.assertEqual(
+            detail.refs,
+            {
+                "https://github.com/acme/widget/issues/2": (
+                    "confirmed bounty platform feed (BountyHub): $125"
+                )
+            },
+        )
+        self.assertEqual(detail.failures, ())
+
+    def test_bountyhub_empty_or_unrecognized_listing_is_incomplete(self) -> None:
+        amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
+        # No verified BountyHub empty-state contract exists for any of these responses.
+        for html in (
+            "",
+            "<!doctype html><html><div id='app'></div></html>",
+            "<main>No bounties found</main>",
+        ):
+            with self.subTest(html=html):
+                result = sources.bountyhub_platform_refs(
+                    amount_pattern,
+                    lambda _: sources.TextFetchResult(html),
+                )
+                self.assertEqual(result.refs, {})
+                self.assertEqual(len(result.failures), 1)
+                self.assertIsInstance(result.failures[0], DiscoveryFailureReason)
+                self.assertIn("BountyHub", result.failures[0])
+                self.assertIn("scan coverage incomplete", result.failures[0])
 
     def test_bountyhub_listing_and_detail_failures_are_semantic(self) -> None:
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
