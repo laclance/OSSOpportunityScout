@@ -1098,6 +1098,11 @@ class VerificationTests(unittest.TestCase):
             patch.object(github, "github_collection", return_value=timeline) as timeline_fetch,
             patch.object(github, "issue_comments_checked") as comments_fetch,
             patch.object(scout, "timeline_open_pr_reason") as timeline_network_check,
+            patch.object(
+                paid_verification,
+                "repository_open_implementation_pr_reason",
+                return_value=None,
+            ) as repository_pr_check,
             patch.object(scout, "linked_open_pr_reason", return_value=None),
             patch.object(scout, "fetch_repo_metadata", return_value=meta),
             patch.object(scout, "contribution_guide", return_value=None),
@@ -1118,6 +1123,43 @@ class VerificationTests(unittest.TestCase):
         )
         comments_fetch.assert_not_called()
         timeline_network_check.assert_not_called()
+        repository_pr_check.assert_called_once_with("example/project", 42, "t")
+
+    def test_verify_strategic_prefetched_timeline_uses_repository_pr_fallback(self) -> None:
+        fresh = issue(
+            body="Parser task",
+            title="Parser task",
+            comments=1,
+            labels=[{"name": "help wanted"}, {"name": "bug"}],
+        )
+        timeline = [
+            {
+                "event": "commented",
+                "body": "Thanks for the report.",
+                "author_association": "NONE",
+                "user": {"login": "observer"},
+                "created_at": "2026-10-01T00:00:00Z",
+                "updated_at": "2026-10-01T00:00:00Z",
+            }
+        ]
+        reason = "existing open implementation PR: https://github.com/example/project/pull/43"
+        with (
+            patch.object(scout, "refresh_issue", return_value=(fresh, None)),
+            patch.object(paid_policy, "payment_signal", return_value=None),
+            patch.object(scout, "supplemental_payment_signal", return_value=None),
+            patch.object(github, "github_collection", return_value=timeline),
+            patch.object(
+                paid_verification,
+                "repository_open_implementation_pr_reason",
+                return_value=reason,
+            ) as repository_pr_check,
+            patch.object(scout, "linked_open_pr_reason", return_value=None),
+            patch.object(scout, "fetch_repo_metadata") as fetch_meta,
+        ):
+            self.assertEqual(scout.verify(fresh, "t", {}, {}), (None, reason))
+
+        repository_pr_check.assert_called_once_with("example/project", 42, "t")
+        fetch_meta.assert_not_called()
 
     def test_verify_strategic_fails_closed_when_comments_cannot_refresh(self) -> None:
         fresh = issue(body="", title="Feature", comments=2)
