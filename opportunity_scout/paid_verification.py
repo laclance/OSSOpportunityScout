@@ -144,6 +144,7 @@ class _OpenPullRequestEvidence:
     repository_url: str
     title: str
     body: str | None
+    raw_pull: dict[str, Any]
 
     @classmethod
     def classify(
@@ -176,7 +177,13 @@ class _OpenPullRequestEvidence:
 
         return (
             _TimelineEvidenceState.OPEN_PR,
-            cls(url=url, repository_url=repository_url, title=title, body=body),
+            cls(
+                url=url,
+                repository_url=repository_url,
+                title=title,
+                body=body,
+                raw_pull=source_issue,
+            ),
         )
 
     def implements(self, target: _TargetIssue) -> bool:
@@ -217,6 +224,8 @@ def existing_implementation_pr_reason(
     timeline: object,
     repo: str,
     issue_number: int,
+    *,
+    ignore_open_pull: OpenPullRequestIgnore | None = None,
 ) -> str | None:
     """Evaluate complete timeline evidence for an open implementation PR."""
     if not isinstance(timeline, list):
@@ -229,6 +238,8 @@ def existing_implementation_pr_reason(
             return SourceFailureReason(_TIMELINE_FAILURE)
         if state is _TimelineEvidenceState.OPEN_PR and candidate is not None:
             if candidate.implements(target):
+                if ignore_open_pull is not None and ignore_open_pull(candidate.raw_pull):
+                    continue
                 return f"existing open implementation PR: {candidate.url}"
     return None
 
