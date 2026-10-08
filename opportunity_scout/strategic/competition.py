@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum, auto
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from opportunity_scout import github, paid_verification
 from opportunity_scout.strategic.claims import strategic_claim_text
@@ -93,6 +93,7 @@ _COMMENT_DUPLICATE_REDIRECT_RE = re.compile(
 )
 _CANONICAL_COMMENT_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR"}
 _SHARED_WORK_OVERRIDE_ASSOCIATIONS = {"OWNER", "MEMBER", "COLLABORATOR"}
+_STRATEGIC_REOPEN_LABELS = {"good first issue", "help wanted"}
 _SHARED_WORK_OVERRIDE_RE = re.compile(
     r"\b(?:general|tracking)\s+issue\b"
     r".{0,240}\ball\s+contributions?\b"
@@ -235,6 +236,51 @@ def _comments_after_shared_work_override(
         ):
             latest_override = index
     return comments[latest_override + 1 :]
+
+
+def strategic_open_pr_is_superseded(
+    raw_pull: dict[str, Any],
+    timeline_events: list[Any],
+) -> bool:
+    """Return whether project lifecycle evidence supersedes an inactive open PR."""
+    user = raw_pull.get("user")
+    author = str(user.get("login") or "").casefold() if isinstance(user, dict) else ""
+    pull_updated = github.parse_github_datetime(raw_pull.get("updated_at"))
+    if not author or pull_updated is None:
+        return False
+
+    unassigned_at: datetime | None = None
+    for event in timeline_events:
+        if not isinstance(event, dict) or event.get("event") != "unassigned":
+            continue
+        assignee = event.get("assignee")
+        assignee_login = (
+            str(assignee.get("login") or "").casefold() if isinstance(assignee, dict) else ""
+        )
+        event_at = github.parse_github_datetime(event.get("created_at"))
+        if assignee_login != author or event_at is None or event_at <= pull_updated:
+            continue
+        if unassigned_at is None or event_at > unassigned_at:
+            unassigned_at = event_at
+
+    if unassigned_at is None:
+        return False
+
+    for event in timeline_events:
+        if not isinstance(event, dict) or event.get("event") != "labeled":
+            continue
+        label = event.get("label")
+        label_name = (
+            str(label.get("name") or "").casefold() if isinstance(label, dict) else ""
+        )
+        event_at = github.parse_github_datetime(event.get("created_at"))
+        if (
+            label_name in _STRATEGIC_REOPEN_LABELS
+            and event_at is not None
+            and event_at >= unassigned_at
+        ):
+            return True
+    return False
 
 
 def strategic_claim_reason(
