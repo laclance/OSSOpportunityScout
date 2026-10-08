@@ -56,6 +56,7 @@ _IMPLEMENTATION_EVIDENCE_PATTERNS: Final = _patterns(
     r"^\s*starting (?:work on|a fix for)\b",
     r"^\s*delivered in pr\b",
     r"^\s*submitted (?:a )?pr\b",
+    r"\bpublished (?:a |the )?signed(?:/dco)? branch\b",
 )
 
 _PR_INTENT_PATTERNS: Final = _patterns(
