@@ -493,8 +493,7 @@ class PlatformAdapterTests(unittest.TestCase):
     def test_bountyhub_slugged_detail_links_are_fetched_once(self) -> None:
         # Current public BountyHub links include both a UUID and a readable slug.
         detail_path = (
-            "/en/bounty/view/521afa31-6c6f-4d2c-becc-c6b14318d2b4/"
-            "bounty-rcs-support-14999dollar"
+            "/en/bounty/view/521afa31-6c6f-4d2c-becc-c6b14318d2b4/bounty-rcs-support-14999dollar"
         )
         detail_url = "https://www.bountyhub.dev" + detail_path
         requests: list[str] = []
@@ -513,9 +512,7 @@ class PlatformAdapterTests(unittest.TestCase):
                 )
             return sources.TextFetchResult("", failure="unexpected detail URL")
 
-        result = sources.bountyhub_platform_refs(
-            r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?", fetcher
-        )
+        result = sources.bountyhub_platform_refs(r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?", fetcher)
 
         self.assertEqual(
             result.refs,
