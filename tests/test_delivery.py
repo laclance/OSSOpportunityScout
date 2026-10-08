@@ -424,6 +424,7 @@ class DeliveryTests(unittest.TestCase):
                 )
             )
         self.assertEqual(opened.call_count, 2)
+
     def test_http_error_reports_status_without_telegram_token(self) -> None:
         secret = "telegram-url-secret"
         error = urllib.error.HTTPError(
