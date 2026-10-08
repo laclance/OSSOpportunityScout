@@ -428,6 +428,27 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ),
         )
 
+    def test_repository_fallback_detects_direct_fix_reference(self) -> None:
+        open_pulls = [
+            {
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/10",
+                "title": "Fix widget race",
+                "body": "Fixes #42",
+            }
+        ]
+
+        self.assertEqual(
+            paid_verification.has_existing_implementation_pr(
+                "acme/widget",
+                42,
+                "tok",
+                fetch_json=lambda *_: [],
+                fetch_open_pulls=lambda *_: open_pulls,
+            ),
+            "existing open implementation PR: https://github.com/acme/widget/pull/10",
+        )
+
     def test_repository_fallback_ignores_generic_same_repo_context_reference(self) -> None:
         open_pulls = [
             {
@@ -449,7 +470,21 @@ class ExistingImplementationPrTests(unittest.TestCase):
         )
 
     def test_repository_fallback_fails_closed_on_unusable_open_pr_listing(self) -> None:
-        values: tuple[object, ...] = (None, {}, ["bad"])
+        values: tuple[object, ...] = (
+            None,
+            {},
+            ["bad"],
+            [{"html_url": None, "title": "Fix", "body": None}],
+            [{"html_url": "", "title": "Fix", "body": None}],
+            [{"html_url": "https://github.com/acme/widget/pull/9", "title": None, "body": None}],
+            [
+                {
+                    "html_url": "https://github.com/acme/widget/pull/9",
+                    "title": "Fix",
+                    "body": {"bad": "shape"},
+                }
+            ],
+        )
         for value in values:
             with self.subTest(value=value):
                 reason = paid_verification.has_existing_implementation_pr(
