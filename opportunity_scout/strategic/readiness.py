@@ -587,6 +587,9 @@ def readiness_pending_label_reason(
         return None
 
     normalized_labels = tuple(_normalize_label_separators(label) for label in issue_label_set(item))
+    if "no decision" in normalized_labels:
+        return "awaiting maintainer decision"
+
     rules = (
         ("needs reproduction", "awaiting reproduction confirmation"),
         ("waiting for reproduction", "awaiting reproduction confirmation"),
@@ -595,7 +598,6 @@ def readiness_pending_label_reason(
         ("needs analysis", "awaiting maintainer investigation"),
         ("needs clarification", "awaiting maintainer clarification"),
         ("needs design", "awaiting maintainer design decision"),
-        ("no decision", "awaiting maintainer decision"),
     )
     for marker, reason in rules:
         if any(marker in label for label in normalized_labels):
