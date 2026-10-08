@@ -58,6 +58,21 @@ class StrategicClaimTextTests(unittest.TestCase):
             )
         )
 
+    def test_published_signed_branch_is_active_implementation_evidence(self) -> None:
+        self.assertTrue(
+            strategic_claim_text(
+                "## R61 Progress\n\n"
+                "Published signed/DCO branch `codex/r61-distributed-execution-v1` "
+                "at `237d2666` to both repositories.\n\n"
+                "Implemented an owner-thread factory and bounded nonblocking commands."
+            )
+        )
+        self.assertFalse(
+            strategic_claim_text(
+                "The old signed branch was published last year and has since been abandoned."
+            )
+        )
+
     def test_putting_up_pr_is_active_ownership(self) -> None:
         self.assertTrue(
             strategic_claim_text(
