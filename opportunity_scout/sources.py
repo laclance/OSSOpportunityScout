@@ -59,7 +59,7 @@ _ISSUEHUNT_LINK_RE = re.compile(
     re.IGNORECASE,
 )
 _OPIRE_DETAIL_RE = re.compile(r'href=["\'](/issues/[A-Za-z0-9_-]+)["\']')
-_BOUNTYHUB_DETAIL_RE = re.compile(r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+)["\']')
+_BOUNTYHUB_DETAIL_RE = re.compile(r'href=["\'](/en/bounty/view/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)?)["\']')
 _DOLLAR_AMOUNT_RE = re.compile(r"\$\s*\d[\d,]*(?:\.\d+)?")
 _OPIRE_BOUNTY_RE = re.compile(r"\$\s*\d[\d,]*(?:\.\d+)?\s+bounty\b", re.IGNORECASE)
 _PLATFORM_REQUEST_LOCK = Lock()
