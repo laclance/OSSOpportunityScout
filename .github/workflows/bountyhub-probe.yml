@@ -44,3 +44,43 @@ jobs:
                   hits=list(dict.fromkeys(re.findall(pat, js, re.I)))
                   print("MATCHES",len(hits),[h[:190] for h in hits[:16]])
           PY
+
+      - name: Inspect public endpoint callers and read-only listing responses
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import re, urllib.request, urllib.error
+          from urllib.parse import urljoin
+          def get(url):
+              req=urllib.request.Request(url,headers={"User-Agent":"OSSOpportunityScout public-source audit", "Accept":"application/json, text/html;q=0.9"})
+              try:
+                  with urllib.request.urlopen(req,timeout=10) as r:
+                      return (r.status,r.headers.get("content-type"),r.read(2_000_000).decode("utf-8","replace"))
+              except urllib.error.HTTPError as e:
+                  return(e.code,e.headers.get("content-type"),e.read(500).decode("utf-8","replace"))
+          base="https://www.bountyhub.dev"
+          status,_,html=get(base+"/en/bounties")
+          print("LISTING:",status)
+          scripts=re.findall(r'<script[^>]+src=["\\\']([^"\\\']+)',html,re.I)
+          for src in scripts:
+              url=urljoin(base,src)
+              try: code,kind,js=get(url)
+              except Exception as e:
+                  print("FETCH_ERROR:",url,type(e).__name__)
+                  continue
+              if code!=200: continue
+              if "bount" not in js.lower() and "api.bountyhub" not in js:continue
+              print("SCRIPT:",src,len(js))
+              for pattern in (r'api\\.bountyhub',r'bounties',r'fetch\\(',r'/bounty',r'\\.get\\('):
+                  hits=list(re.finditer(pattern,js,re.I))
+                  print("  ",pattern,"hits",len(hits))
+                  for m in hits[:6]:
+                      left=max(0,m.start()-150);right=min(len(js),m.end()+230)
+                      print("     ",repr(js[left:right])[:400])
+          for path in ("/api/bounties","/api/bounty","/api/bounties?page=1","/api/bounties?status=open","/api/bounties/search","/api/public/bounties"):
+              u="https://api.bountyhub.dev"+path
+              try:
+                  st,ct,txt=get(u)
+                  print("ENDPOINT:",u,st,ct,repr(txt[:450]))
+              except Exception as e:print("ENDPOINT ERROR",u,type(e).__name__,str(e)[:150])
+          PY
