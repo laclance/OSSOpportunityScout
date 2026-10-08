@@ -595,6 +595,7 @@ def readiness_pending_label_reason(
         ("needs analysis", "awaiting maintainer investigation"),
         ("needs clarification", "awaiting maintainer clarification"),
         ("needs design", "awaiting maintainer design decision"),
+        ("no decision", "awaiting maintainer decision"),
     )
     for marker, reason in rules:
         if any(marker in label for label in normalized_labels):
