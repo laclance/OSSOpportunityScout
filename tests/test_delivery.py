@@ -72,6 +72,51 @@ class DeliveryTests(unittest.TestCase):
         self.assertEqual(req.get_header("Content-type"), "application/json")
         self.assertEqual(opened.call_args.kwargs["timeout"], 10)
 
+    def test_telegram_neutralizes_source_mentions_only_in_outbound_payload(self) -> None:
+        message = (
+            "🎯 OSS Opportunity Queue (now)\n\n"
+            "1. owner/repo #42 — Fix @alice and @bob in parser_[edge]\n"
+            "   • strategic OSS | career: 80/100 | priority: 93/100\n"
+            "   • https://github.com/owner/repo/issues/42"
+        )
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(),
+        ) as opened:
+            self.assertTrue(delivery.send_telegram_notification("bot", "chat", message))
+
+        req = cast(urllib.request.Request, opened.call_args.args[0])
+        self.assertEqual(req.full_url, "https://api.telegram.org/botbot/sendMessage")
+        self.assertEqual(
+            request_json(req),
+            {
+                "chat_id": "chat",
+                "text": message.replace("@", "@\u200b"),
+                "disable_web_page_preview": False,
+            },
+        )
+        self.assertNotIn("parse_mode", request_json(req))
+        outbound_text = request_json(req)["text"]
+        self.assertIn("parser_[edge]", outbound_text)
+        self.assertIn("   • strategic OSS | career: 80/100", outbound_text)
+        self.assertNotIn("@alice", outbound_text)
+        self.assertNotIn("@bob", outbound_text)
+        self.assertEqual(message.count("@"), 2)
+
+    def test_telegram_mention_neutralization_stays_within_message_limit(self) -> None:
+        message = "@" * 1900
+        with patch.object(
+            urllib.request,
+            "urlopen",
+            return_value=FakeResponse(),
+        ) as opened:
+            self.assertTrue(delivery.send_telegram_notification("bot", "chat", message))
+        req = cast(urllib.request.Request, opened.call_args.args[0])
+        outbound_text = request_json(req)["text"]
+        self.assertEqual(outbound_text, "@\u200b" * 1900)
+        self.assertLessEqual(len(outbound_text), 4096)
+
     def test_telegram_failure_returns_false(self) -> None:
         with patch.object(urllib.request, "urlopen", side_effect=OSError("telegram failed")):
             self.assertFalse(delivery.send_telegram_notification("bot", "chat", "hello"))
