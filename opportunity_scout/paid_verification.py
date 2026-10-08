@@ -238,6 +238,7 @@ def repository_open_implementation_pr_reason(
     token: str | None,
     *,
     fetch_open_pulls: FetchJson | None = None,
+    ignore_open_pull: OpenPullRequestIgnore | None = None,
 ) -> str | None:
     """Check cached same-repository open PRs when issue timelines omit relationships."""
     url = f"https://api.github.com/repos/{repo}/pulls?state=open&per_page=100"
@@ -275,6 +276,8 @@ def repository_open_implementation_pr_reason(
             body=body,
         )
         if evidence.implements_from_repository_listing(target):
+            if ignore_open_pull is not None and ignore_open_pull(raw_pull):
+                continue
             return f"existing open implementation PR: {html_url}"
     return None
 
