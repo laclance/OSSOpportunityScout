@@ -346,9 +346,7 @@ def _bountyhub_detail_refs(
     return refs, failed
 
 
-def _bountyhub_api_refs(
-    fetcher: FetchText, *, page_size: int, max_pages: int = 5
-) -> PlatformDiscoveryResult:
+def _bountyhub_api_refs(fetcher: FetchText, *, page_size: int, max_pages: int = 5) -> PlatformDiscoveryResult:
     """Read BountyHub's public paginated JSON feed, failing closed on changed pages."""
     refs: dict[str, str] = {}
     incomplete = False
@@ -404,7 +402,7 @@ def _bountyhub_api_refs(
                 not isinstance(source, str)
                 or _ISSUE_URL_RE.fullmatch(source) is None
                 or not isinstance(amount, str)
-                or re.fullmatch(r"\\d+(?:\\.\\d{1,2})?", amount) is None
+                or re.fullmatch(r"\d+(?:\.\d{1,2})?", amount) is None
             ):
                 incomplete = True
                 continue
@@ -428,7 +426,7 @@ def bountyhub_platform_refs(
     fetch_limit: int = 20,
     network_workers: int = 6,
 ) -> PlatformDiscoveryResult:
-    """Read public BountyHub listings when the site exposes them in HTML."""
+    """Read BountyHub HTML links, or use its paginated public JSON feed."""
     listing = fetcher("https://www.bountyhub.dev/en/bounties")
     if listing.failure is None:
         normalized = _normalized_platform_text(listing.text)
