@@ -69,6 +69,50 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ],
         )
 
+    def test_timeline_pr_filter_can_ignore_superseded_match_and_keep_scanning(self) -> None:
+        timeline = [
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/acme/widget/pull/9",
+                        "repository_url": "https://api.github.com/repos/acme/widget",
+                        "title": "Old widget fix",
+                        "body": "Fixes #42",
+                        "user": {"login": "old-dev"},
+                        "updated_at": "2026-09-23T17:25:07Z",
+                    }
+                },
+            },
+            {
+                "event": "cross-referenced",
+                "source": {
+                    "issue": {
+                        "pull_request": {},
+                        "state": "open",
+                        "html_url": "https://github.com/acme/widget/pull/10",
+                        "repository_url": "https://api.github.com/repos/acme/widget",
+                        "title": "Current widget fix",
+                        "body": "Fixes #42",
+                        "user": {"login": "current-dev"},
+                        "updated_at": "2026-10-08T18:00:00Z",
+                    }
+                },
+            },
+        ]
+
+        self.assertEqual(
+            paid_verification.existing_implementation_pr_reason(
+                timeline,
+                "acme/widget",
+                42,
+                ignore_open_pull=lambda pull: pull.get("html_url", "").endswith("/9"),
+            ),
+            "existing open implementation PR: https://github.com/acme/widget/pull/10",
+        )
+
     def test_issue_reference_scope_distinguishes_same_and_cross_repository_prs(self) -> None:
         same_repo_timeline = [
             {
