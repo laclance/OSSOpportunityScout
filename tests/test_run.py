@@ -844,9 +844,13 @@ class RunLifecycleTests(unittest.TestCase):
     ) -> None:
         messages: list[str] = []
         item = candidate()
-        failure = DiscoveryFailureReason(
-            "official bounty-platform discovery failed for Opire; scan coverage incomplete"
+        bountyhub = sources.bountyhub_platform_refs(
+            r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?",
+            lambda _: sources.TextFetchResult("<html><div id='app'></div></html>"),
         )
+        self.assertEqual(bountyhub.refs, {})
+        self.assertEqual(len(bountyhub.failures), 1)
+        failure = bountyhub.failures[0]
 
         def paid(
             _token: str | None,
