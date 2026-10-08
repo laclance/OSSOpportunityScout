@@ -65,7 +65,6 @@ from opportunity_scout.types import (
     RepositoryMetadata,
     SearchQueryResult,
     SourceFailureReason,
-    StrategicPreviewRow,
 )
 
 TARGET_REPOS = strategic_discovery.TARGET_REPOS
@@ -1212,16 +1211,6 @@ def discover_paid(
     return found, rejected, examples
 
 
-def possible_miss_signal(item: GitHubIssue) -> bool:
-    """Compatibility wrapper for strategic near-miss detection."""
-    return strategic_discovery.possible_miss_signal(item)
-
-
-def basic_rejection_audit_reason(item: GitHubIssue) -> str | None:
-    """Compatibility wrapper for strategic basic-filter audit reasons."""
-    return strategic_discovery.basic_rejection_audit_reason(item)
-
-
 def add_audit(
     audit: list[RejectionRecord],
     item: GitHubIssue,
@@ -1233,17 +1222,6 @@ def add_audit(
         item,
         reason,
         limit=STRATEGIC_AUDIT_LIMIT,
-    )
-
-
-def strategic_inspection_items(
-    provisional: list[StrategicPreviewRow],
-) -> dict[str, list[GitHubIssue]]:
-    """Compatibility wrapper for bounded strategic inspection selection."""
-    return strategic_discovery.strategic_inspection_items(
-        provisional,
-        base_per_repo=STRATEGIC_INSPECT_PER_REPO,
-        adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
     )
 
 
