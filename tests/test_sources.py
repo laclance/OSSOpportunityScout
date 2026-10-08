@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 import urllib.error
 import urllib.request
@@ -524,6 +525,217 @@ class PlatformAdapterTests(unittest.TestCase):
         )
         self.assertEqual(result.failures, ())
         self.assertEqual(requests.count(detail_url), 1)
+
+    def test_bountyhub_api_paginates_and_filters_inactive_rows(self) -> None:
+        listing_url = "https://www.bountyhub.dev/en/bounties"
+        api_url = "https://api.bountyhub.dev/api/bounties"
+        calls: list[str] = []
+
+        def row(number: int, **overrides: Any) -> dict[str, Any]:
+            item: dict[str, Any] = {
+                "htmlURL": f"https://github.com/example/repo/issues/{number}",
+                "issueState": "open",
+                "solved": False,
+                "retracted": False,
+                "totalAmount": "125.00",
+            }
+            item.update(overrides)
+            return item
+
+        pages = {
+            f"{api_url}?page=1&limit=6": {
+                "data": [row(1), row(2, totalAmount="250.25")],
+                "hasNextPage": True,
+            },
+            f"{api_url}?page=2&limit=6": {
+                "data": [
+                    row(3, totalAmount="30"),
+                    row(4, issueState="closed"),
+                    row(5, solved=True),
+                    row(6, retracted=True),
+                ],
+                "hasNextPage": False,
+            },
+        }
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            calls.append(url)
+            if url == listing_url:
+                return sources.TextFetchResult("<main>Available Bounties</main>")
+            return sources.TextFetchResult(json.dumps(pages[url]))
+
+        result = sources.bountyhub_platform_refs(
+            r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?",
+            fetcher,
+            fetch_limit=6,
+        )
+        self.assertEqual(
+            result.refs,
+            {
+                "https://github.com/example/repo/issues/1": (
+                    "confirmed bounty platform feed (BountyHub): $125.00"
+                ),
+                "https://github.com/example/repo/issues/2": (
+                    "confirmed bounty platform feed (BountyHub): $250.25"
+                ),
+                "https://github.com/example/repo/issues/3": (
+                    "confirmed bounty platform feed (BountyHub): $30"
+                ),
+            },
+        )
+        self.assertEqual(result.failures, ())
+        self.assertEqual(calls, [listing_url, *pages])
+
+    def test_bountyhub_api_survives_html_transport_failure(self) -> None:
+        def fetcher(url: str) -> sources.TextFetchResult:
+            if url.endswith("/en/bounties"):
+                return sources.TextFetchResult("", failure="HTML fetch unavailable")
+            return sources.TextFetchResult(
+                json.dumps(
+                    {
+                        "data": [
+                            {
+                                "htmlURL": "https://github.com/example/repo/issues/1",
+                                "issueState": "open",
+                                "solved": False,
+                                "retracted": False,
+                                "totalAmount": "10.00",
+                            }
+                        ],
+                        "hasNextPage": False,
+                    }
+                )
+            )
+
+        result = sources.bountyhub_platform_refs("amount", fetcher)
+        self.assertEqual(len(result.refs), 1)
+        self.assertEqual(result.failures, ())
+
+    def test_bountyhub_api_invalid_envelopes_fail_closed(self) -> None:
+        bad_responses = [
+            sources.TextFetchResult("", failure="upstream error"),
+            sources.TextFetchResult("not JSON"),
+            sources.TextFetchResult(cast(str, None)),
+            sources.TextFetchResult(json.dumps([])),
+            sources.TextFetchResult(json.dumps({"data": None, "hasNextPage": False})),
+            sources.TextFetchResult(json.dumps({"data": [], "hasNextPage": "false"})),
+            sources.TextFetchResult(
+                json.dumps({"data": [{}, {}], "hasNextPage": False})
+            ),
+            sources.TextFetchResult(json.dumps({"data": [], "hasNextPage": True})),
+        ]
+        for response in bad_responses:
+            with self.subTest(response=response):
+                result = sources.bountyhub_platform_refs(
+                    "amount",
+                    lambda url: (
+                        sources.TextFetchResult("<main>JS shell</main>")
+                        if url.endswith("/en/bounties")
+                        else response
+                    ),
+                    fetch_limit=1,
+                )
+                self.assertEqual(result.refs, {})
+                self.assertEqual(len(result.failures), 1)
+
+    def test_bountyhub_api_partial_bad_rows_preserve_failure(self) -> None:
+        valid = {
+            "htmlURL": "https://github.com/example/repo/issues/1",
+            "issueState": "open",
+            "solved": False,
+            "retracted": False,
+            "totalAmount": "75.00",
+        }
+        variants: list[Any] = [
+            None,
+            {},
+            {**valid, "issueState": "unknown"},
+            {**valid, "solved": "false"},
+            {**valid, "retracted": None},
+            {**valid, "htmlURL": None},
+            {**valid, "htmlURL": "https://untrusted.example/issues/9"},
+            {**valid, "totalAmount": None},
+            {**valid, "totalAmount": "1.234"},
+        ]
+        response = json.dumps({"data": [valid, *variants], "hasNextPage": False})
+        result = sources.bountyhub_platform_refs(
+            "amount",
+            lambda url: sources.TextFetchResult(
+                "<main>JS shell</main>" if url.endswith("/en/bounties") else response
+            ),
+            fetch_limit=10,
+        )
+        self.assertEqual(
+            result.refs,
+            {
+                "https://github.com/example/repo/issues/1": (
+                    "confirmed bounty platform feed (BountyHub): $75.00"
+                )
+            },
+        )
+        self.assertEqual(len(result.failures), 1)
+
+    def test_bountyhub_api_partial_second_page_failure(self) -> None:
+        calls: list[str] = []
+        first = json.dumps(
+            {
+                "data": [
+                    {
+                        "htmlURL": "https://github.com/example/repo/issues/1",
+                        "issueState": "open",
+                        "solved": False,
+                        "retracted": False,
+                        "totalAmount": "55.00",
+                    }
+                ],
+                "hasNextPage": True,
+            }
+        )
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            calls.append(url)
+            if url.endswith("/en/bounties"):
+                return sources.TextFetchResult("")
+            if "page=1&" in url:
+                return sources.TextFetchResult(first)
+            return sources.TextFetchResult("", failure="page 2 failed")
+
+        result = sources.bountyhub_platform_refs("amount", fetcher)
+        self.assertEqual(len(result.refs), 1)
+        self.assertEqual(len(result.failures), 1)
+        self.assertEqual(len(calls), 3)
+
+    def test_bountyhub_api_page_cap_is_incomplete(self) -> None:
+        calls: list[str] = []
+
+        def fetcher(url: str) -> sources.TextFetchResult:
+            calls.append(url)
+            if url.endswith("/en/bounties"):
+                return sources.TextFetchResult("")
+            page_number = len(calls) - 1
+            return sources.TextFetchResult(
+                json.dumps(
+                    {
+                        "data": [
+                            {
+                                "htmlURL": (
+                                    f"https://github.com/example/repo/issues/{page_number}"
+                                ),
+                                "issueState": "open",
+                                "solved": False,
+                                "retracted": False,
+                                "totalAmount": "10.00",
+                            }
+                        ],
+                        "hasNextPage": True,
+                    }
+                )
+            )
+
+        result = sources.bountyhub_platform_refs("amount", fetcher)
+        self.assertEqual(len(result.refs), 5)
+        self.assertEqual(len(result.failures), 1)
+        self.assertEqual(len(calls), 6)
 
     def test_bountyhub_empty_or_unrecognized_listing_is_incomplete(self) -> None:
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
