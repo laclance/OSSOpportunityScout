@@ -458,9 +458,7 @@ class PlatformAdapterTests(unittest.TestCase):
         amount_pattern = r"[$][ ]*[0-9][0-9,]*(?:[.][0-9]+)?"
         direct = sources.bountyhub_platform_refs(
             amount_pattern,
-            lambda _: sources.TextFetchResult(
-                r"https:\/\/github.com\/direct\/repo\/issues\/1"
-            ),
+            lambda _: sources.TextFetchResult(r"https:\/\/github.com\/direct\/repo\/issues\/1"),
         )
         self.assertEqual(
             direct.refs,
@@ -473,9 +471,7 @@ class PlatformAdapterTests(unittest.TestCase):
         self.assertEqual(direct.failures, ())
 
         pages = {
-            "https://www.bountyhub.dev/en/bounties": (
-                '<a href="/en/bounty/view/A">bounty</a>'
-            ),
+            "https://www.bountyhub.dev/en/bounties": ('<a href="/en/bounty/view/A">bounty</a>'),
             "https://www.bountyhub.dev/en/bounty/view/A": (
                 "Reward $125 https://github.com/acme/widget/issues/2"
             ),
