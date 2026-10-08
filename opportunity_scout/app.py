@@ -294,6 +294,12 @@ def strategic_competition_reason(
                 repository,
                 issue_number,
                 _token,
+                ignore_open_pull=lambda raw_pull: (
+                    competition_policy.strategic_open_pr_is_superseded(
+                        raw_pull,
+                        timeline_events,
+                    )
+                ),
             )
 
         timeline_pr_checker = prefetched_timeline_pr_checker
