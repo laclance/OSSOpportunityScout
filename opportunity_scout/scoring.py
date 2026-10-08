@@ -272,16 +272,8 @@ def _trusted_history_complexity(activity_comments: Collection[GitHubComment] | N
     return prior_work and concerns >= 2
 
 
-def estimate_effort_details(
-    item: GitHubIssue,
-    activity_comments: Collection[GitHubComment] | None = None,
-) -> EffortEstimate:
-    """Estimate implementation effort from source text and already-fetched discussion."""
-    evidence = _IssueEvidence.from_issue(item)
-
-    if documentation_microfix(item):
-        return EffortEstimate("<1h", ("documentation-only micro-fix",))
-
+def _whole_surface_migration(evidence: _IssueEvidence) -> bool:
+    """Recognize migrations covering an entire interface surface."""
     whole_surface_migration = bool(
         re.search(
             r"\b(?:migrat(?:e|ing)|replace|convert)\b.{0,120}"
@@ -290,9 +282,11 @@ def estimate_effort_details(
             re.DOTALL,
         )
     )
-    if whole_surface_migration:
-        return EffortEstimate("1d+", ("whole-surface interface migration",))
+    return whole_surface_migration
 
+
+def _explicit_broad_scope(evidence: _IssueEvidence) -> bool:
+    """Recognize explicitly large design or feature requests."""
     explicit_large = bool(
         re.search(
             r"\b(?:epic|roadmap|redesign|rewrite|multi-phase|"
@@ -303,9 +297,11 @@ def estimate_effort_details(
         )
         or (evidence.feature_request_scope and not evidence.bounded_docs_feature_request)
     )
-    if explicit_large:
-        return EffortEstimate("1d+", ("explicit broad feature/design scope",))
+    return explicit_large
 
+
+def _compatibility_risk(evidence: _IssueEvidence) -> bool:
+    """Recognize persisted-state and backwards-compatibility changes."""
     compatibility_risk = bool(
         re.search(
             r"\b(?:backward[- ]incompatible|backwards? compatibility|"
@@ -321,9 +317,11 @@ def estimate_effort_details(
             )
         )
     )
-    if compatibility_risk:
-        return EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",))
+    return compatibility_risk
 
+
+def _reproduction_heavy(evidence: _IssueEvidence) -> bool:
+    """Recognize hardware-constrained or non-deterministic investigation."""
     reproduction_heavy = bool(
         re.search(
             r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
@@ -338,33 +336,11 @@ def estimate_effort_details(
             evidence.text,
         )
     )
-    if reproduction_heavy:
-        return EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
+    return reproduction_heavy
 
-    if evidence.feature_signal and evidence.cross_component:
-        return EffortEstimate(
-            "1d+",
-            ("feature spans multiple runtime/configuration components",),
-        )
-    if len(evidence.prose) > 12000:
-        return EffortEstimate("1d+", ("large narrative implementation scope",))
 
-    broad_docs = bool(
-        evidence.docs_signal
-        and re.search(
-            r"\b(?:all|every|each)\s+(?:the\s+)?(?:grpc\s+)?services?\b|"
-            r"\b(?:generated?|generate)\s+(?:docs?|documentation)\b|"
-            r"\bdocs?\s+(?:generated|generation)\b|"
-            r"\bhost(?:ed|ing)?\s+(?:them\s+)?on\s+(?:the\s+)?website\b|"
-            r"\ball\s+in\s+one\s+place\b",
-            evidence.text,
-        )
-    )
-    if broad_docs:
-        return EffortEstimate("6–12h", ("cross-service documentation/generation scope",))
-    if evidence.docs_signal and evidence.file_refs == 0 and len(evidence.prose) < 4500:
-        return EffortEstimate("1–3h", ("bounded documentation change",))
-
+def _broader_implementation_reasons(evidence: _IssueEvidence) -> tuple[str, ...] | None:
+    """Return ordered, capped reasons for broader implementation scope."""
     suggested_fix_bullets = len(re.findall(r"(?m)^\s*-\s+", evidence.body))
     platform_label = any(
         marker in evidence.labels.lower()
@@ -427,22 +403,13 @@ def estimate_effort_details(
             reasons.append("constrained network reproduction/setup")
         if api_memory_tradeoff:
             reasons.append("API/interface change with explicit memory trade-off")
-        return EffortEstimate("6–12h", tuple(reasons[:3]) or ("broader implementation scope",))
+        return tuple(reasons[:3]) or ("broader implementation scope",)
 
-    if _trusted_history_complexity(activity_comments):
-        return EffortEstimate(
-            "6–12h",
-            ("maintainer-confirmed implementation-history complexity",),
-        )
-    if re.search(r"\b(?:data race|race condition|deadlock|concurren\w*)\b", evidence.text):
-        return EffortEstimate("3–6h", ("concurrency/lifecycle debugging risk",))
-    if re.search(
-        r"\b(?:may be related to|upstream (?:issue|dependency)|"
-        r"vendor(?:ed)? dependency|third[- ]party dependency)\b",
-        evidence.text,
-    ):
-        return EffortEstimate("3–6h", ("upstream/dependency investigation",))
+    return None
 
+
+def _bounded_local_change_reason(evidence: _IssueEvidence) -> str | None:
+    """Return the highest-priority reason for a bounded local change."""
     localized_todo = bool(
         evidence.file_refs <= 2
         and re.search(r"\btodo\b", evidence.text)
@@ -487,7 +454,74 @@ def estimate_effort_details(
             reason = "diagnosed one-file code-path fix"
         else:
             reason = "bounded deterministic bug signal"
-        return EffortEstimate("1–3h", (reason,))
+        return reason
+
+    return None
+
+
+def estimate_effort_details(
+    item: GitHubIssue,
+    activity_comments: Collection[GitHubComment] | None = None,
+) -> EffortEstimate:
+    """Estimate implementation effort from source text and already-fetched discussion."""
+    evidence = _IssueEvidence.from_issue(item)
+
+    if documentation_microfix(item):
+        return EffortEstimate("<1h", ("documentation-only micro-fix",))
+    if _whole_surface_migration(evidence):
+        return EffortEstimate("1d+", ("whole-surface interface migration",))
+    if _explicit_broad_scope(evidence):
+        return EffortEstimate("1d+", ("explicit broad feature/design scope",))
+    if _compatibility_risk(evidence):
+        return EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",))
+    if _reproduction_heavy(evidence):
+        return EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
+
+    if evidence.feature_signal and evidence.cross_component:
+        return EffortEstimate(
+            "1d+",
+            ("feature spans multiple runtime/configuration components",),
+        )
+    if len(evidence.prose) > 12000:
+        return EffortEstimate("1d+", ("large narrative implementation scope",))
+
+    broad_docs = bool(
+        evidence.docs_signal
+        and re.search(
+            r"\b(?:all|every|each)\s+(?:the\s+)?(?:grpc\s+)?services?\b|"
+            r"\b(?:generated?|generate)\s+(?:docs?|documentation)\b|"
+            r"\bdocs?\s+(?:generated|generation)\b|"
+            r"\bhost(?:ed|ing)?\s+(?:them\s+)?on\s+(?:the\s+)?website\b|"
+            r"\ball\s+in\s+one\s+place\b",
+            evidence.text,
+        )
+    )
+    if broad_docs:
+        return EffortEstimate("6–12h", ("cross-service documentation/generation scope",))
+    if evidence.docs_signal and evidence.file_refs == 0 and len(evidence.prose) < 4500:
+        return EffortEstimate("1–3h", ("bounded documentation change",))
+
+    broader_reasons = _broader_implementation_reasons(evidence)
+    if broader_reasons is not None:
+        return EffortEstimate("6–12h", broader_reasons)
+
+    if _trusted_history_complexity(activity_comments):
+        return EffortEstimate(
+            "6–12h",
+            ("maintainer-confirmed implementation-history complexity",),
+        )
+    if re.search(r"\b(?:data race|race condition|deadlock|concurren\w*)\b", evidence.text):
+        return EffortEstimate("3–6h", ("concurrency/lifecycle debugging risk",))
+    if re.search(
+        r"\b(?:may be related to|upstream (?:issue|dependency)|"
+        r"vendor(?:ed)? dependency|third[- ]party dependency)\b",
+        evidence.text,
+    ):
+        return EffortEstimate("3–6h", ("upstream/dependency investigation",))
+
+    local_reason = _bounded_local_change_reason(evidence)
+    if local_reason is not None:
+        return EffortEstimate("1–3h", (local_reason,))
 
     return EffortEstimate("3–6h", ("moderate implementation scope",))
 

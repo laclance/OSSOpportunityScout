@@ -481,6 +481,29 @@ class EffortCalibrationTests(unittest.TestCase):
         ]
         self.assertEqual(scoring.estimate_effort_details(item, comments).bucket, "1d+")
 
+    def test_broader_scope_reasons_keep_order_and_limit(self) -> None:
+        estimate = scoring.estimate_effort_details(
+            issue(
+                title="Add response metadata option",
+                labels=[{"name": "enhancement"}, {"name": "os-android"}],
+                body=(
+                    "pkg/a.go pkg/b.go\n"
+                    "Suggested fixes\n- first\n- second\n- third\n"
+                    + "Implementation detail. " * 350
+                    + "\nNo response to reproduction questions."
+                ),
+            )
+        )
+        self.assertEqual(estimate.bucket, "6–12h")
+        self.assertEqual(
+            estimate.reasons,
+            (
+                "feature/enhancement scope",
+                "large narrative scope",
+                "multi-step suggested implementation",
+            ),
+        )
+
     def test_effort_precedence_broad_feature_over_compatibility(self) -> None:
         estimate = scoring.estimate_effort_details(
             issue(
