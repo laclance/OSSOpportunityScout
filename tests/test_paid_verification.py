@@ -428,6 +428,33 @@ class ExistingImplementationPrTests(unittest.TestCase):
             ),
         )
 
+    def test_repository_fallback_can_ignore_superseded_matching_pr(self) -> None:
+        open_pulls = [
+            {
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/9",
+                "title": "Old widget fix",
+                "body": "Fixes #42",
+            },
+            {
+                "state": "open",
+                "html_url": "https://github.com/acme/widget/pull/10",
+                "title": "Current widget fix",
+                "body": "Fixes #42",
+            },
+        ]
+
+        self.assertEqual(
+            paid_verification.repository_open_implementation_pr_reason(
+                "acme/widget",
+                42,
+                "tok",
+                fetch_open_pulls=lambda *_: open_pulls,
+                ignore_open_pull=lambda pull: pull.get("html_url", "").endswith("/9"),
+            ),
+            "existing open implementation PR: https://github.com/acme/widget/pull/10",
+        )
+
     def test_repository_fallback_detects_direct_fix_reference(self) -> None:
         open_pulls = [
             {
