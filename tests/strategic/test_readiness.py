@@ -1250,6 +1250,34 @@ class ReporterSupportTriageTests(unittest.TestCase):
 
 
 class ManualTrackingIssueTests(unittest.TestCase):
+    def test_living_advisory_report_is_not_single_implementation_task(self) -> None:
+        tracker = issue(
+            title="Hive Advisory Report",
+            body=(
+                "This issue collects advisory findings from automated agents. "
+                "Do not close this issue. It is a living document."
+            ),
+        )
+        self.assertEqual(
+            readiness.manual_tracking_issue_reason(tracker),
+            "umbrella tracking issue, not a single implementation task",
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(
+                    body=(
+                        "This design note is a living document for one implementation. "
+                        "Keep the acceptance criteria current."
+                    )
+                )
+            )
+        )
+        self.assertIsNone(
+            readiness.manual_tracking_issue_reason(
+                issue(body="This issue collects findings for this one parser bug.")
+            )
+        )
+
     def test_multi_child_umbrella_tracker_is_not_single_implementation_task(self) -> None:
         tracker = issue(
             body=(
