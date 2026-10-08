@@ -285,6 +285,7 @@ def strategic_competition_reason(
             repo, number = github.issue_repo_and_number(_item)
             repository = cast(str, repo)
             issue_number = cast(int, number)
+
             def ignore_open_pull(raw_pull: dict[str, Any]) -> bool:
                 return competition_policy.strategic_open_pr_is_superseded(
                     raw_pull,
