@@ -84,3 +84,32 @@ jobs:
                   print("ENDPOINT:",u,st,ct,repr(txt[:450]))
               except Exception as e:print("ENDPOINT ERROR",u,type(e).__name__,str(e)[:150])
           PY
+
+      - name: Inspect listing schema, pagination, and reward fields
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,urllib.request
+          from urllib.parse import urlencode
+          for page,limit in ((1,10),(1,20),(2,20),(3,20)):
+              url="https://api.bountyhub.dev/api/bounties?"+urlencode({"page":page,"limit":limit})
+              req=urllib.request.Request(url,headers={"User-Agent":"OSSOpportunityScout","Accept":"application/json"})
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as response:
+                      payload=json.load(response)
+              except Exception as exc:
+                  print("ERROR",page,limit,type(exc).__name__,str(exc)[:100]);continue
+              print("PAGE",page,"LIMIT",limit,"TYPE",type(payload).__name__,"KEYS",list(payload) if isinstance(payload,dict) else "not-dict")
+              if not isinstance(payload,dict):continue
+              for k,v in payload.items():
+                  if k!="data": print("META",k,repr(v)[:300])
+              rows=payload.get("data")
+              print("ROWS",len(rows) if isinstance(rows,list) else type(rows).__name__)
+              if isinstance(rows,list):
+                  for record in rows[:2]:
+                      print("RECORD_KEYS",list(record) if isinstance(record,dict) else "not-dict")
+                      if isinstance(record,dict):
+                          for k,v in record.items():
+                              if k.lower() in ("title","body","description","user","owner","createdby","contributors"):continue
+                              print(" FIELD",k,repr(v)[:160])
+          PY
