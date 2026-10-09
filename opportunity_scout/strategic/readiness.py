@@ -570,7 +570,7 @@ def maintainer_readiness_comment_state(
         if not _comment_has_maintainer_authority(evidence):
             continue
 
-        if _explicit_ready_signal(body):
+        if _explicit_ready_signal(body) and evidence.author_association in TRUSTED_ASSOCIATIONS:
             state = True
             reason = None
             diagnostic_pending = False
@@ -757,7 +757,7 @@ def reporter_design_discussion_reason(
 
         if (
             implementation_decision_pending
-            and _comment_has_maintainer_authority(comment_evidence)
+            and comment_evidence.author_association in TRUSTED_ASSOCIATIONS
             and _explicit_ready_signal(body)
         ):
             implementation_decision_pending = False
