@@ -1298,18 +1298,14 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
                     {"body": "PRs welcome", "author_association": "NONE"}
                 ]
                 self.assertEqual(
-                    readiness.unapproved_architecture_proposal_reason(
-                        with_discussion, contributor
-                    ),
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, contributor),
                     reason,
                 )
                 approved: list[GitHubComment] = [
                     {"body": "Ready for implementation", "author_association": "MEMBER"}
                 ]
                 self.assertIsNone(
-                    readiness.unapproved_architecture_proposal_reason(
-                        with_discussion, approved
-                    )
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, approved)
                 )
                 self.assertIsNone(
                     readiness.unapproved_architecture_proposal_reason(
@@ -1351,9 +1347,7 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
         )
         for candidate in cases:
             with self.subTest(title=candidate["title"]):
-                self.assertIsNone(
-                    readiness.unapproved_architecture_proposal_reason(candidate, [])
-                )
+                self.assertIsNone(readiness.unapproved_architecture_proposal_reason(candidate, []))
 
 
 class ReporterDesignDiscussionTests(unittest.TestCase):

@@ -832,9 +832,8 @@ def unapproved_architecture_proposal_reason(
     evidence = _issue_evidence(item)
     if evidence.label_set & {"help wanted", "good first issue", "triage/accepted"}:
         return None
-    if (
-        evidence.author_association in TRUSTED_ASSOCIATIONS
-        and _explicit_ready_signal(evidence.normalized_body_lower)
+    if evidence.author_association in TRUSTED_ASSOCIATIONS and _explicit_ready_signal(
+        evidence.normalized_body_lower
     ):
         return None
     if maintainer_readiness_comment_state(item, comments)[0] is True:
