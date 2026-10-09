@@ -931,7 +931,10 @@ class UpstreamToolReproductionTests(unittest.TestCase):
             "nothing to fix on this side",
         ):
             with self.subTest(missing=missing):
-                partial = {**diagnosis, "body": diagnosis["body"].replace(missing, "")}
+                partial: GitHubComment = {
+                    **diagnosis,
+                    "body": str(diagnosis["body"]).replace(missing, ""),
+                }
                 self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, [partial]))
 
         self.assertIsNone(
