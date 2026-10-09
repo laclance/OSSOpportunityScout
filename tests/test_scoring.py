@@ -180,7 +180,7 @@ class EffortCalibrationTests(unittest.TestCase):
         for statement in (
             "This would not be an API break.",
             "No API break is expected.",
-            "An earlier API break is unrelated to this small change.",
+            "An earlier API break is unrelated to this metadata change.",
         ):
             with self.subTest(statement=statement):
                 estimate = scoring.estimate_effort_details(
