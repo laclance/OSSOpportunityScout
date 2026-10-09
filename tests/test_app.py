@@ -768,6 +768,37 @@ class VerificationTests(unittest.TestCase):
                 "maintainer confirms reported behavior is outside project code",
             )
 
+    def test_unapproved_architecture_proposal_preflight_and_final_verification(self) -> None:
+        proposal = issue(
+            title="Image snapshotter needs image pull credentials",
+            labels=["kind/feature"],
+            comments=0,
+            body=(
+                "I do not suggest specific API for the snapshotter. "
+                "We should pass image pull credentials to it."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        self.assertEqual(scout.strategic_preflight_rejection(proposal), reason)
+        self.assertEqual(scout.strategic_rejection(proposal, "t", []), reason)
+
+        discussed = issue(**{**proposal, "comments": 1})
+        self.assertIsNone(scout.strategic_preflight_rejection(discussed))
+        self.assertEqual(
+            scout.strategic_rejection(
+                discussed, "t", [{"body": "I like the idea", "author_association": "NONE"}]
+            ),
+            reason,
+        )
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    discussed,
+                    "t",
+                    [{"body": "Ready for implementation", "author_association": "MEMBER"}],
+                )
+            )
+
     def test_upstream_go_tool_reproduction_is_not_an_actionable_issue(self) -> None:
         report = issue(
             html_url="https://github.com/golangci/golangci-lint/issues/4099",

@@ -117,6 +117,11 @@ until a later trusted maintainer approval; ordinary contributor opinions do not.
 A narrowly corroborated upstream-Go-tool diagnosis (standalone `go vet` reproduction,
 matching failure without the project CLI, explicit upstream attribution and no
 project-local fix) also holds strategic work, unless a trusted maintainer approves it.
+Explicitly undecided public APIs, proposals contingent on agreement about interfaces,
+and proxy-controlled trusted log labels are not implementation-ready without
+project acceptance. This narrow gate recognizes source-only cases with no discussion,
+defers when comments are still unfetched, and honors trusted maintainer approval or
+project-ready labels; normal feature requests are not categorically excluded.
 Cloud-managed metric discrepancies with unknown backend version and step-sensitive
 samples, and untriaged failing-test image-artifact incidents, also need diagnostic
 ownership and an implementation scope before being recommended. A later trusted
