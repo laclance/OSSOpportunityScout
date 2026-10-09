@@ -2032,6 +2032,68 @@ class DiscoveryTests(unittest.TestCase):
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
+    def test_discover_paid_preserves_signal_origin_and_result_order(self) -> None:
+        first = issue(html_url="https://github.com/a/a/issues/1")
+        second = issue(html_url="https://github.com/a/a/issues/2")
+        platform = issue(html_url="https://github.com/p/p/issues/3")
+        first_url = str(first["html_url"])
+        second_url = str(second["html_url"])
+        platform_url = str(platform["html_url"])
+        signal = "confirmed platform payment: $300"
+        output = io.StringIO()
+
+        def reject_source(item: GitHubIssue, *_args: Any, **_kwargs: Any) -> tuple[None, str]:
+            return None, f"rejected {item['html_url']}"
+
+        with (
+            patch.object(github, "search_github") as search,
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={first_url: "duplicate", platform_url: signal},
+                    failures=(),
+                ),
+            ),
+            patch.object(
+                scout, "issue_from_github_url_checked", return_value=(platform, None)
+            ) as hydrate,
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
+            patch.object(scout, "verify", side_effect=reject_source) as verifier,
+            redirect_stdout(output),
+        ):
+            found, rejected, examples = scout.discover_paid(
+                "t",
+                set(),
+                {},
+                {},
+                [("paid-q", {"items": [first, second]})],
+            )
+
+        search.assert_not_called()
+        hydrate.assert_called_once_with(platform_url, "t")
+        self.assertEqual(found, [])
+        self.assertEqual(verifier.call_count, 3)
+        self.assertEqual(
+            {
+                call.args[0]["html_url"]: call.kwargs["payment_signal_override"]
+                for call in verifier.call_args_list
+            },
+            {first_url: None, second_url: None, platform_url: signal},
+        )
+        self.assertTrue(all(call.kwargs["require_paid"] for call in verifier.call_args_list))
+        self.assertEqual(
+            rejected,
+            {f"rejected {url}": 1 for url in (first_url, second_url, platform_url)},
+        )
+        self.assertEqual(
+            [example["url"] for example in examples],
+            [first_url, second_url, platform_url],
+        )
+        self.assertIn(f"Skipping paid candidate {first_url}:", output.getvalue())
+        self.assertIn(f"Skipping paid candidate {second_url}:", output.getvalue())
+        self.assertIn(f"Skipping platform candidate {platform_url}:", output.getvalue())
+
     def test_discover_paid_rejects_low_value_direct_and_platform_candidates(self) -> None:
         direct = issue(html_url="https://github.com/a/a/issues/1")
         platform = issue(html_url="https://github.com/p/p/issues/2")
