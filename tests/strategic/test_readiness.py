@@ -1251,6 +1251,111 @@ class RewardHistoryTests(unittest.TestCase):
         )
 
 
+class UnapprovedArchitectureProposalTests(unittest.TestCase):
+    def test_unsettled_api_interface_and_proxy_trust_proposals_need_approval(self) -> None:
+        cases = (
+            issue(
+                title="Image snapshotter needs image pull credentials",
+                labels=["kind/feature"],
+                comments=0,
+                body=(
+                    "I do not suggest specific API due to comments in the original issue. "
+                    "I think the proper solution is to pass credentials to the snapshotter. "
+                    'This API may need to support a "refresh" flow.'
+                ),
+            ),
+            issue(
+                title="CRI: add a shared-netns handler",
+                comments=0,
+                body=(
+                    "This proposal introduces a built-in handler and admission-provided group labels. "
+                    "I can contribute the implementation after agreement on the interface, "
+                    "status representation, and ownership contract."
+                ),
+            ),
+            issue(
+                title="Force label through HTTP Header",
+                labels=["type/feature"],
+                comments=0,
+                body=(
+                    "An optional HTTP header lets the reverse proxy doing authentication "
+                    "force a label on every log entry."
+                ),
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        for candidate in cases:
+            with self.subTest(title=candidate["title"]):
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(candidate, []),
+                    reason,
+                )
+                with_discussion = issue(**{**candidate, "comments": 1})
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, [])
+                )
+                contributor: list[GitHubComment] = [
+                    {"body": "PRs welcome", "author_association": "NONE"}
+                ]
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(
+                        with_discussion, contributor
+                    ),
+                    reason,
+                )
+                approved: list[GitHubComment] = [
+                    {"body": "Ready for implementation", "author_association": "MEMBER"}
+                ]
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(
+                        with_discussion, approved
+                    )
+                )
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(
+                        issue(**{**candidate, "labels": ["help wanted"]}), []
+                    )
+                )
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(
+                        issue(
+                            **{
+                                **candidate,
+                                "author_association": "OWNER",
+                                "body": candidate["body"] + " Ready for implementation.",
+                            }
+                        ),
+                        [],
+                    )
+                )
+
+    def test_ordinary_features_and_partial_proposals_remain_eligible(self) -> None:
+        cases = (
+            issue(title="Add per-request metrics", labels=["enhancement"], comments=0),
+            issue(title="Improve a documented retry flag", labels=["kind/feature"], comments=0),
+            issue(
+                title="Header parsing regression",
+                body="The reverse proxy uses an optional HTTP header for authentication.",
+                comments=0,
+            ),
+            issue(
+                title="Label merging improvement",
+                body="We should force a label in response to a config file, not a proxy header.",
+                comments=0,
+            ),
+            issue(
+                title="Public API cleanup",
+                body="Review the API and fix the known parser bug.",
+                comments=0,
+            ),
+        )
+        for candidate in cases:
+            with self.subTest(title=candidate["title"]):
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(candidate, [])
+                )
+
+
 class ReporterDesignDiscussionTests(unittest.TestCase):
     def test_opentelemetry_reporter_open_design_discussion_is_not_ready(self) -> None:
         item = issue(

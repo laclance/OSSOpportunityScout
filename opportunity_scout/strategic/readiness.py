@@ -820,6 +820,38 @@ def maintainer_submission_hold_reason(item: GitHubIssue) -> str | None:
     return None
 
 
+def unapproved_architecture_proposal_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Hold proposals with explicit unresolved interface or trust-boundary scope."""
+    # Preflight cannot assume an unfetched discussion has no maintainer approval.
+    if int(item.get("comments") or 0) and not comments:
+        return None
+
+    evidence = _issue_evidence(item)
+    if evidence.label_set & {"help wanted", "good first issue", "triage/accepted"}:
+        return None
+    if (
+        evidence.author_association in TRUSTED_ASSOCIATIONS
+        and _explicit_ready_signal(evidence.normalized_body_lower)
+    ):
+        return None
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    body = evidence.normalized_body_lower
+    undecided_api = "do not suggest specific api" in body
+    pending_interface = "after agreement on the interface" in body
+    proxy_label_trust = all(
+        marker in body
+        for marker in ("optional http header", "reverse proxy", "force a label", "authentication")
+    )
+    if undecided_api or pending_interface or proxy_label_trust:
+        return "feature proposal needs maintainer agreement on design or trust boundary"
+    return None
+
+
 def reporter_design_discussion_reason(
     item: GitHubIssue,
     comments: list[GitHubComment] | None,
