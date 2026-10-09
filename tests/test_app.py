@@ -768,6 +768,33 @@ class VerificationTests(unittest.TestCase):
                 "maintainer confirms reported behavior is outside project code",
             )
 
+    def test_godebug_startup_diagnostic_waits_for_project_triage(self) -> None:
+        report = issue(
+            title="Tailscale can not be started on my NAS",
+            body=(
+                'tailscaled exits with fatal error: removed GODEBUG "tlskyber" '
+                'set to old value "0" in environment.'
+            ),
+            labels=[{"name": "OS-linux"}, {"name": "bug"}],
+            comments=1,
+        )
+        attachment: list[GitHubComment] = [
+            {"user": {"login": "reporter"}, "body": "Uploaded startup logs."}
+        ]
+        reason = "environment-specific startup diagnostic awaiting maintainer triage"
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertIsNone(scout.strategic_preflight_rejection(report))
+            self.assertEqual(scout.strategic_rejection(report, "t", attachment), reason)
+            check.assert_not_called()
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    report,
+                    "t",
+                    [*attachment, {"body": "Ready for implementation", "author_association": "OWNER"}],
+                )
+            )
+            check.assert_called_once()
+
     def test_stale_strategic_issue_requires_label_removal(self) -> None:
         # Regression: Cilium #45913 was ranked while marked stale by automation.
         stale = issue(

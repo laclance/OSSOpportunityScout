@@ -1290,6 +1290,79 @@ class ReporterSupportTriageTests(unittest.TestCase):
             with self.subTest(title=item.get("title")):
                 self.assertIsNone(readiness.reporter_support_triage_reason(item))
 
+    def test_removed_godebug_startup_diagnostic_awaits_project_triage(self) -> None:
+        tailscale = issue(
+            title="Tailscale can not be started after an update",
+            user={"login": "reporter"},
+            body=(
+                'tailscaled.service exited with status=2/INVALIDARGUMENT. '
+                'fatal error: removed GODEBUG "tlskyber" set to old value "0" '
+                'in environment. Removing the environment variable does not resolve '
+                'the issue. This happens on an upgraded NAS installation.'
+            ),
+            labels=[{"name": "OS-linux"}, {"name": "bug"}],
+            comments=1,
+        )
+        attachment: GitHubComment = {
+            "user": {"login": "reporter"},
+            "body": "Attached additional diagnostic logs.",
+        }
+        reason = "environment-specific startup diagnostic awaiting maintainer triage"
+
+        # Preflight cannot reject when comments might carry a trusted approval.
+        self.assertIsNone(readiness.reporter_support_triage_reason(tailscale, []))
+        self.assertEqual(readiness.reporter_support_triage_reason(tailscale, [attachment]), reason)
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(issue(**{**tailscale, "comments": 0}), []),
+            reason,
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(
+                tailscale,
+                [
+                    attachment,
+                    {"body": "Contributions welcome", "author_association": "NONE"},
+                ],
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                tailscale,
+                [
+                    attachment,
+                    {"body": "Ready for implementation", "author_association": "MEMBER"},
+                ],
+            )
+        )
+
+    def test_removed_godebug_triage_preserves_actionable_and_unrelated_reports(self) -> None:
+        sample = (
+            'fatal error: removed GODEBUG "tlskyber" set to old value "0" in environment.'
+        )
+        candidates = (
+            issue(title="Service fails to start", body="Startup failure after upgrade."),
+            issue(title="Service fails to start", body="GODEBUG option was updated."),
+            issue(title="Runtime API change", body=sample),
+            issue(
+                title="Service fails to start",
+                body=sample + "\\nSuggested fix: remove the old flag in cmd/launcher/main.go.",
+            ),
+            issue(
+                title="Service fails to start",
+                body=sample,
+                author_association="MEMBER",
+            ),
+            issue(
+                title="Service fails to start",
+                body=sample,
+                labels=[{"name": "contributor/wanted"}],
+            ),
+        )
+        for item in candidates:
+            with self.subTest(title=item.get("title"), body=item.get("body")):
+                self.assertIsNone(readiness.reporter_support_triage_reason(item, []))
+
     def test_terraform_reporter_waiting_for_design_review_is_not_ready(self) -> None:
         terraform = issue(
             body=(
