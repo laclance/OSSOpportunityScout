@@ -41,12 +41,18 @@ class PrivateInstanceContractTests(unittest.TestCase):
         validate_workflow_references(workflow)
         self.assertEqual(
             workflow["on"],
-            {"workflow_dispatch": {"inputs": {"scanner_ref": {
-                "description": "Public scanner revision (main or reviewed 40-character SHA)",
-                "required": False,
-                "type": "string",
-                "default": "main",
-            }}}},
+            {
+                "workflow_dispatch": {
+                    "inputs": {
+                        "scanner_ref": {
+                            "description": "Public scanner revision (main or reviewed 40-character SHA)",
+                            "required": False,
+                            "type": "string",
+                            "default": "main",
+                        }
+                    }
+                }
+            },
         )
         self.assertEqual(workflow["permissions"], {})
         self.assertEqual(
@@ -95,9 +101,9 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertEqual(steps[1]["with"]["ref"], "${{ github.event.repository.default_branch }}")
         recovery_gate = steps[3]
         validate = steps[4]
-        checkout = steps[8]
-        revision = steps[9]
-        scan = steps[10]
+        checkout = steps[5]
+        revision = steps[6]
+        scan = steps[7]
         self.assertEqual(validate["env"]["SCANNER_REF"], "${{ inputs.scanner_ref || 'main' }}")
         self.assertEqual(checkout["with"]["repository"], "laclance/OSSOpportunityScout")
         self.assertEqual(checkout["with"]["ref"], "${{ inputs.scanner_ref || 'main' }}")
@@ -250,9 +256,22 @@ class PrivateInstanceContractTests(unittest.TestCase):
             source = root / ".scout-scanner-source"
             source.mkdir()
             subprocess.run(["git", "init", "-q", str(source)], check=True)
-            subprocess.run(["git", "-C", str(source), "-c", "user.name=Test",
-                            "-c", "user.email=test@example.org",
-                            "commit", "--allow-empty", "-qm", "fixture"], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(source),
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.org",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    "fixture",
+                ],
+                check=True,
+            )
             sha = subprocess.check_output(
                 ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
             ).strip()
@@ -260,14 +279,18 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 with self.subTest(ref=ref):
                     output = root / "output"
                     summary = root / "summary"
-                    result = shell_step(step, source, {
-                        "SCANNER_REF": ref,
-                        "GITHUB_OUTPUT": str(output),
-                        "GITHUB_STEP_SUMMARY": str(summary),
-                    })
+                    result = shell_step(
+                        step,
+                        source,
+                        {
+                            "SCANNER_REF": ref,
+                            "GITHUB_OUTPUT": str(output),
+                            "GITHUB_STEP_SUMMARY": str(summary),
+                        },
+                    )
                     self.assertEqual(result.returncode, expected, result.stderr)
                     if expected == 0:
-                        self.assertEqual(output.read_text(), f"sha={sha}\\n")
+                        self.assertEqual(output.read_text(), f"sha={sha}\n")
                         self.assertIn(sha, summary.read_text())
                     if output.exists():
                         output.unlink()
@@ -291,7 +314,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, expected)
 
     def test_transaction_recovery_classification_is_causal(self) -> None:
-        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][9]
         cases = (
             ("success", "false", "success", {"required": "false", "mode": "none"}),
             ("success", "false", "failure", {"required": "true", "mode": "exact-state"}),
