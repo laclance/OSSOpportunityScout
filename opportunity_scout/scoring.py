@@ -321,10 +321,41 @@ def _compatibility_risk(evidence: _IssueEvidence) -> bool:
     return compatibility_risk
 
 
+def _host_reboot_network_regression(evidence: _IssueEvidence) -> bool:
+    """Require compound upgrade, host-reboot, and custom-network evidence."""
+    prose = evidence.prose.lower()
+    return bool(
+        re.search(r"\bupgrad(?:e|ed|ing)\b", prose)
+        and re.search(r"\b(?:reboot|restart(?:ing)? (?:the )?(?:docker )?host)\b", prose)
+        and re.search(r"\b(?:firewalld|iptables|ip6tables)\b", prose)
+        and re.search(r"\b(?:custom )?bridge\b", prose)
+    )
+
+
+def _trusted_normalization_compatibility_risk(
+    evidence: _IssueEvidence, activity_comments: Collection[GitHubComment] | None
+) -> bool:
+    """Trust explicit maintainer caution about removing controller defaults."""
+    if not (
+        re.search(r"\bdefault(?:[- ]valued?|s)?\b", evidence.text)
+        and re.search(r"\b(?:unset\w*|stripp\w*|remov\w*|disappear\w*)\b", evidence.text)
+    ):
+        return False
+
+    return any(
+        str(comment.get("author_association") or "").upper() in TRUSTED_ASSOCIATIONS
+        and re.search(r"\bnormaliz\w*\b", body := str(comment.get("body") or "").lower())
+        and re.search(r"\b(?:careful|caution|risk|not sure why)\b", body)
+        and re.search(r"\b(?:important|existing behavior|break|compatib\w*)\b", body)
+        for comment in activity_comments or ()
+    )
+
+
 def _reproduction_heavy(evidence: _IssueEvidence) -> bool:
     """Recognize hardware-constrained or non-deterministic investigation."""
     reproduction_heavy = bool(
-        re.search(
+        _host_reboot_network_regression(evidence)
+        or re.search(
             r"\b(?:dual[ -]?sim|physical device|device-specific|hardware-dependent)\b",
             evidence.text,
         )
@@ -365,6 +396,12 @@ def _broader_implementation_reasons(evidence: _IssueEvidence) -> tuple[str, ...]
         and re.search(r"\bdirect connection\b", evidence.text)
         and re.search(r"\b(?:steps to reproduce|reproduc(?:e|tion))\b", evidence.text)
     )
+    macos_ssh_keychain = bool(
+        ("os-macos" in evidence.labels or re.search(r"\bmacos\b", evidence.text))
+        and re.search(r"\btailscale ssh\b", evidence.text)
+        and re.search(r"\bkeychain\b", evidence.text)
+        and re.search(r"\bunlock(?:ing)?\b", evidence.text)
+    )
     api_memory_tradeoff = bool(
         re.search(
             r"\b(?:remove|change)\b.{0,180}\b(?:interface|api)\b",
@@ -383,6 +420,7 @@ def _broader_implementation_reasons(evidence: _IssueEvidence) -> tuple[str, ...]
         or (platform_label and missing_reproduction)
         or specialized_device_repro
         or constrained_network_repro
+        or macos_ssh_keychain
         or api_memory_tradeoff
         or (re.search(r"\bsuggested fix(?:es)?\b", evidence.text) and suggested_fix_bullets >= 3)
     )
@@ -402,6 +440,8 @@ def _broader_implementation_reasons(evidence: _IssueEvidence) -> tuple[str, ...]
             reasons.append("specialized device reproduction/setup")
         if constrained_network_repro:
             reasons.append("constrained network reproduction/setup")
+        if macos_ssh_keychain:
+            reasons.append("macOS Tailscale SSH keychain reproduction/setup")
         if api_memory_tradeoff:
             reasons.append("API/interface change with explicit memory trade-off")
         return tuple(reasons[:3]) or ("broader implementation scope",)
@@ -475,6 +515,11 @@ def estimate_effort_details(
         return EffortEstimate("1d+", ("explicit broad feature/design scope",))
     if _compatibility_risk(evidence):
         return EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",))
+    if _trusted_normalization_compatibility_risk(evidence, activity_comments):
+        return EffortEstimate(
+            "1d+",
+            ("maintainer-identified normalization compatibility risk",),
+        )
     if _reproduction_heavy(evidence):
         return EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
 
