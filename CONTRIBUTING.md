@@ -90,7 +90,7 @@ create a live private instance or trigger delivery to validate distribution asse
 Keep pins immutable, state reads inside serialization, and recovery uploads private.
 External actions and external reusable workflows must use reviewed full 40-character
 commit SHAs; same-repository reusable workflows may use GitHub's same-commit local
-reference syntax (`./.github/workflows/...` or `$/.github/workflows/...`).
+reference syntax (`./.github/workflows/...`).
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
 

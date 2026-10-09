@@ -30,9 +30,10 @@ OSS Opportunity Scout is a package-owned scanner with:
 - a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, private recovery artifacts, and a durable recovery barrier
 
 Coverage completeness is independent of warning thresholds, including quiet-run
-maintenance. Failed persistence is guarded by a durable private recovery marker, and
-authoritative direct-source language filtering occurs before bounded adaptive
-inspection. Historical state remains private; public examples never replace that
+maintenance. The distributed private workflow template uses a durable recovery
+marker after persistence failure; deployed instances must adopt and validate that
+template before relying on this barrier. Authoritative direct-source language
+filtering occurs before bounded adaptive inspection. Historical state remains private; public examples never replace that
 history.
 
 ## Deployment baseline

@@ -31,6 +31,18 @@ The public repository is the scanner source and distribution point, not a persis
 
 Forking is optional and intended only for scanner-code customization.
 
+## Documentation guide
+
+**Set up and operate:** [Private instance guide](docs/PRIVATE_INSTANCE.md) and
+[configuration reference](docs/CONFIGURATION.md).
+
+**Understand and contribute:** [Architecture](ARCHITECTURE.md),
+[contributor workflow](CONTRIBUTING.md), and [AI agent instructions](AGENTS.md).
+
+**Plan and trace history:** [Roadmap](ROADMAP.md) and the
+[completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md). The migration
+record is historical; use the private instance guide for current procedures.
+
 ## Illustrative ranked result
 
 > **Illustrative example — synthetic, not a current bounty.**<br>
