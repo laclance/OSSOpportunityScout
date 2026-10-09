@@ -838,6 +838,63 @@ class VerificationTests(unittest.TestCase):
             )
             self.assertEqual(check.call_count, 4)
 
+    def test_unscoped_diagnostic_reports_do_not_enter_strategic_queue(self) -> None:
+        loki = issue(
+            html_url="https://github.com/grafana/loki/issues/24870",
+            title="count_over_time metric query missing log entries",
+            body=(
+                "Grafana Cloud (Explore), Loki version: Unknown. Logs sample has "
+                "missing count_over_time entries. At Step 30s bars return; "
+                "at Step 1m they disappear."
+            ),
+            comments=0,
+        )
+        kubernetes = issue(
+            html_url="https://github.com/kubernetes/kubernetes/issues/136114",
+            title="[Failing Test] node-feature-discovery-e2e",
+            labels=["sig/node", "help wanted", "kind/failing-test", "needs-triage"],
+            body=(
+                "Testgrid https://testgrid.k8s.io/sig-node-node-feature-discovery "
+                "fails: Image gcr.io/k8s-staging-nfd/node-feature-discovery:v0.19 "
+                "not found."
+            ),
+            comments=9,
+        )
+        status: list[GitHubComment] = [
+            {
+                "body": "This request has been marked as needing help from a contributor.",
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        ready: list[GitHubComment] = [
+            {"body": "Ready for implementation", "author_association": "MEMBER"}
+        ]
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertEqual(
+                scout.strategic_preflight_rejection(loki),
+                "cloud-managed metric discrepancy awaiting product-layer investigation",
+            )
+            self.assertIsNone(scout.strategic_preflight_rejection(kubernetes))
+            self.assertEqual(
+                scout.strategic_rejection(loki, "t", []),
+                "cloud-managed metric discrepancy awaiting product-layer investigation",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(kubernetes, "t", status),
+                "failing-test image artifact awaits triage and code-change scope",
+            )
+            check.assert_not_called()
+            self.assertIsNone(scout.strategic_rejection(loki, "t", ready))
+            self.assertIsNone(scout.strategic_rejection(kubernetes, "t", ready))
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Fix deterministic parser bug", labels=["help wanted"]),
+                    "t",
+                    status,
+                )
+            )
+            self.assertEqual(check.call_count, 3)
+
     def test_godebug_startup_diagnostic_waits_for_project_triage(self) -> None:
         report = issue(
             title="Tailscale can not be started on my NAS",
