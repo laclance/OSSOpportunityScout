@@ -126,9 +126,7 @@ class UnscopedDiagnosticTests(unittest.TestCase):
         ):
             with self.subTest(labels=labels):
                 self.assertIsNone(
-                    readiness.unscoped_diagnostic_reason(
-                        issue(**{**failing, "labels": labels})
-                    )
+                    readiness.unscoped_diagnostic_reason(issue(**{**failing, "labels": labels}))
                 )
         self.assertIsNone(
             readiness.unscoped_diagnostic_reason(

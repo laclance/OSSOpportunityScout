@@ -935,7 +935,7 @@ def unscoped_diagnostic_reason(
         "grafana cloud" in body
         and "loki version: unknown" in body
         and "logs sample" in body
-        and "count_over_time" in evidence.text
+        and ("count_over_time" in evidence.title_lower or "count_over_time" in body)
         and re.search(r"\b30\s*s\b", body)
         and re.search(r"\b1\s*m\b", body)
     ):
