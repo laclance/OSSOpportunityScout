@@ -14,7 +14,7 @@ from opportunity_scout.types import (
     IssueLifecycleStatus,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
 )
 from tests.helpers import candidate
 
@@ -26,7 +26,7 @@ def paid_candidate(
     _seen: set[str],
     _repo_cache: dict[str, RepositoryMetadata],
     _guide_cache: dict[str, str | None],
-    _search_results: list[SearchBatch] | None,
+    _search_results: list[SearchQueryResult] | None,
 ) -> run.PaidDiscoveryResult:
     return [candidate()], {}, []
 
@@ -37,7 +37,7 @@ def empty_strategic(
     _paid_urls: set[str],
     _repo_cache: dict[str, RepositoryMetadata],
     _guide_cache: dict[str, str | None],
-    _search_results: list[SearchBatch] | None,
+    _search_results: list[SearchQueryResult] | None,
 ) -> run.StrategicDiscoveryResult:
     return [], {}, [], []
 
@@ -48,7 +48,7 @@ def incomplete_strategic(
     _paid_urls: set[str],
     _repo_cache: dict[str, RepositoryMetadata],
     _guide_cache: dict[str, str | None],
-    _search_results: list[SearchBatch] | None,
+    _search_results: list[SearchQueryResult] | None,
 ) -> run.StrategicDiscoveryResult:
     return (
         [],
@@ -64,7 +64,9 @@ def incomplete_strategic(
     )
 
 
-def empty_prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+def empty_prefetch(
+    _token: str | None,
+) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
     return [], []
 
 
@@ -162,7 +164,9 @@ class PrivateGitHubRunTests(unittest.TestCase):
         prefetch_tokens: list[str | None] = []
         private_calls: list[tuple[str, str]] = []
 
-        def prefetch(token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+        def prefetch(
+            token: str | None,
+        ) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
             prefetch_tokens.append(token)
             return [], []
 

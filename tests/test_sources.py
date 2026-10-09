@@ -9,7 +9,11 @@ from unittest.mock import patch
 
 from opportunity_scout import sources
 from opportunity_scout import github
-from opportunity_scout.types import DiscoveryFailureReason, GitHubIssue
+from opportunity_scout.types import (
+    DiscoveryFailureReason,
+    GitHubIssue,
+    StrategicPreviewRow,
+)
 from tests.helpers import FakeResponse, candidate
 
 
@@ -862,7 +866,7 @@ class PlatformAdapterTests(unittest.TestCase):
 
 class AdaptiveInspectionTests(unittest.TestCase):
     def test_keeps_base_rows_and_spends_global_budget_on_strong_overflow(self) -> None:
-        provisional: list[sources.IssueRow] = []
+        provisional: list[StrategicPreviewRow] = []
         for repo in ("a/a", "b/b"):
             for i in range(4):
                 provisional.append(
@@ -986,7 +990,7 @@ class VerificationSettlementTests(unittest.TestCase):
         )
 
     def test_verification_upper_bound_accounts_for_score_uplift(self) -> None:
-        row: sources.IssueRow = (70, 60, 0, issue(1, comments=3))
+        row: StrategicPreviewRow = (70, 60, 0, issue(1, comments=3))
         self.assertEqual(
             sources.strategic_verification_upper_bound(
                 row,
@@ -994,7 +998,7 @@ class VerificationSettlementTests(unittest.TestCase):
             ),
             (81, 71, 0, -3),
         )
-        capped: sources.IssueRow = (95, 96, 0, issue(2, comments=0))
+        capped: StrategicPreviewRow = (95, 96, 0, issue(2, comments=0))
         self.assertEqual(
             sources.strategic_verification_upper_bound(
                 capped,
@@ -1026,7 +1030,7 @@ class VerificationSettlementTests(unittest.TestCase):
             )
         )
 
-        competitive: list[sources.IssueRow] = [(75, 75, 0, issue(3))]
+        competitive: list[StrategicPreviewRow] = [(75, 75, 0, issue(3))]
         self.assertFalse(
             sources.strategic_repo_slots_settled(
                 verified,
@@ -1036,7 +1040,7 @@ class VerificationSettlementTests(unittest.TestCase):
             )
         )
 
-        safely_below: list[sources.IssueRow] = [(68, 68, 0, issue(4))]
+        safely_below: list[StrategicPreviewRow] = [(68, 68, 0, issue(4))]
         self.assertTrue(
             sources.strategic_repo_slots_settled(
                 verified,

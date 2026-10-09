@@ -43,6 +43,23 @@ class _JsonRequest:
 class _TransportResult:
     succeeded: bool
     body: bytes = b""
+    failure: str | None = None
+
+
+def _transport_failure(exc: Exception) -> str:
+    """Classify failures from safe values only; exceptions may contain credentials."""
+    if isinstance(exc, urllib.error.HTTPError):
+        status = exc.code
+        if type(status) is int and 100 <= status <= 599:
+            return f"HTTP {status}"
+        return "HTTP error"
+    if isinstance(exc, (urllib.error.URLError, OSError)):
+        return "network error"
+    return "transport error"
+
+
+def _failure_message(operation: str, result: _TransportResult) -> str:
+    return f"{operation} ({result.failure or 'transport error'})."
 
 
 class _NoGitHubMutationRedirect(urllib.request.HTTPRedirectHandler):
@@ -66,23 +83,31 @@ def _github_mutation_open(request: urllib.request.Request, *, timeout: int) -> A
 def _perform(request_spec: _JsonRequest) -> _TransportResult:
     try:
         request = request_spec.materialize()
+    except Exception:
+        return _TransportResult(False, failure="request error")
+
+    try:
         with urllib.request.urlopen(request, timeout=request_spec.timeout) as response:
             return _TransportResult(True, bytes(response.read()))
-    except Exception:
-        return _TransportResult(False)
+    except Exception as exc:
+        return _TransportResult(False, failure=_transport_failure(exc))
 
 
 def _perform_github_mutation(request_spec: _JsonRequest) -> _TransportResult:
     """Execute one authenticated GitHub mutation only on the trusted API origin."""
     if not github._trusted_github_api_url(request_spec.endpoint):
-        return _TransportResult(False)
+        return _TransportResult(False, failure="untrusted destination")
 
     try:
         request = request_spec.materialize()
+    except Exception:
+        return _TransportResult(False, failure="request error")
+
+    try:
         with _github_mutation_open(request, timeout=request_spec.timeout) as response:
             return _TransportResult(True, bytes(response.read()))
-    except Exception:
-        return _TransportResult(False)
+    except Exception as exc:
+        return _TransportResult(False, failure=_transport_failure(exc))
 
 
 def _notification_request(endpoint: str, payload: Mapping[str, object]) -> _JsonRequest:
@@ -96,8 +121,9 @@ def _notification_request(endpoint: str, payload: Mapping[str, object]) -> _Json
 
 
 def _deliver_notification(provider: str, request_spec: _JsonRequest) -> bool:
-    if not _perform(request_spec).succeeded:
-        print(f"Failed to send {provider} notification.")
+    result = _perform(request_spec)
+    if not result.succeeded:
+        print(_failure_message(f"Failed to send {provider} notification", result))
         return False
     print(f"{provider} notification sent successfully.")
     return True
@@ -179,7 +205,7 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         )
     )
     if not created.succeeded:
-        print("Failed to create GitHub Issue notification.")
+        print(_failure_message("Failed to create GitHub Issue notification", created))
         return False
 
     issue_url = _created_issue_url(created.body)
@@ -196,7 +222,7 @@ def create_github_issue(repo_fullname: str, token: str, title: str, body: str) -
         )
     )
     if not closed.succeeded:
-        print("Failed to auto-close GitHub Issue notification.")
+        print(_failure_message("Failed to auto-close GitHub Issue notification", closed))
         return False
 
     print("GitHub Issue notification created and auto-closed successfully.")
@@ -233,7 +259,7 @@ def create_private_github_issue(repo_fullname: str, token: str, title: str, body
         )
     )
     if not created.succeeded:
-        print("Failed to create private GitHub report.")
+        print(_failure_message("Failed to create private GitHub report", created))
         return False
 
     print("Private GitHub report created successfully.")

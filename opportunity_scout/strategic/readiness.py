@@ -570,7 +570,7 @@ def maintainer_readiness_comment_state(
         if not _comment_has_maintainer_authority(evidence):
             continue
 
-        if _explicit_ready_signal(body):
+        if _explicit_ready_signal(body) and evidence.author_association in TRUSTED_ASSOCIATIONS:
             state = True
             reason = None
             diagnostic_pending = False
@@ -621,6 +621,18 @@ def abandoned_lifecycle_reason(
         return None
     if "lifecycle/rotten" in issue_label_set(item):
         return "issue is in an abandoned/rotten lifecycle state"
+    return None
+
+
+def stale_lifecycle_reason(
+    item: GitHubIssue,
+    ready_override: bool = False,
+) -> str | None:
+    """Hold explicitly stale issues unless a trusted maintainer revives implementation."""
+    if ready_override:
+        return None
+    if issue_label_set(item) & {"stale", "lifecycle/stale"}:
+        return "stale issue awaiting maintainer re-triage"
     return None
 
 
@@ -745,7 +757,7 @@ def reporter_design_discussion_reason(
 
         if (
             implementation_decision_pending
-            and _comment_has_maintainer_authority(comment_evidence)
+            and comment_evidence.author_association in TRUSTED_ASSOCIATIONS
             and _explicit_ready_signal(body)
         ):
             implementation_decision_pending = False

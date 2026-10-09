@@ -28,7 +28,7 @@ from opportunity_scout.strategic import discovery
 from opportunity_scout.types import (
     Candidate,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
 )
 from tests.helpers import candidate, issue
@@ -176,7 +176,10 @@ class SourceControlTests(unittest.TestCase):
 
     def test_global_control_discards_prefetched_results_and_does_not_search(self) -> None:
         blocked = issue(html_url="https://github.com/blocked/repo/issues/1")
-        batches: list[list[SearchBatch] | None] = [None, [("ignored", {"items": [blocked]})]]
+        batches: list[list[SearchQueryResult] | None] = [
+            None,
+            [("ignored", {"items": [blocked]})],
+        ]
         for global_results in batches:
             with (
                 self.subTest(global_results=global_results),

@@ -49,6 +49,7 @@ from opportunity_scout.strategic.readiness import (
     reporter_support_triage_reason as reporter_support_triage_reason,
     reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
+    stale_lifecycle_reason as stale_lifecycle_reason,
     readiness_pending_label_reason as readiness_pending_label_reason,
     release_tracking_reason as release_tracking_reason,
     triage_pending_signal as triage_pending_signal,
@@ -64,7 +65,6 @@ from opportunity_scout.types import (
     RepositoryMetadata,
     SearchQueryResult,
     SourceFailureReason,
-    StrategicPreviewRow,
 )
 
 TARGET_REPOS = strategic_discovery.TARGET_REPOS
@@ -606,6 +606,9 @@ def strategic_preflight_rejection(item: GitHubIssue) -> str | None:
         abandoned_reason = abandoned_lifecycle_reason(item, False)
         if abandoned_reason:
             return abandoned_reason
+        stale_reason = stale_lifecycle_reason(item)
+        if stale_reason:
+            return stale_reason
         readiness_reason = readiness_pending_label_reason(item, accepted)
         if readiness_reason:
             return readiness_reason
@@ -642,6 +645,10 @@ def strategic_rejection(
     abandoned_reason = abandoned_lifecycle_reason(item, comment_ready is True)
     if abandoned_reason:
         return abandoned_reason
+
+    stale_reason = stale_lifecycle_reason(item)
+    if stale_reason:
+        return stale_reason
 
     accepted = (
         bool(TRIAGE_ACCEPTED_LABELS & label_set)
@@ -710,6 +717,13 @@ class _VerifiedLane:
 class _RepositoryContext:
     metadata: RepositoryMetadata
     guide: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingPaidCandidate:
+    issue: GitHubIssue
+    platform_signal: str | None
+    is_platform: bool
 
 
 def _resolve_verification_source(
@@ -975,8 +989,8 @@ def _collect_direct_paid_candidates(
     search_results: list[SearchQueryResult] | None,
     *,
     scout_preferences: preferences.ScoutPreferences,
-) -> list[tuple[GitHubIssue, str | None, bool]]:
-    pending: list[tuple[GitHubIssue, str | None, bool]] = []
+) -> list[_PendingPaidCandidate]:
+    pending: list[_PendingPaidCandidate] = []
 
     if search_results is None:
         search_results = [
@@ -1011,7 +1025,13 @@ def _collect_direct_paid_candidates(
             if not selection.repository_excluded(
                 repo, scout_preferences
             ) and paid.is_clean_candidate(item):
-                pending.append((item, None, False))
+                pending.append(
+                    _PendingPaidCandidate(
+                        issue=item,
+                        platform_signal=None,
+                        is_platform=False,
+                    )
+                )
 
     return pending
 
@@ -1024,7 +1044,7 @@ def _collect_platform_paid_candidates(
     examples: list[RejectionRecord],
     *,
     scout_preferences: preferences.ScoutPreferences,
-) -> list[tuple[GitHubIssue, str | None, bool]]:
+) -> list[_PendingPaidCandidate]:
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Fetch their source issues concurrently, then
     # apply the same source-authoritative verification as direct discoveries.
@@ -1076,7 +1096,7 @@ def _collect_platform_paid_candidates(
         platform_hydration_requests,
     )
 
-    pending: list[tuple[GitHubIssue, str | None, bool]] = []
+    pending: list[_PendingPaidCandidate] = []
     for (source_url, platform_signal), (platform_item, source_failure) in zip(
         platform_sources,
         platform_items,
@@ -1094,13 +1114,19 @@ def _collect_platform_paid_candidates(
             )
             continue
         if platform_item and paid.is_clean_candidate(platform_item):
-            pending.append((platform_item, platform_signal, True))
+            pending.append(
+                _PendingPaidCandidate(
+                    issue=platform_item,
+                    platform_signal=platform_signal,
+                    is_platform=True,
+                )
+            )
 
     return pending
 
 
 def _verify_paid_candidates(
-    pending: list[tuple[GitHubIssue, str | None, bool]],
+    pending: list[_PendingPaidCandidate],
     token: str | None,
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
@@ -1110,21 +1136,17 @@ def _verify_paid_candidates(
     scout_preferences: preferences.ScoutPreferences,
 ) -> list[Candidate]:
     def verify_paid(
-        row: tuple[GitHubIssue, str | None, bool],
-    ) -> tuple[
-        tuple[GitHubIssue, str | None, bool],
-        tuple[Candidate | None, str | None],
-    ]:
-        item, platform_signal, _ = row
+        row: _PendingPaidCandidate,
+    ) -> tuple[_PendingPaidCandidate, tuple[Candidate | None, str | None]]:
         return (
             row,
             verify(
-                item,
+                row.issue,
                 token,
                 repo_cache,
                 guide_cache,
                 require_paid=True,
-                payment_signal_override=platform_signal,
+                payment_signal_override=row.platform_signal,
                 scout_preferences=scout_preferences,
             ),
         )
@@ -1140,9 +1162,10 @@ def _verify_paid_candidates(
     )
 
     found: list[Candidate] = []
-    for (item, _, is_platform), (candidate, reason) in verification_results:
+    for row, (candidate, reason) in verification_results:
+        item = row.issue
         url = str(item.get("html_url") or "")
-        kind = "platform" if is_platform else "paid"
+        kind = "platform" if row.is_platform else "paid"
         if reason:
             add_reject(rejected, examples, item, reason)
             print(f"Skipping {kind} candidate {url}: {reason}")
@@ -1204,16 +1227,6 @@ def discover_paid(
     return found, rejected, examples
 
 
-def possible_miss_signal(item: GitHubIssue) -> bool:
-    """Compatibility wrapper for strategic near-miss detection."""
-    return strategic_discovery.possible_miss_signal(item)
-
-
-def basic_rejection_audit_reason(item: GitHubIssue) -> str | None:
-    """Compatibility wrapper for strategic basic-filter audit reasons."""
-    return strategic_discovery.basic_rejection_audit_reason(item)
-
-
 def add_audit(
     audit: list[RejectionRecord],
     item: GitHubIssue,
@@ -1225,17 +1238,6 @@ def add_audit(
         item,
         reason,
         limit=STRATEGIC_AUDIT_LIMIT,
-    )
-
-
-def strategic_inspection_items(
-    provisional: list[StrategicPreviewRow],
-) -> dict[str, list[GitHubIssue]]:
-    """Compatibility wrapper for bounded strategic inspection selection."""
-    return strategic_discovery.strategic_inspection_items(
-        provisional,
-        base_per_repo=STRATEGIC_INSPECT_PER_REPO,
-        adaptive_budget=STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
     )
 
 

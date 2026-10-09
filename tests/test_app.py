@@ -23,7 +23,7 @@ from opportunity_scout.types import (
     GitHubIssue,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
 )
 from tests.helpers import FakeResponse
@@ -723,12 +723,71 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
+    def test_stale_strategic_issue_requires_label_removal(self) -> None:
+        # Regression: Cilium #45913 was ranked while marked stale by automation.
+        stale = issue(
+            html_url="https://github.com/cilium/cilium/issues/45913",
+            title="Gateway API hostNetwork TLS Passthrough regression",
+            labels=[{"name": "kind/bug"}, {"name": "stale"}],
+            comments=4,
+            updated_at="2026-10-08T01:54:20Z",
+        )
+        reason = "stale issue awaiting maintainer re-triage"
+        bot_comment: list[GitHubComment] = [
+            {
+                "body": "This issue has been automatically marked as stale.",
+                "author_association": "NONE",
+            }
+        ]
+        contributor_comment: list[GitHubComment] = [
+            {
+                "body": "Contributions welcome; I think this still needs fixing.",
+                "author_association": "NONE",
+            }
+        ]
+        maintainer_ready: list[GitHubComment] = [
+            {
+                "body": "Confirmed still reproducible; contributions welcome.",
+                "author_association": "MEMBER",
+                "created_at": "2026-06-01T00:00:00Z",
+            }
+        ]
+
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertEqual(scout.strategic_rejection(stale, "t", bot_comment), reason)
+            self.assertEqual(scout.strategic_rejection(stale, "t", contributor_comment), reason)
+            check.assert_not_called()
+            # Earlier readiness cannot override the current stale label.
+            self.assertEqual(scout.strategic_rejection(stale, "t", maintainer_ready), reason)
+            check.assert_not_called()
+
+            # Once the stale label is removed, readiness can be evaluated normally.
+            cleared = issue(labels=[{"name": "kind/bug"}], comments=4)
+            self.assertIsNone(scout.strategic_rejection(cleared, "t", maintainer_ready))
+            check.assert_called_once()
+
+            # Generic readiness labels are not evidence that a stale issue was revived.
+            stale_with_help = issue(labels=["help wanted", "stale"], comments=2)
+            self.assertEqual(
+                scout.strategic_rejection(stale_with_help, "t", bot_comment),
+                reason,
+            )
+            self.assertIsNone(
+                scout.strategic_rejection(issue(labels=["bug"], comments=2), "t", bot_comment)
+            )
+
     def test_readiness_gate_allows_explicit_ready_override_and_normal_features(self) -> None:
         pending = issue(labels=[{"name": "status/needs-reproduction"}])
         ready_comments: list[GitHubComment] = [
             {
                 "body": "Reproduced and confirmed. This is ready for implementation.",
                 "author_association": "MEMBER",
+            }
+        ]
+        contributor_ready: list[GitHubComment] = [
+            {
+                "body": "We're marking this as ready for implementation; contributions welcome.",
+                "author_association": "CONTRIBUTOR",
             }
         ]
         feature = issue(
@@ -746,6 +805,10 @@ class VerificationTests(unittest.TestCase):
 
         with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertIsNone(scout.strategic_rejection(pending, "t", ready_comments))
+            self.assertEqual(
+                scout.strategic_rejection(pending, "t", contributor_ready),
+                "awaiting reproduction confirmation",
+            )
             self.assertIsNone(scout.strategic_rejection(feature, "t", []))
             self.assertIsNone(scout.strategic_rejection(proposal_without_hold, "t", []))
             self.assertEqual(
@@ -1556,27 +1619,9 @@ class VerificationTests(unittest.TestCase):
 
 
 class DiscoveryTests(unittest.TestCase):
-    def test_possible_miss_signal_delegates_to_strategic_discovery(self) -> None:
-        item = issue()
-        with patch(
-            "opportunity_scout.strategic.discovery.possible_miss_signal",
-            return_value=True,
-        ) as signal:
-            self.assertTrue(scout.possible_miss_signal(item))
-        signal.assert_called_once_with(item)
-
-    def test_strategic_discovery_audit_wrappers_delegate(self) -> None:
+    def test_add_audit_binds_configured_limit(self) -> None:
         item = issue()
         audit: list[RejectionRecord] = []
-        provisional: list[sources.IssueRow] = []
-
-        with patch(
-            "opportunity_scout.strategic.discovery.basic_rejection_audit_reason",
-            return_value="reason",
-        ) as reason:
-            self.assertEqual(scout.basic_rejection_audit_reason(item), "reason")
-        reason.assert_called_once_with(item)
-
         with patch("opportunity_scout.strategic.discovery.add_audit") as add:
             scout.add_audit(audit, item, "reason")
         add.assert_called_once_with(
@@ -1584,17 +1629,6 @@ class DiscoveryTests(unittest.TestCase):
             item,
             "reason",
             limit=scout.STRATEGIC_AUDIT_LIMIT,
-        )
-
-        with patch(
-            "opportunity_scout.strategic.discovery.strategic_inspection_items",
-            return_value={"a/a": [item]},
-        ) as inspect:
-            self.assertEqual(scout.strategic_inspection_items(provisional), {"a/a": [item]})
-        inspect.assert_called_once_with(
-            provisional,
-            base_per_repo=scout.STRATEGIC_INSPECT_PER_REPO,
-            adaptive_budget=scout.STRATEGIC_ADAPTIVE_INSPECT_BUDGET,
         )
 
     def test_detection_tracker_rejection_does_not_reach_near_miss_audit(self) -> None:
@@ -1786,6 +1820,15 @@ class DiscoveryTests(unittest.TestCase):
                 issue(labels=[{"name": "needs reproduction"}], comments=0)
             ),
             "awaiting reproduction confirmation",
+        )
+        self.assertEqual(
+            scout.strategic_preflight_rejection(
+                issue(labels=[{"name": "stale"}, {"name": "help wanted"}], comments=0)
+            ),
+            "stale issue awaiting maintainer re-triage",
+        )
+        self.assertIsNone(
+            scout.strategic_preflight_rejection(issue(labels=[{"name": "stale"}], comments=1))
         )
         self.assertIsNone(scout.strategic_preflight_rejection(issue(comments=0)))
         self.assertEqual(
@@ -2007,6 +2050,68 @@ class DiscoveryTests(unittest.TestCase):
         selfEqual(rejected, {})
         selfEqual(examples, [])
 
+    def test_discover_paid_preserves_signal_origin_and_result_order(self) -> None:
+        first = issue(html_url="https://github.com/a/a/issues/1")
+        second = issue(html_url="https://github.com/a/a/issues/2")
+        platform = issue(html_url="https://github.com/p/p/issues/3")
+        first_url = str(first["html_url"])
+        second_url = str(second["html_url"])
+        platform_url = str(platform["html_url"])
+        signal = "confirmed platform payment: $300"
+        output = io.StringIO()
+
+        def reject_source(item: GitHubIssue, *_args: Any, **_kwargs: Any) -> tuple[None, str]:
+            return None, f"rejected {item['html_url']}"
+
+        with (
+            patch.object(github, "search_github") as search,
+            patch.object(
+                scout,
+                "platform_paid_refs",
+                return_value=sources.PlatformDiscoveryResult(
+                    refs={first_url: "duplicate", platform_url: signal},
+                    failures=(),
+                ),
+            ),
+            patch.object(
+                scout, "issue_from_github_url_checked", return_value=(platform, None)
+            ) as hydrate,
+            patch.object(paid_policy, "is_clean_candidate", return_value=True),
+            patch.object(scout, "verify", side_effect=reject_source) as verifier,
+            redirect_stdout(output),
+        ):
+            found, rejected, examples = scout.discover_paid(
+                "t",
+                set(),
+                {},
+                {},
+                [("paid-q", {"items": [first, second]})],
+            )
+
+        search.assert_not_called()
+        hydrate.assert_called_once_with(platform_url, "t")
+        self.assertEqual(found, [])
+        self.assertEqual(verifier.call_count, 3)
+        self.assertEqual(
+            {
+                call.args[0]["html_url"]: call.kwargs["payment_signal_override"]
+                for call in verifier.call_args_list
+            },
+            {first_url: None, second_url: None, platform_url: signal},
+        )
+        self.assertTrue(all(call.kwargs["require_paid"] for call in verifier.call_args_list))
+        self.assertEqual(
+            rejected,
+            {f"rejected {url}": 1 for url in (first_url, second_url, platform_url)},
+        )
+        self.assertEqual(
+            [example["url"] for example in examples],
+            [first_url, second_url, platform_url],
+        )
+        self.assertIn(f"Skipping paid candidate {first_url}:", output.getvalue())
+        self.assertIn(f"Skipping paid candidate {second_url}:", output.getvalue())
+        self.assertIn(f"Skipping platform candidate {platform_url}:", output.getvalue())
+
     def test_discover_paid_rejects_low_value_direct_and_platform_candidates(self) -> None:
         direct = issue(html_url="https://github.com/a/a/issues/1")
         platform = issue(html_url="https://github.com/p/p/issues/2")
@@ -2114,14 +2219,14 @@ class DiscoveryTests(unittest.TestCase):
 class FormattingAndMainTests(unittest.TestCase):
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
-        paid_prefetch: list[SearchBatch] = [("paid-q", {"items": []})]
-        strategic_prefetch: list[SearchBatch] = [("global-q", {"items": []})]
+        paid_prefetch: list[SearchQueryResult] = [("paid-q", {"items": []})]
+        strategic_prefetch: list[SearchQueryResult] = [("global-q", {"items": []})]
 
         def prefetch(
             _token: str | None,
             *,
             scout_preferences: preferences.ScoutPreferences,
-        ) -> tuple[list[SearchBatch], list[SearchBatch]]:
+        ) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
             order.append("searches")
             return paid_prefetch, strategic_prefetch
 

@@ -18,7 +18,7 @@ from opportunity_scout.types import (
     IssueLifecycleStatus,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
 )
 from tests.helpers import candidate
@@ -31,7 +31,7 @@ def empty_paid(
     _seen: set[str],
     _repo_cache: dict[str, RepositoryMetadata],
     _guide_cache: dict[str, str | None],
-    _search_results: list[SearchBatch] | None,
+    _search_results: list[SearchQueryResult] | None,
 ) -> run.PaidDiscoveryResult:
     return [], {}, []
 
@@ -42,12 +42,14 @@ def empty_strategic(
     _paid_urls: set[str],
     _repo_cache: dict[str, RepositoryMetadata],
     _guide_cache: dict[str, str | None],
-    _search_results: list[SearchBatch] | None,
+    _search_results: list[SearchQueryResult] | None,
 ) -> run.StrategicDiscoveryResult:
     return [], {}, [], []
 
 
-def empty_prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+def empty_prefetch(
+    _token: str | None,
+) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
     return [], []
 
 
@@ -383,7 +385,7 @@ class RunLifecycleTests(unittest.TestCase):
                             _seen: set[str],
                             _repo_cache: dict[str, RepositoryMetadata],
                             _guide_cache: dict[str, str | None],
-                            _search_results: list[SearchBatch] | None,
+                            _search_results: list[SearchQueryResult] | None,
                         ) -> run.PaidDiscoveryResult:
                             return items, paid_rejects, []
 
@@ -393,7 +395,7 @@ class RunLifecycleTests(unittest.TestCase):
                             _paid_urls: set[str],
                             _repo_cache: dict[str, RepositoryMetadata],
                             _guide_cache: dict[str, str | None],
-                            _search_results: list[SearchBatch] | None,
+                            _search_results: list[SearchQueryResult] | None,
                         ) -> run.StrategicDiscoveryResult:
                             return [], strategic_rejects, [], audit
 
@@ -487,7 +489,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [new], {}, []
 
@@ -543,7 +545,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [item], {}, []
 
@@ -580,7 +582,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [item], {}, []
 
@@ -624,7 +626,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [item], {}, []
 
@@ -673,7 +675,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [item], {}, []
 
@@ -720,7 +722,7 @@ class RunLifecycleTests(unittest.TestCase):
             _paid_urls: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.StrategicDiscoveryResult:
             return (
                 [candidate(paid=False)],
@@ -776,7 +778,9 @@ class RunLifecycleTests(unittest.TestCase):
         source_url = "https://github.com/platform/project/issues/7"
         delivered = candidate(paid=False)
 
-        def prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+        def prefetch(
+            _token: str | None,
+        ) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
             return [("paid-q", {"items": []})], []
 
         def strategic(
@@ -785,7 +789,7 @@ class RunLifecycleTests(unittest.TestCase):
             _paid_urls: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.StrategicDiscoveryResult:
             return [delivered], {}, [], []
 
@@ -857,7 +861,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return (
                 [item],
@@ -917,7 +921,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [], {SourceFailureReason("paid claim evidence failed"): 1}, []
 
@@ -966,7 +970,9 @@ class RunLifecycleTests(unittest.TestCase):
     def test_paid_prefetch_failure_blocks_state_without_duplicate_search(self) -> None:
         reports: list[str] = []
 
-        def prefetch(_token: str | None) -> tuple[list[SearchBatch], list[SearchBatch]]:
+        def prefetch(
+            _token: str | None,
+        ) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
             return [("paid-q", {})], []
 
         def strategic(
@@ -975,7 +981,7 @@ class RunLifecycleTests(unittest.TestCase):
             _paid_urls: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.StrategicDiscoveryResult:
             return [candidate(paid=False)], {}, [], []
 
@@ -1031,7 +1037,7 @@ class RunLifecycleTests(unittest.TestCase):
             _paid_urls: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.StrategicDiscoveryResult:
             return [candidate(paid=False)], {}, [], []
 
@@ -1082,7 +1088,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [candidate()], {}, []
 
@@ -1144,7 +1150,7 @@ class RunLifecycleTests(unittest.TestCase):
             _seen: set[str],
             _repo_cache: dict[str, RepositoryMetadata],
             _guide_cache: dict[str, str | None],
-            _search_results: list[SearchBatch] | None,
+            _search_results: list[SearchQueryResult] | None,
         ) -> run.PaidDiscoveryResult:
             return [item], {}, []
 
