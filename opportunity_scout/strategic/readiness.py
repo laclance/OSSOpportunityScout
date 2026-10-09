@@ -65,6 +65,15 @@ _READY_MARKERS: Final = (
     "this issue is active again",
     "reopening this for implementation",
 )
+_NEGATED_READY_RE: Final = re.compile(
+    r"\b(?:not|never|no\s+longer|isn['’]t|aren['’]t|wasn['’]t)"
+    r"\s+(?:(?:yet|currently|necessarily|fully)\s+)?"
+    r"(?:ready\s+(?:for\s+implementation|to\s+implement)|"
+    r"contributions?\s+welcome|prs?\s+welcome|pull\s+requests?\s+welcome|"
+    r"feel\s+free\s+to\s+work\s+on\s+this|go\s+ahead\s+and\s+implement)\b",
+    re.IGNORECASE,
+)
+
 _NON_PROJECT_CAUSE_RE: Final = re.compile(
     r"\bnot\s+an?\s+(?:[a-z0-9_-]+\s+)?bug\b.{0,240}"
     r"\b(?:net/http|standard library|upstream|third[- ]party)\b",
@@ -581,7 +590,8 @@ def _canonical_duplicate(body: str) -> bool:
 
 
 def _explicit_ready_signal(body: str) -> bool:
-    return _contains_any(body, _READY_MARKERS)
+    """A negated readiness statement cannot grant implementation approval."""
+    return _NEGATED_READY_RE.search(body) is None and _contains_any(body, _READY_MARKERS)
 
 
 def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None, bool]:
@@ -608,7 +618,7 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
         "are you sure" in body and "reproduc" in body
     ):
         return _REASON_REPRODUCTION, False
-    if _contains_any(body, _IMPLEMENTATION_WAIT_MARKERS):
+    if _NEGATED_READY_RE.search(body) or _contains_any(body, _IMPLEMENTATION_WAIT_MARKERS):
         return _REASON_WAIT, False
     if _contains_any(body, _CLARIFICATION_MARKERS):
         return _REASON_CLARIFICATION, False

@@ -799,6 +799,25 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+    def test_negated_maintainer_readiness_cannot_release_strategic_hold(self) -> None:
+        proposal = issue(
+            title="Snapshotter interface design",
+            body="I do not suggest specific API until the design is agreed.",
+            comments=2,
+        )
+        refusal: GitHubComment = {
+            "body": "Not ready for implementation. Design approval is pending.",
+            "author_association": "MEMBER",
+        }
+        approved: GitHubComment = {
+            "body": "Design agreed; ready for implementation.",
+            "author_association": "OWNER",
+        }
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertEqual(scout.strategic_rejection(proposal, "t", [refusal]), reason)
+            self.assertIsNone(scout.strategic_rejection(proposal, "t", [refusal, approved]))
+
     def test_upstream_go_tool_reproduction_is_not_an_actionable_issue(self) -> None:
         report = issue(
             html_url="https://github.com/golangci/golangci-lint/issues/4099",
