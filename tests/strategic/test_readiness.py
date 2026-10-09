@@ -434,6 +434,81 @@ class MaintainerReadinessTests(unittest.TestCase):
             (None, None),
         )
 
+    def test_negated_readiness_is_a_hold_and_later_approval_wins(self) -> None:
+        report = issue(labels=["needs/design"])
+        wait = "maintainer asked contributors to wait before implementation"
+        denials = (
+            "Not ready for implementation.",
+            "This is not yet ready for implementation.",
+            "We are not ready to implement.",
+            "It isn't ready for implementation.",
+            "Never ready to implement.",
+            "This is not contributions welcome; approval is still pending.",
+            "Ready for implementation? No: not ready for implementation.",
+        )
+        approved = comment(
+            body="Design approved; ready for implementation.",
+            author_association="OWNER",
+        )
+        for statement in denials:
+            with self.subTest(statement=statement):
+                negative = comment(body=statement, author_association="MEMBER")
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(report, [negative]),
+                    (False, wait),
+                )
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(
+                        report, [negative, approved]
+                    ),
+                    (True, None),
+                )
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(
+                        report, [approved, negative]
+                    ),
+                    (False, wait),
+                )
+
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    comment(
+                        body="Not blocking this change; ready for implementation.",
+                        author_association="MEMBER",
+                    )
+                ],
+            ),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    comment(
+                        body="Not ready for implementation.",
+                        author_association="NONE",
+                    )
+                ],
+            ),
+            (None, None),
+        )
+
+    def test_maintainer_issue_body_negation_is_not_approval(self) -> None:
+        pending = issue(
+            author_association="MEMBER",
+            body="Not ready for implementation: need to decide API semantics.",
+        )
+        self.assertEqual(
+            readiness.maintainer_issue_decision_reason(pending),
+            "maintainer-authored issue is still deciding implementation semantics",
+        )
+        approved = issue(
+            **{**pending, "body": "API semantics are decided. Ready for implementation."}
+        )
+        self.assertIsNone(readiness.maintainer_issue_decision_reason(approved))
+
     def test_latest_explicit_stance_wins(self) -> None:
         hold = comment(
             body="Please wait before implementing; this needs clarification.",
@@ -957,6 +1032,28 @@ class UpstreamToolReproductionTests(unittest.TestCase):
         )
 
 
+    def test_negated_approval_cannot_override_upstream_reproduction(self) -> None:
+        item = issue(title="Symlinked module path fails")
+        diagnosis = comment(
+            body=(
+                "The behaviour comes from cmd/go rather than from golangci-lint. "
+                "The same command without golangci-lint fails identically: "
+                "go vet /realroot/try-go. There is nothing to fix on this side."
+            )
+        )
+        denial = comment(body="Not ready for implementation.", author_association="MEMBER")
+        approval = comment(body="Ready for implementation.", author_association="OWNER")
+        reason = "independent upstream Go tool reproduction indicates no project-side fix"
+        self.assertEqual(
+            readiness.upstream_tool_reproduction_reason(item, [diagnosis, denial]),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(
+                item, [diagnosis, denial, approval]
+            )
+        )
+
 class MaintainerCurrentBehaviorTests(unittest.TestCase):
     def test_moby_current_default_save_load_preserves_digest(self) -> None:
         moby = issue(
@@ -1324,6 +1421,27 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
                         [],
                     )
                 )
+
+    def test_negated_approval_does_not_clear_architecture_hold(self) -> None:
+        proposal = issue(
+            body="I do not suggest specific API for passing image pull credentials.",
+            comments=2,
+        )
+        refusal = comment(
+            body="Not ready for implementation. We need to agree on the design.",
+            author_association="MEMBER",
+        )
+        approval = comment(body="Now ready for implementation.", author_association="MEMBER")
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        self.assertEqual(
+            readiness.unapproved_architecture_proposal_reason(proposal, [refusal]),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unapproved_architecture_proposal_reason(
+                proposal, [refusal, approval]
+            )
+        )
 
     def test_ordinary_features_and_partial_proposals_remain_eligible(self) -> None:
         cases = (

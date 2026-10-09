@@ -111,6 +111,8 @@ For strategic readiness, a current `stale` or `lifecycle/stale` label holds an
 issue even if earlier maintainer comments indicated readiness. It becomes
 eligible for normal verification again when the stale label is removed.
 Only `OWNER`, `MEMBER`, and `COLLABORATOR` comments may approve implementation;
+negated readiness statements remain holds, not approvals, and later explicit
+maintainer decisions replace earlier stances.
 contributor project-action comments can still provide hold evidence. Explicit owning-team
 triage handoffs and unresolved safe-scope questions hold strategic opportunities
 until a later trusted maintainer approval; ordinary contributor opinions do not.
