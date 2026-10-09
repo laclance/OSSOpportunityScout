@@ -1025,7 +1025,13 @@ def _collect_direct_paid_candidates(
             if not selection.repository_excluded(
                 repo, scout_preferences
             ) and paid.is_clean_candidate(item):
-                pending.append(_PendingPaidCandidate(issue=item, platform_signal=None, is_platform=False))
+                pending.append(
+                    _PendingPaidCandidate(
+                        issue=item,
+                        platform_signal=None,
+                        is_platform=False,
+                    )
+                )
 
     return pending
 

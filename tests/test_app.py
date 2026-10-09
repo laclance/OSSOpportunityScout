@@ -2042,7 +2042,9 @@ class DiscoveryTests(unittest.TestCase):
         signal = "confirmed platform payment: $300"
         output = io.StringIO()
 
-        def reject_source(item: GitHubIssue, *_args: Any, **_kwargs: Any) -> tuple[None, str]:
+        def reject_source(
+            item: GitHubIssue, *_args: Any, **_kwargs: Any
+        ) -> tuple[None, str]:
             return None, f"rejected {item['html_url']}"
 
         with (
@@ -2081,7 +2083,9 @@ class DiscoveryTests(unittest.TestCase):
             },
             {first_url: None, second_url: None, platform_url: signal},
         )
-        self.assertTrue(all(call.kwargs["require_paid"] for call in verifier.call_args_list))
+        self.assertTrue(
+            all(call.kwargs["require_paid"] for call in verifier.call_args_list)
+        )
         self.assertEqual(
             rejected,
             {f"rejected {url}": 1 for url in (first_url, second_url, platform_url)},
