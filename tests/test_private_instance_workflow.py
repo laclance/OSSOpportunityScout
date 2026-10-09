@@ -551,8 +551,7 @@ class PinnedActionTests(unittest.TestCase):
                 self.assertEqual(capture["source"], str(source / "opportunity_scout.py"))
                 self.assertEqual(capture["tokens"], ["fake-discovery", "fake-report"])
                 outputs = (caller / "action-output").read_text(encoding="utf-8")
-                self.assertIn("recovery-required=false", outputs)
-                self.assertIn("recovery-mode=none", outputs)
+                self.assertEqual(outputs, "recovery-required=false\nrecovery-mode=none\n")
 
     def test_post_delivery_save_failure_emits_reconstruction_signal(self) -> None:
         step = document(ACTION)["runs"]["steps"][1]
@@ -610,8 +609,7 @@ class PinnedActionTests(unittest.TestCase):
             self.assertIn("RuntimeError: root save cause", result.stderr)
             self.assertIn("PostDeliveryStateSaveError: save failed after delivery", result.stderr)
             outputs = output.read_text(encoding="utf-8")
-            self.assertIn("recovery-required=true", outputs)
-            self.assertIn("recovery-mode=reconstruct", outputs)
+            self.assertEqual(outputs, "recovery-required=true\nrecovery-mode=reconstruct\n")
 
     def test_real_action_invalid_config_fails_before_state_or_network(self) -> None:
         step = document(ACTION)["runs"]["steps"][1]

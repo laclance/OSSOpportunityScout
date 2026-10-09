@@ -111,9 +111,21 @@ For strategic readiness, a current `stale` or `lifecycle/stale` label holds an
 issue even if earlier maintainer comments indicated readiness. It becomes
 eligible for normal verification again when the stale label is removed.
 Only `OWNER`, `MEMBER`, and `COLLABORATOR` comments may approve implementation;
+negated readiness statements remain holds, not approvals, and later explicit
+maintainer decisions replace earlier stances.
 contributor project-action comments can still provide hold evidence. Explicit owning-team
 triage handoffs and unresolved safe-scope questions hold strategic opportunities
 until a later trusted maintainer approval; ordinary contributor opinions do not.
+A narrowly corroborated upstream-Go-tool diagnosis (standalone `go vet` reproduction,
+matching failure without the project CLI, explicit upstream attribution and no
+project-local fix) also holds strategic work, unless a trusted maintainer approves it.
+Explicitly undecided public APIs, proposals contingent on agreement about interfaces,
+and proposed proxy-controlled trusted log labels are not implementation-ready without
+project acceptance. The proxy-label hold requires feature-request evidence and
+does not treat existing-header regressions as unapproved proposals. This narrow gate
+recognizes source-only cases with no discussion,
+defers when comments are still unfetched, and honors trusted maintainer approval or
+project-ready labels; normal feature requests are not categorically excluded.
 Cloud-managed metric discrepancies with unknown backend version and step-sensitive
 samples, and untriaged failing-test image-artifact incidents, also need diagnostic
 ownership and an implementation scope before being recommended. A later trusted

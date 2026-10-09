@@ -434,6 +434,77 @@ class MaintainerReadinessTests(unittest.TestCase):
             (None, None),
         )
 
+    def test_negated_readiness_is_a_hold_and_later_approval_wins(self) -> None:
+        report = issue(labels=["needs/design"])
+        wait = "maintainer asked contributors to wait before implementation"
+        denials = (
+            "Not ready for implementation.",
+            "This is not yet ready for implementation.",
+            "We are not ready to implement.",
+            "It isn't ready for implementation.",
+            "Never ready to implement.",
+            "This is not contributions welcome; approval is still pending.",
+            "Ready for implementation? No: not ready for implementation.",
+        )
+        approved = comment(
+            body="Design approved; ready for implementation.",
+            author_association="OWNER",
+        )
+        for statement in denials:
+            with self.subTest(statement=statement):
+                negative = comment(body=statement, author_association="MEMBER")
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(report, [negative]),
+                    (False, wait),
+                )
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(report, [negative, approved]),
+                    (True, None),
+                )
+                self.assertEqual(
+                    readiness.maintainer_readiness_comment_state(report, [approved, negative]),
+                    (False, wait),
+                )
+
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    comment(
+                        body="Not blocking this change; ready for implementation.",
+                        author_association="MEMBER",
+                    )
+                ],
+            ),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    comment(
+                        body="Not ready for implementation.",
+                        author_association="NONE",
+                    )
+                ],
+            ),
+            (None, None),
+        )
+
+    def test_maintainer_issue_body_negation_is_not_approval(self) -> None:
+        pending = issue(
+            author_association="MEMBER",
+            body="Not ready for implementation: we still need to decide API semantics.",
+        )
+        self.assertEqual(
+            readiness.maintainer_issue_decision_reason(pending),
+            "maintainer-authored issue is still deciding implementation semantics",
+        )
+        approved = issue(
+            **{**pending, "body": "API semantics are decided. Ready for implementation."}
+        )
+        self.assertIsNone(readiness.maintainer_issue_decision_reason(approved))
+
     def test_latest_explicit_stance_wins(self) -> None:
         hold = comment(
             body="Please wait before implementing; this needs clarification.",
@@ -902,6 +973,81 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
                 )
 
 
+class UpstreamToolReproductionTests(unittest.TestCase):
+    def test_golangci_lint_symlink_report_is_upstream_behavior(self) -> None:
+        report = issue(
+            title="Symbolic links for parent directories of module broken",
+            body="golangci-lint run /private/var/tmp/try-go fails outside main module.",
+            comments=2,
+        )
+        diagnosis: GitHubComment = {
+            "author_association": "NONE",
+            "body": (
+                "The behaviour comes from cmd/go rather than from golangci-lint.\n"
+                "And the same command without golangci-lint fails identically:\n"
+                "console: $ cd /linkroot/try-go && go vet /realroot/try-go\n"
+                "directory outside main module or its selected dependencies\n"
+                "There is nothing to fix on this side."
+            ),
+        }
+        reason = "independent upstream Go tool reproduction indicates no project-side fix"
+        self.assertEqual(readiness.upstream_tool_reproduction_reason(report, [diagnosis]), reason)
+        self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, []))
+        self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, None))
+
+        for missing in (
+            "comes from cmd/go rather than",
+            "same command without golangci-lint fails identically",
+            "go vet",
+            "nothing to fix on this side",
+        ):
+            with self.subTest(missing=missing):
+                partial: GitHubComment = {
+                    **diagnosis,
+                    "body": str(diagnosis["body"]).replace(missing, ""),
+                }
+                self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, [partial]))
+
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(
+                report,
+                [{"body": "This is an upstream issue, do not fix.", "author_association": "NONE"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(
+                report,
+                [
+                    diagnosis,
+                    {
+                        "body": "Ready for implementation; go ahead and implement",
+                        "author_association": "MEMBER",
+                    },
+                ],
+            )
+        )
+
+    def test_negated_approval_cannot_override_upstream_reproduction(self) -> None:
+        item = issue(title="Symlinked module path fails")
+        diagnosis = comment(
+            body=(
+                "The behaviour comes from cmd/go rather than from golangci-lint. "
+                "The same command without golangci-lint fails identically: "
+                "go vet /realroot/try-go. There is nothing to fix on this side."
+            )
+        )
+        denial = comment(body="Not ready for implementation.", author_association="MEMBER")
+        approval = comment(body="Ready for implementation.", author_association="OWNER")
+        reason = "independent upstream Go tool reproduction indicates no project-side fix"
+        self.assertEqual(
+            readiness.upstream_tool_reproduction_reason(item, [diagnosis, denial]),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(item, [diagnosis, denial, approval])
+        )
+
+
 class MaintainerCurrentBehaviorTests(unittest.TestCase):
     def test_moby_current_default_save_load_preserves_digest(self) -> None:
         moby = issue(
@@ -1194,6 +1340,192 @@ class RewardHistoryTests(unittest.TestCase):
                 )
             )
         )
+
+
+class UnapprovedArchitectureProposalTests(unittest.TestCase):
+    def test_unsettled_api_interface_and_proxy_trust_proposals_need_approval(self) -> None:
+        cases = (
+            issue(
+                title="Image snapshotter needs image pull credentials",
+                labels=["kind/feature"],
+                comments=0,
+                body=(
+                    "I do not suggest specific API due to comments in the original issue. "
+                    "I think the proper solution is to pass credentials to the snapshotter. "
+                    'This API may need to support a "refresh" flow.'
+                ),
+            ),
+            issue(
+                title="CRI: add a shared-netns handler",
+                comments=0,
+                body=(
+                    "This proposal introduces a built-in handler and admission-provided group labels. "
+                    "I can contribute the implementation after agreement on the interface, "
+                    "status representation, and ownership contract."
+                ),
+            ),
+            issue(
+                title="Force label through HTTP Header",
+                labels=["type/feature"],
+                comments=0,
+                body=(
+                    "An optional HTTP header lets the reverse proxy doing authentication "
+                    "force a label on every log entry."
+                ),
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        for candidate in cases:
+            with self.subTest(title=candidate["title"]):
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(candidate, []),
+                    reason,
+                )
+                with_discussion = issue(**{**candidate, "comments": 1})
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, [])
+                )
+                contributor: list[GitHubComment] = [
+                    {"body": "PRs welcome", "author_association": "NONE"}
+                ]
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, contributor),
+                    reason,
+                )
+                approved: list[GitHubComment] = [
+                    {"body": "Ready for implementation", "author_association": "MEMBER"}
+                ]
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(with_discussion, approved)
+                )
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(
+                        issue(**{**candidate, "labels": ["help wanted"]}), []
+                    )
+                )
+                self.assertIsNone(
+                    readiness.unapproved_architecture_proposal_reason(
+                        issue(
+                            **{
+                                **candidate,
+                                "author_association": "OWNER",
+                                "body": str(candidate["body"]) + " Ready for implementation.",
+                            }
+                        ),
+                        [],
+                    )
+                )
+
+    def test_negated_approval_does_not_clear_architecture_hold(self) -> None:
+        proposal = issue(
+            body="I do not suggest specific API for passing image pull credentials.",
+            comments=2,
+        )
+        refusal = comment(
+            body="Not ready for implementation. We need to agree on the design.",
+            author_association="MEMBER",
+        )
+        approval = comment(body="Now ready for implementation.", author_association="MEMBER")
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        self.assertEqual(
+            readiness.unapproved_architecture_proposal_reason(proposal, [refusal]),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unapproved_architecture_proposal_reason(proposal, [refusal, approval])
+        )
+
+    def test_proxy_header_hold_requires_feature_intent_not_existing_regression(self) -> None:
+        feature = issue(
+            title="Force label through HTTP Header",
+            labels=["type/feature"],
+            comments=0,
+            body=(
+                "Is your feature request related to a problem? Please describe. "
+                "Describe the solution you'd like: An optional HTTP header that allows "
+                "the reverse proxy doing authentication to force a label on every log entry."
+            ),
+        )
+        proposed = issue(
+            title="Add optional HTTP header",
+            comments=0,
+            body=(
+                "Please add an optional HTTP header so the reverse proxy doing "
+                "authentication can force a label on every log entry."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        for candidate in (feature, proposed):
+            with self.subTest(title=candidate["title"]):
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(candidate, []),
+                    reason,
+                )
+
+        existing_regressions = (
+            issue(
+                title="Regression: trusted log labels dropped after upgrade",
+                labels=["type/feature"],
+                comments=0,
+                body=(
+                    "The existing optional HTTP header from the reverse proxy doing "
+                    "authentication must force a label on every log entry, but it no "
+                    "longer works since the upgrade."
+                ),
+            ),
+            issue(
+                title="Proxy authentication header stopped working",
+                labels=["bug"],
+                comments=0,
+                body=(
+                    "The optional HTTP header from the reverse proxy doing "
+                    "authentication used to force a label, but fails after upgrading."
+                ),
+            ),
+            issue(
+                title="Existing header parsing bug",
+                comments=0,
+                body=(
+                    "The existing optional HTTP header passed by our reverse proxy "
+                    "doing authentication should force a label, but does not."
+                ),
+            ),
+            issue(
+                title="Header parsing bug",
+                comments=0,
+                body=(
+                    "The optional HTTP header from the reverse proxy doing "
+                    "authentication should force a label, but it does not."
+                ),
+            ),
+        )
+        for candidate in existing_regressions:
+            with self.subTest(title=candidate["title"]):
+                self.assertIsNone(readiness.unapproved_architecture_proposal_reason(candidate, []))
+
+    def test_ordinary_features_and_partial_proposals_remain_eligible(self) -> None:
+        cases = (
+            issue(title="Add per-request metrics", labels=["enhancement"], comments=0),
+            issue(title="Improve a documented retry flag", labels=["kind/feature"], comments=0),
+            issue(
+                title="Header parsing regression",
+                body="The reverse proxy uses an optional HTTP header for authentication.",
+                comments=0,
+            ),
+            issue(
+                title="Label merging improvement",
+                body="We should force a label in response to a config file, not a proxy header.",
+                comments=0,
+            ),
+            issue(
+                title="Public API cleanup",
+                body="Review the API and fix the known parser bug.",
+                comments=0,
+            ),
+        )
+        for candidate in cases:
+            with self.subTest(title=candidate["title"]):
+                self.assertIsNone(readiness.unapproved_architecture_proposal_reason(candidate, []))
 
 
 class ReporterDesignDiscussionTests(unittest.TestCase):

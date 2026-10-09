@@ -768,6 +768,106 @@ class VerificationTests(unittest.TestCase):
                 "maintainer confirms reported behavior is outside project code",
             )
 
+    def test_unapproved_architecture_proposal_preflight_and_final_verification(self) -> None:
+        proposal = issue(
+            title="Image snapshotter needs image pull credentials",
+            labels=["kind/feature"],
+            comments=0,
+            body=(
+                "I do not suggest specific API for the snapshotter. "
+                "We should pass image pull credentials to it."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        self.assertEqual(scout.strategic_preflight_rejection(proposal), reason)
+        self.assertEqual(scout.strategic_rejection(proposal, "t", []), reason)
+
+        discussed = issue(**{**proposal, "comments": 1})
+        self.assertIsNone(scout.strategic_preflight_rejection(discussed))
+        self.assertEqual(
+            scout.strategic_rejection(
+                discussed, "t", [{"body": "I like the idea", "author_association": "NONE"}]
+            ),
+            reason,
+        )
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    discussed,
+                    "t",
+                    [{"body": "Ready for implementation", "author_association": "MEMBER"}],
+                )
+            )
+
+    def test_existing_proxy_header_bug_is_not_an_unapproved_feature(self) -> None:
+        regression = issue(
+            title="Regression: proxy labels dropped after update",
+            labels=["bug"],
+            comments=0,
+            body=(
+                "Our existing optional HTTP header from the reverse proxy doing "
+                "authentication should force a label on each log entry, but it no "
+                "longer works."
+            ),
+        )
+        feature = issue(
+            title="Force label through HTTP Header",
+            labels=["type/feature"],
+            comments=0,
+            body=(
+                "Feature request: introduce an optional HTTP header that lets the "
+                "reverse proxy doing authentication force a label on every log entry."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(scout.strategic_preflight_rejection(regression))
+            self.assertIsNone(scout.strategic_rejection(regression, "t", []))
+            self.assertEqual(scout.strategic_preflight_rejection(feature), reason)
+            self.assertEqual(scout.strategic_rejection(feature, "t", []), reason)
+
+    def test_negated_maintainer_readiness_cannot_release_strategic_hold(self) -> None:
+        proposal = issue(
+            title="Snapshotter interface design",
+            body="I do not suggest specific API until the design is agreed.",
+            comments=2,
+        )
+        refusal: GitHubComment = {
+            "body": "Not ready for implementation. Design approval is pending.",
+            "author_association": "MEMBER",
+        }
+        approved: GitHubComment = {
+            "body": "Design agreed; ready for implementation.",
+            "author_association": "OWNER",
+        }
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertEqual(scout.strategic_rejection(proposal, "t", [refusal]), reason)
+            self.assertIsNone(scout.strategic_rejection(proposal, "t", [refusal, approved]))
+
+    def test_upstream_go_tool_reproduction_is_not_an_actionable_issue(self) -> None:
+        report = issue(
+            html_url="https://github.com/golangci/golangci-lint/issues/4099",
+            title="Symbolic links for parent directories of module broken",
+            body="golangci-lint run /private/var/tmp/try-go fails typechecking.",
+            comments=1,
+        )
+        diagnosis: list[GitHubComment] = [
+            {
+                "author_association": "NONE",
+                "body": (
+                    "The behaviour comes from cmd/go rather than from golangci-lint. "
+                    "The same command without golangci-lint fails identically: "
+                    "$ go vet /realroot/try-go. There is nothing to fix on this side."
+                ),
+            }
+        ]
+        self.assertIsNone(scout.strategic_preflight_rejection(report))
+        self.assertEqual(
+            scout.strategic_rejection(report, "t", diagnosis),
+            "independent upstream Go tool reproduction indicates no project-side fix",
+        )
+
     def test_maintainer_scope_and_owner_triage_regressions(self) -> None:
         aws = issue(
             html_url=(

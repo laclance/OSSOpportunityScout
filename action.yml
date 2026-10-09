@@ -88,10 +88,10 @@ runs:
           --config "$SCOUT_CONFIG" --state "$SCOUT_STATE" || status=$?
         set -e
         if test "$status" -eq "$post_delivery_save_status"; then
-          printf 'recovery-required=true\\n' >> "$GITHUB_OUTPUT"
-          printf 'recovery-mode=reconstruct\\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-required=true\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-mode=reconstruct\n' >> "$GITHUB_OUTPUT"
         else
-          printf 'recovery-required=false\\n' >> "$GITHUB_OUTPUT"
-          printf 'recovery-mode=none\\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-required=false\n' >> "$GITHUB_OUTPUT"
+          printf 'recovery-mode=none\n' >> "$GITHUB_OUTPUT"
         fi
         exit "$status"

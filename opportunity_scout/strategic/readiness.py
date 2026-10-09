@@ -65,11 +65,31 @@ _READY_MARKERS: Final = (
     "this issue is active again",
     "reopening this for implementation",
 )
+_NEGATED_READY_RE: Final = re.compile(
+    r"\b(?:not|never|no\s+longer|isn['’]t|aren['’]t|wasn['’]t)"
+    r"\s+(?:(?:yet|currently|necessarily|fully)\s+)?"
+    r"(?:ready\s+(?:for\s+implementation|to\s+implement)|"
+    r"contributions?\s+welcome|prs?\s+welcome|pull\s+requests?\s+welcome|"
+    r"feel\s+free\s+to\s+work\s+on\s+this|go\s+ahead\s+and\s+implement)\b",
+    re.IGNORECASE,
+)
+
 _NON_PROJECT_CAUSE_RE: Final = re.compile(
     r"\bnot\s+an?\s+(?:[a-z0-9_-]+\s+)?bug\b.{0,240}"
     r"\b(?:net/http|standard library|upstream|third[- ]party)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_UPSTREAM_COMMAND_REPRO_RE: Final = re.compile(
+    r"\bsame command without [\w.-]+ fails identically\b", re.IGNORECASE
+)
+_UPSTREAM_GO_CAUSE_RE: Final = re.compile(
+    r"\bcomes from\s+[\x60]?cmd/go[\x60]?\s+rather than\b", re.IGNORECASE
+)
+_UPSTREAM_NO_LOCAL_FIX_RE: Final = re.compile(
+    r"\b(?:nothing to fix on this side|no (?:project[- ]side|repository[- ]side) fix)\b",
+    re.IGNORECASE,
+)
+
 _WRONG_APPROACH_MARKERS: Final = (
     "would be the wrong solution",
     "is the wrong solution",
@@ -302,6 +322,28 @@ _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
     r"(?:preferred|right)\s+(?:design|approach|direction))\b",
     re.IGNORECASE | re.DOTALL,
 )
+_PROPOSED_PROXY_HEADER_RE: Final = re.compile(
+    r"\b(?:add|introduce|propose|request)\s+(?:(?:a|an|the)\s+)?"
+    r"(?:new\s+)?optional\s+http\s+header\b",
+    re.IGNORECASE,
+)
+_EXISTING_PROXY_HEADER_FAILURE_RE: Final = re.compile(
+    r"\b(?:regression|no\s+longer|stopped\s+working|previously\s+supported|"
+    r"used\s+to\s+(?:work|set|force|apply)|existing\s+(?:(?:optional|http|auth|authentication|proxy)\s+)*header)\b",
+    re.IGNORECASE,
+)
+_PROXY_FEATURE_LABELS: Final = frozenset(
+    {
+        "feature",
+        "feature-request",
+        "enhancement",
+        "type/feature",
+        "kind/feature",
+        "type/enhancement",
+        "kind/proposal",
+    }
+)
+
 _REPORTER_UNAPPROVED_PROPOSAL_RE: Final = re.compile(
     r"\b(?:feel free to|it(?:'s| is) (?:fine|okay|ok) to)\s+"
     r"(?:wontfix|close|reject)\b",
@@ -570,7 +612,8 @@ def _canonical_duplicate(body: str) -> bool:
 
 
 def _explicit_ready_signal(body: str) -> bool:
-    return _contains_any(body, _READY_MARKERS)
+    """A negated readiness statement cannot grant implementation approval."""
+    return _NEGATED_READY_RE.search(body) is None and _contains_any(body, _READY_MARKERS)
 
 
 def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None, bool]:
@@ -597,7 +640,7 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
         "are you sure" in body and "reproduc" in body
     ):
         return _REASON_REPRODUCTION, False
-    if _contains_any(body, _IMPLEMENTATION_WAIT_MARKERS):
+    if _NEGATED_READY_RE.search(body) or _contains_any(body, _IMPLEMENTATION_WAIT_MARKERS):
         return _REASON_WAIT, False
     if _contains_any(body, _CLARIFICATION_MARKERS):
         return _REASON_CLARIFICATION, False
@@ -712,6 +755,26 @@ def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
     return None
 
 
+def upstream_tool_reproduction_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Hold upstream Go-tool behavior demonstrated without a project-local fix."""
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    for comment in comments or []:
+        body = str(comment.get("body") or "")
+        if (
+            _UPSTREAM_GO_CAUSE_RE.search(body)
+            and _UPSTREAM_COMMAND_REPRO_RE.search(body)
+            and re.search(r"\bgo vet\b", body, re.IGNORECASE)
+            and _UPSTREAM_NO_LOCAL_FIX_RE.search(body)
+        ):
+            return "independent upstream Go tool reproduction indicates no project-side fix"
+    return None
+
+
 def maintainer_current_behavior_reason(
     item: GitHubIssue,
     comments: list[GitHubComment] | None,
@@ -786,6 +849,54 @@ def maintainer_submission_hold_reason(item: GitHubIssue) -> str | None:
         ),
     ) or _SUBMISSION_CLOSED_RE.search(body):
         return "maintainer explicitly says not to open a PR for this issue"
+    return None
+
+
+def unapproved_architecture_proposal_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Hold proposals with explicit unresolved interface or trust-boundary scope."""
+    # Preflight cannot assume an unfetched discussion has no maintainer approval.
+    if int(item.get("comments") or 0) and not comments:
+        return None
+
+    evidence = _issue_evidence(item)
+    if evidence.label_set & {"help wanted", "good first issue", "triage/accepted"}:
+        return None
+    if evidence.author_association in TRUSTED_ASSOCIATIONS and _explicit_ready_signal(
+        evidence.normalized_body_lower
+    ):
+        return None
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    body = evidence.normalized_body_lower
+    undecided_api = "do not suggest specific api" in body
+    pending_interface = "after agreement on the interface" in body
+    proxy_feature_request = (
+        "feature request" in body
+        or "describe the solution you'd like" in body
+        or _PROPOSED_PROXY_HEADER_RE.search(f"{evidence.title}\n{body}") is not None
+        or bool(evidence.label_set & _PROXY_FEATURE_LABELS)
+    )
+    # The same technical phrases can describe a broken, already-supported header.
+    existing_header_failure = _EXISTING_PROXY_HEADER_FAILURE_RE.search(f"{evidence.title}\n{body}")
+    proxy_label_trust = (
+        proxy_feature_request
+        and existing_header_failure is None
+        and all(
+            marker in body
+            for marker in (
+                "optional http header",
+                "reverse proxy",
+                "force a label",
+                "authentication",
+            )
+        )
+    )
+    if undecided_api or pending_interface or proxy_label_trust:
+        return "feature proposal needs maintainer agreement on design or trust boundary"
     return None
 
 
