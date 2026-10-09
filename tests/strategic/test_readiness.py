@@ -1027,7 +1027,6 @@ class UpstreamToolReproductionTests(unittest.TestCase):
             )
         )
 
-
     def test_negated_approval_cannot_override_upstream_reproduction(self) -> None:
         item = issue(title="Symlinked module path fails")
         diagnosis = comment(
