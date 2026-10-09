@@ -47,6 +47,7 @@ from opportunity_scout.strategic.readiness import (
     reporter_external_infrastructure_reason as reporter_external_infrastructure_reason,
     reporter_resolution_reason as reporter_resolution_reason,
     reporter_support_triage_reason as reporter_support_triage_reason,
+    unscoped_diagnostic_reason as unscoped_diagnostic_reason,
     reward_history_reason as reward_history_reason,
     security_disclosure_reason as security_disclosure_reason,
     stale_lifecycle_reason as stale_lifecycle_reason,
@@ -577,7 +578,8 @@ def _strategic_classification_rejection(
     """Return ordered policy rejections that are pure over supplied issue evidence."""
     for reason in (
         security_disclosure_reason(item),
-        reporter_support_triage_reason(item),
+        reporter_support_triage_reason(item, comments),
+        unscoped_diagnostic_reason(item, comments),
         reporter_design_discussion_reason(item, comments),
         reporter_external_infrastructure_reason(item, comments),
         manual_tracking_issue_reason(item, comments),

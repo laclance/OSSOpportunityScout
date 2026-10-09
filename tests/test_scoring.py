@@ -147,6 +147,48 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(estimate.bucket, "1d+")
         self.assertIn("backward-compatibility", estimate.reasons[0])
 
+    def test_report_19_explicit_api_break_raises_architectural_effort(self) -> None:
+        grpc = issue(
+            title="refactor into separate client and server modules to reduce CVE fire drills?",
+            body=(
+                "Refactor google.golang.org/grpc into separate grpc/client and "
+                "grpc/server modules, with a third shared module. "
+                "I recognize that this would be an API break and probably annoying "
+                "in other ways, so feel free to WONTFIX if it doesn't make sense."
+            ),
+            labels=[{"name": "Type: Feature"}],
+        )
+        estimate = scoring.estimate_effort_details(grpc)
+        self.assertEqual(
+            estimate,
+            scoring.EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",)),
+        )
+        self.assertEqual(scoring.strategic_priority_score(75, estimate.bucket, "none")[0], 72)
+
+    def test_api_break_scope_signal_requires_explicit_positive_statement(self) -> None:
+        for statement in (
+            "This might be an API break.",
+            "This will be an API break.",
+            "The refactor could be an API break.",
+        ):
+            with self.subTest(statement=statement):
+                self.assertEqual(
+                    scoring.estimate_effort(issue(title="Split client modules", body=statement)),
+                    "1d+",
+                )
+
+        for statement in (
+            "This would not be an API break.",
+            "No API break is expected.",
+            "An earlier API break is unrelated to this metadata change.",
+        ):
+            with self.subTest(statement=statement):
+                estimate = scoring.estimate_effort_details(
+                    issue(title="Update client metadata type", body=statement)
+                )
+                self.assertEqual(estimate.bucket, "3–6h")
+                self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
     def test_fenced_diagnostics_do_not_inflate_effort(self) -> None:
         fence = chr(96) * 3
         huge_dump = "x" * 18000
@@ -221,6 +263,156 @@ class EffortCalibrationTests(unittest.TestCase):
                 estimate = scoring.estimate_effort_details(item)
                 self.assertEqual(estimate.bucket, "3–6h")
                 self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
+    def test_report_20_moby_cross_version_reboot_network_regression(self) -> None:
+        moby = issue(
+            html_url="https://github.com/moby/moby/issues/53901",
+            title="Container: network does not exist",
+            body=(
+                "After upgrading to 29.7.0, Docker cannot find a custom bridge network. "
+                "The setup uses Debian Trixie with iptables disabled and firewalld. "
+                "Upgrading from 29.6.x to 29.8.x requires recreating the bridge; "
+                "reboot host, and the failure comes back."
+            ),
+            labels=[{"name": "area/networking/d/bridge"}],
+        )
+        expected = scoring.EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
+        self.assertEqual(scoring.estimate_effort_details(moby), expected)
+        self.assertEqual(scoring.estimate_effort(moby), "1d+")
+        negatives = (
+            issue(
+                title="Bridge network fails on upgrade",
+                body="Upgraded to 29.8 with iptables and a custom bridge; no host restart.",
+            ),
+            issue(
+                title="Bridge network lost on restart",
+                body="Reboot host with firewalld and a custom bridge; no upgrade involved.",
+            ),
+            issue(
+                title="Bridge network lost after upgrade and reboot",
+                body="Upgraded Docker to 29.8, reboot host, custom bridge disappears.",
+            ),
+            issue(
+                title="Host reboot regression after upgrading",
+                body="After upgrading, reboot host with firewalld; local parser fails.",
+            ),
+        )
+        for item in negatives:
+            with self.subTest(title=item["title"]):
+                self.assertEqual(scoring.estimate_effort_details(item).bucket, "3–6h")
+
+    def test_report_20_tailscale_ssh_macos_keychain_requires_specialized_setup(self) -> None:
+        tailscale = issue(
+            html_url="https://github.com/tailscale/tailscale/issues/21704",
+            title="Unable to unlock MacOS keychain when connected via Tailscale SSH",
+            body=(
+                "Over regular ssh, security unlock-keychain works. Over Tailscale SSH "
+                "the same command fails with an invalid passphrase. OS: macOS 27; "
+                "Tailscale 1.102.5. Steps: connect to the macOS host and unlock keychain."
+            ),
+            labels=[{"name": "OS-macos"}, {"name": "bug"}],
+        )
+        self.assertEqual(
+            scoring.estimate_effort_details(tailscale),
+            scoring.EffortEstimate("6–12h", ("macOS Tailscale SSH keychain reproduction/setup",)),
+        )
+        for item in (
+            issue(title="Tailscale SSH login fails on macOS", body="SSH login is denied."),
+            issue(title="macOS keychain unlock issue", body="Unlock the keychain locally."),
+            issue(title="SSH keychain unlock bug", body="Tailscale SSH keychain unlock fails."),
+            issue(
+                title="Document Tailscale SSH on macOS",
+                body="Add keychain documentation without altering unlock behavior.",
+                labels=[{"name": "docs"}],
+            ),
+        ):
+            with self.subTest(title=item["title"]):
+                self.assertNotEqual(scoring.estimate_effort_details(item).bucket, "6–12h")
+
+    def test_report_20_argo_controller_default_normalization_compatibility(self) -> None:
+        argo = issue(
+            html_url="https://github.com/argoproj/argo-cd/issues/21002",
+            title="Application objects are unsetting values when they match default values",
+            body=(
+                "Argo CD strips explicitly set false values after an Application sync. "
+                "This causes a perpetual Terraform diff. The values disappear from "
+                "the live application definition even though they were specified."
+            ),
+        )
+        caution: GitHubComment = {
+            "author_association": "MEMBER",
+            "body": (
+                "My guess is that this is done as part of the controllers "
+                "normalization logic. I'm not sure why that logic was added in "
+                "the first place, but we'll want to be careful that we're not "
+                "removing something important."
+            ),
+        }
+        expected = scoring.EffortEstimate(
+            "1d+", ("maintainer-identified normalization compatibility risk",)
+        )
+        self.assertEqual(scoring.estimate_effort_details(argo, [caution]), expected)
+        self.assertEqual(scoring.estimate_effort_details(argo).bucket, "3–6h")
+        self.assertEqual(
+            scoring.estimate_effort_details(
+                argo, [{**caution, "author_association": "NONE"}]
+            ).bucket,
+            "3–6h",
+        )
+        self.assertEqual(
+            scoring.estimate_effort_details(
+                argo,
+                [{"author_association": "MEMBER", "body": "Normalization has a focused fix."}],
+            ).bucket,
+            "3–6h",
+        )
+        self.assertEqual(
+            scoring.estimate_effort_details(
+                issue(title="Application sync issue", body="The controller has a parsing bug."),
+                [caution],
+            ).bucket,
+            "3–6h",
+        )
+
+    def test_report_20_effort_flows_to_verified_strategic_queue(self) -> None:
+        argo = issue(
+            title="Application objects are unsetting default values",
+            body="Application fields disappear when they match default values.",
+        )
+        caution: GitHubComment = {
+            "author_association": "COLLABORATOR",
+            "body": (
+                "The controller normalization logic may have an important purpose. "
+                "Be careful before removing something important."
+            ),
+        }
+        base = scoring.build_candidate(
+            argo,
+            "strategic",
+            None,
+            repo_meta(),
+            "guide",
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        verified = scoring.build_candidate(
+            argo,
+            "strategic",
+            None,
+            repo_meta(),
+            "guide",
+            [caution],
+            target_repos={"example/project"},
+            amount_pattern=AMOUNT_RE,
+        )
+        self.assertEqual(base["effort"], "3–6h")
+        self.assertEqual(verified["effort"], "1d+")
+        self.assertEqual(
+            verified["effort_reasons"],
+            ["maintainer-identified normalization compatibility risk"],
+        )
+        self.assertIn("1d+ execution penalty", verified["priority_reasons"])
+        self.assertLess(verified["priority_score"], base["priority_score"])
 
     def test_report_13_nondeterministic_reproduction_raises_effort(self) -> None:
         estimate = scoring.estimate_effort_details(

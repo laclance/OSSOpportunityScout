@@ -44,6 +44,7 @@ _CONTRIBUTOR_AUTHORITY_MARKERS: Final = (
     "we're closing this",
     "we are closing this",
     "prevailing wisdom on the maintainer team",
+    "codeowner for this functionality, has been notified and will triage",
 )
 _READY_MARKERS: Final = (
     "ready for implementation",
@@ -64,6 +65,11 @@ _READY_MARKERS: Final = (
     "this issue is active again",
     "reopening this for implementation",
 )
+_NON_PROJECT_CAUSE_RE: Final = re.compile(
+    r"\bnot\s+an?\s+(?:[a-z0-9_-]+\s+)?bug\b.{0,240}"
+    r"\b(?:net/http|standard library|upstream|third[- ]party)\b",
+    re.IGNORECASE | re.DOTALL,
+)
 _WRONG_APPROACH_MARKERS: Final = (
     "would be the wrong solution",
     "is the wrong solution",
@@ -78,6 +84,23 @@ _WRONG_APPROACH_MARKERS: Final = (
     "should be implemented as a provider function",
     "should live in a provider",
     "should be done in a provider",
+)
+_SAFE_SCOPE_CONSTRAINT_RE: Final = re.compile(
+    r"\b(?:don't|do not)\s+think\s+(?:it|this)\s+generalizes?\s+cleanly\b|"
+    r"\b(?:we\s+)?can\s+only\s+safely\s+merge\b|"
+    r"\b(?:safe|safest)\s+(?:is|would be)\s+a\s+narrow\b",
+    re.IGNORECASE,
+)
+_OPEN_SCOPE_QUESTION_RE: Final = re.compile(
+    r"\bquestions?\s+to\s+size\s+it\b|"
+    r"\bneed\s+to\s+(?:decide|agree|settle)\s+(?:on\s+)?"
+    r"(?:the\s+)?(?:scope|design|ownership)\b|"
+    r"\bhow\s+many\s+methods\b.{0,120}\b(?:path|route)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_OWNER_TRIAGE_RE: Final = re.compile(
+    r"\bcodeowners?\b.{0,120}\bhas\s+been\s+notified\s+and\s+will\s+triage\b",
+    re.IGNORECASE | re.DOTALL,
 )
 _DISCUSSION_MARKERS: Final = (
     "needs discussion",
@@ -258,11 +281,40 @@ _REPORTER_GUIDANCE_REQUEST_RE: Final = re.compile(
     r".{0,180}\b(?:how\s+to|configur(?:e|ation)|use|using|supply|provide|add|set\s*up)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_REMOVED_GODEBUG_FATAL_RE: Final = re.compile(
+    r"\bfatal error:\s*removed\s+godebug\b.{0,180}\bin environment\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_STARTUP_FAILURE_RE: Final = re.compile(
+    r"\b(?:cannot|can not|can't|fails? to|unable to|won't)\s+"
+    r"(?:be\s+)?start(?:ed)?\b",
+    re.IGNORECASE,
+)
+_PROPOSED_STARTUP_CODE_FIX_RE: Final = re.compile(
+    r"(?m)^\s*(?:#{1,6}\s*)?(?:proposed|suggested)\s+fix:\s*"
+    r"[^\n]{0,160}\b(?:cmd/|src/|[\w.-]+\.go)\b",
+    re.IGNORECASE,
+)
 _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
     r"\bbefore\s+(?:another\s+|an?\s+)?(?:implementation\s+)?(?:pr|pull request)\b"
     r".{0,260}\b(?:maintainers?\b.{0,100}\b(?:review|approve)|"
     r"guidance\b.{0,100}\b(?:design|scope|direction)|"
     r"(?:preferred|right)\s+(?:design|approach|direction))\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_REPORTER_UNAPPROVED_PROPOSAL_RE: Final = re.compile(
+    r"\b(?:feel free to|it(?:'s| is) (?:fine|okay|ok) to)\s+"
+    r"(?:wontfix|close|reject)\b",
+    re.IGNORECASE,
+)
+_REPORTER_CONFIG_SOURCE_RE: Final = re.compile(
+    r"\b(?:found|identified)\s+(?:the\s+)?(?:problem|root cause)\b"
+    r".{0,240}\b(?:configmap|configuration|config)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_REPORTER_CONFIG_HELP_RE: Final = re.compile(
+    r"\b(?:no clue|don't know|not sure)\b.{0,120}\bhow to\b"
+    r".{0,120}\b(?:specify|configure|set|provide|supply)\b",
     re.IGNORECASE | re.DOTALL,
 )
 _REPORTER_DESIGN_PLANNING_RE: Final = re.compile(
@@ -374,6 +426,8 @@ _REASON_INVESTIGATION = "maintainer says issue still needs investigation"
 _REASON_REPRODUCTION = "maintainer says reproduction is still required"
 _REASON_WAIT = "maintainer asked contributors to wait before implementation"
 _REASON_CLARIFICATION = "maintainer says issue still needs clarification"
+_REASON_SCOPE = "maintainer implementation scope remains unresolved under project constraints"
+_REASON_OWNER_TRIAGE = "implementation awaits owning team triage and scope decision"
 _REASON_PROPOSAL_FEEDBACK = "proposal is still gathering feedback"
 _REASON_UMBRELLA = "umbrella tracking issue, not a single implementation task"
 
@@ -527,8 +581,14 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
         return _REASON_REDIRECT, False
     if _canonical_duplicate(body):
         return _REASON_DUPLICATE, False
+    if _NON_PROJECT_CAUSE_RE.search(body):
+        return "maintainer confirms reported behavior is outside project code", False
     if _contains_any(body, _WRONG_APPROACH_MARKERS):
         return _REASON_WRONG_APPROACH, False
+    if _OWNER_TRIAGE_RE.search(body):
+        return _REASON_OWNER_TRIAGE, False
+    if _SAFE_SCOPE_CONSTRAINT_RE.search(body) and _OPEN_SCOPE_QUESTION_RE.search(body):
+        return _REASON_SCOPE, False
     if _contains_any(body, _DISCUSSION_MARKERS):
         return _REASON_DISCUSSION, False
     if _contains_any(body, _INVESTIGATION_MARKERS):
@@ -739,6 +799,13 @@ def reporter_design_discussion_reason(
     if not reporter:
         return None
 
+    # Defer source-only rejection when unfetched comments could contain maintainer approval.
+    if _REPORTER_UNAPPROVED_PROPOSAL_RE.search(evidence.normalized_body_lower) and (
+        comments or not int(item.get("comments") or 0)
+    ):
+        if maintainer_readiness_comment_state(item, comments)[0] is not True:
+            return "reporter proposal awaits maintainer acceptance"
+
     reporter_comments: list[_CommentEvidence] = []
     implementation_decision_pending = False
     for comment in comments or []:
@@ -851,7 +918,43 @@ def reward_history_reason(item: GitHubIssue) -> str | None:
     return None
 
 
-def reporter_support_triage_reason(item: GitHubIssue) -> str | None:
+def unscoped_diagnostic_reason(
+    item: GitHubIssue, comments: list[GitHubComment] | None = None
+) -> str | None:
+    """Hold narrowly evidenced diagnostics without an accepted implementation scope."""
+    evidence = _issue_evidence(item)
+    body = evidence.body_lower
+
+    # Source-only inspection must not bypass later maintainer approval in comments.
+    if int(item.get("comments") or 0) and not comments:
+        return None
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    if (
+        "grafana cloud" in body
+        and "loki version: unknown" in body
+        and "logs sample" in body
+        and ("count_over_time" in evidence.title_lower or "count_over_time" in body)
+        and re.search(r"\b30\s*s\b", body)
+        and re.search(r"\b1\s*m\b", body)
+    ):
+        return "cloud-managed metric discrepancy awaiting product-layer investigation"
+
+    if (
+        "kind/failing-test" in evidence.label_set
+        and "needs-triage" in evidence.label_set
+        and "testgrid.k8s.io" in body
+        and re.search(r"\bimage\b[^\n]{0,160}\bnot found\b", body)
+    ):
+        return "failing-test image artifact awaits triage and code-change scope"
+
+    return None
+
+
+def reporter_support_triage_reason(
+    item: GitHubIssue, comments: list[GitHubComment] | None = None
+) -> str | None:
     """Reject reporter-authored support or unresolved pre-implementation planning."""
     evidence = _issue_evidence(item)
     body = evidence.normalized_body_lower
@@ -877,6 +980,43 @@ def reporter_support_triage_reason(item: GitHubIssue) -> str | None:
         or _REPORTER_GUIDANCE_REQUEST_RE.search(body)
     ):
         return "support/triage issue rather than a contributor task"
+
+    if evidence.reporter_login:
+        reporter_comments = [
+            _comment_evidence(comment)
+            for comment in comments or []
+            if _comment_evidence(comment).login == evidence.reporter_login
+        ]
+        if reporter_comments:
+            latest = reporter_comments[-1].normalized_body_lower
+            if (
+                _REPORTER_CONFIG_SOURCE_RE.search(latest)
+                and _REPORTER_CONFIG_HELP_RE.search(latest)
+                and maintainer_readiness_comment_state(item, comments)[0] is not True
+            ):
+                return "reporter follow-up seeks configuration guidance before implementation"
+
+    # Treat a removed Go runtime flag as startup triage, not an inferred code task.
+    # Defer source-only preflight when comments may contain maintainer approval.
+    if (
+        _REMOVED_GODEBUG_FATAL_RE.search(evidence.body_lower)
+        and _STARTUP_FAILURE_RE.search(evidence.title_lower)
+        and not _PROPOSED_STARTUP_CODE_FIX_RE.search(evidence.body_lower)
+        and evidence.author_association not in TRUSTED_ASSOCIATIONS
+        and not (
+            evidence.label_set
+            & {
+                "help wanted",
+                "good first issue",
+                "contributor/wanted",
+                "triage/accepted",
+                "refined",
+            }
+        )
+        and (comments or not int(item.get("comments") or 0))
+        and maintainer_readiness_comment_state(item, comments)[0] is not True
+    ):
+        return "environment-specific startup diagnostic awaiting maintainer triage"
     return None
 
 

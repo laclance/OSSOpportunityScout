@@ -1,8 +1,7 @@
 # Private instance execution template
 
-The public [composite action](../action.yml), generic
-[private workflow template](../examples/private-instance/scout.yml), and optional
-[Dependabot example](../examples/private-instance/dependabot.yml) are distribution
+The public [composite action](../action.yml) and generic
+[private workflow template](../examples/private-instance/scout.yml) are distribution
 assets for independent private instances; they do not create an instance or migrate
 history. Local scans require `scout.toml` in the working directory or explicit
 `--config PATH`. See the
@@ -19,48 +18,40 @@ Forking is optional for scanner-code customization; use a deliberate full SHA fr
 upstream or a customized fork. Never run an upstream persistent workflow that reads
 private instance state remotely.
 
-The template pins checkout, Python setup, artifact upload, and scanner execution
-to full commit SHAs. The distributed template contains a deliberately reviewed full
-scanner SHA. Before adopting or upgrading it, review the selected upstream commit
-and its checks. Branches and moving tags must not silently upgrade the scanner.
-When scanner behavior is promoted to `main` and becomes the new reviewed deployment
-baseline, update the distributed template pin and its approval regression in the same
-maintenance cycle. Do not advance the scanner pin for documentation, CI, governance,
-or Marketplace-only `main` commits that leave scanner behavior unchanged.
-Changing the scanner pin is an instance-owned deployment change; the instance owner
-decides whether to adopt each reviewed baseline.
+The distributed workflow offers two scanner selection modes when manually
+dispatching it:
 
-There are two supported maintenance modes:
+1. **Latest main (default):** leave `scanner_ref` set to `main`. Each run checks
+   out the current public scanner `main`, including approved releases promoted
+   since the previous scan.
+2. **Reviewed full SHA:** replace `scanner_ref` with a reviewed, lowercase
+   40-character commit SHA to run precisely that source revision. This is an
+   explicit per-dispatch override; subsequent dispatches again default to `main`
+   unless the operator selects an SHA. To make the default persistently pinned,
+   edit the private workflow's `workflow_dispatch.inputs.scanner_ref.default`
+   to that reviewed SHA.
 
-1. **Manual (default):** keep only the workflow template and replace its scanner SHA
-   deliberately when the operator chooses to adopt a reviewed baseline. No Dependabot
-   configuration is required.
-2. **Optional Dependabot-managed PRs:** copy
-   `examples/private-instance/dependabot.yml` to `.github/dependabot.yml` in the
-   private instance. The example allows updates only for `laclance/OSSOpportunityScout`;
-   checkout, setup-python, upload-artifact, and other Actions remain outside this
-   Dependabot update rule. Dependabot opens an update PR; normal review, CI, and human
-   merge remain required. The resulting workflow still executes a full 40-character
-   SHA, never `@main` or another moving ref.
+The workflow validates the ref (`main` or exact full SHA) before checkout, uses
+a separately pinned `actions/checkout` step to fetch the public scanner into
+`.scout-scanner-source` with `persist-credentials: false`, and records the
+actual checkout commit in the run output and summary. The scanner runs as the
+checked-out local composite action (`uses: ./.scout-scanner-source`).
+Dynamic `uses: owner/repo@${{ ... }}` is not supported, and the workflow does not
+use an unpinned external action. Checkout, Python setup, and artifact-upload actions
+still use reviewed immutable full SHAs.
 
-Dependabot resolves GitHub Action versions from git tags. If an Action is pinned to
-an untagged commit, GitHub documents that Dependabot can advance it to the action
-repository's latest commit, which is broader than this project's reviewed-release
-policy. Therefore the optional mode uses reviewed SemVer project-release tags as
-**release signals**. Each tag points to the reviewed promoted release commit for that
-whole project release, normally the current `main` commit after a `dev → main`
-promotion. A release may include scanner and non-scanner changes; the tag does not
-claim that every included commit changed scanner behavior. The private workflow
-never executes the tag itself: Dependabot resolves the tagged release to a full
-immutable commit SHA in its PR, which still requires normal review and human merge.
+**Trust tradeoff:** `main` automatically follows future public merges. That code
+will run with the private instance's scanner discovery credential, while private
+report delivery uses its separate credential. Use the SHA override when a
+reproducible, reviewed deployment is more important than automatic upgrades.
+An earlier run's logged SHA is the authoritative source version for debugging.
 
-The manually distributed scanner baseline may therefore be older than the newest
-project release tag when intervening releases do not change scanner behavior. That is
-expected: the manual template pin advances only for reviewed scanner-behavior
-baseline changes, while the optional Dependabot mode tracks reviewed project
-releases. Creating or pushing future release tags is a separate
-maintainer-authorized release action, not something the runtime workflow performs
-automatically.
+A moving tag does not drive scanner selection, and scanner updates no longer
+depend on private Dependabot PRs. A legacy Dependabot configuration targeting
+`laclance/OSSOpportunityScout` as an external action is unnecessary with this
+local-checkout workflow; remove it from existing private instances after adopting
+the selector. Operator-selected source revisions are independent of the
+separately maintainer-authorized release tag creation process.
 
 The action executes `opportunity_scout.py` and its package from `github.action_path`,
 using isolated Python 3.12 with that source directory explicitly inserted into the
@@ -83,9 +74,12 @@ The distribution assets do not perform instance setup or state migration.
 
 ## Private instance acceptance checklist
 
-The original migrated instance completed these gates with operational evidence kept
-private. Every new independent instance should establish equivalent evidence for
-itself; recovery or offline checks alone do not complete operational acceptance.
+The original migrated instance completed Slice 6 operational acceptance before the
+durable recovery marker and queued-run cancellation were added to the public
+template. Those later safeguards need separate adoption and live validation in
+each deployed workflow; a successful scan does not prove they are installed.
+Every new independent instance must establish its own private evidence. Offline
+checks alone do not establish operational acceptance.
 Resolve the instance repository, personal preferences, delivery destinations, and
 secure provisioning of the separate report credential before dependent actions.
 Keep the following evidence in private storage or the confirmed private instance:
@@ -93,8 +87,8 @@ Keep the following evidence in private storage or the confirmed private instance
 | Gate | Private evidence required |
 | --- | --- |
 | State seed or recovery | New instance: deliberate empty seed verified. Existing/migrated instance: trustworthy recovered source/commit/path, snapshot bytes and checksum, canonical version-2 parser/scanner SHA, entry count, and provenance establishing trust. |
-| Instance ownership | GitHub metadata explicitly confirming repository privacy and independence; default branch owns personal config, seeded state, manual-only workflow, full scanner SHA, and persistence/history |
-| Configuration and pin | Personal config validated with the pinned parser; deliberate scanner SHA reviewed against source and passing checks; remote seed verified byte for byte against the intended initial snapshot |
+| Instance ownership | GitHub metadata explicitly confirming repository privacy and independence; default branch owns personal config, seeded state, manual-only workflow, scanner selector, and persistence/history |
+| Configuration and pin | Personal config validated with the selected scanner parser; scanner mode/ref and resolved SHA recorded, with full SHA reviewed when overridden; remote seed verified byte for byte against the intended initial snapshot |
 | Credentials and delivery | Explicit intended channels/destinations; scanner/persistence credential separate from report credential; report-repository metadata verified private with the report credential; host reporting disabled |
 | First manual scan | Run/attempt, scanner pin, transaction base, coverage result, intended delivery evidence, and resulting state; delivery and persistence outcomes recorded separately |
 | Remote persistence | Private remote state retrieved after the run, canonically parsed, and compared with the exact resulting snapshot and delivered entries; normal state-only commit or justified unchanged-state result |
@@ -130,9 +124,10 @@ claims.
 Public tracker/PR updates contain only non-sensitive status and public source/check
 identifiers. Keep personal repository identities, preferences, secrets, state
 contents/counts, opportunity URLs, run IDs, recovery hashes, and operational logs
-private. The original migrated instance completed these gates; operational evidence
-remains private. Every new independent instance must prove equivalent gates for
-itself.
+private. The historical Slice 6 acceptance record does not establish that
+the deployed instance adopted or validated the later recovery marker and
+cancellation safeguards. Verify the deployed workflow separately against the
+current template before relying on those protections.
 
 ## Action inputs and credentials
 

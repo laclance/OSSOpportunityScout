@@ -723,6 +723,208 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
+    def test_latest_report_readiness_regressions(self) -> None:
+        proposal = issue(
+            body="Split client and server modules. Feel free to WONTFIX if this makes no sense.",
+            comments=0,
+            user={"login": "author"},
+        )
+        support = issue(user={"login": "author"}, comments=1)
+        support_followup: list[GitHubComment] = [
+            {
+                "user": {"login": "author"},
+                "body": (
+                    "I found the problem source in the Vault configmap. "
+                    "I have no clue how to specify the role name."
+                ),
+            }
+        ]
+        possible_bug = issue(
+            labels=[{"name": "kind/bug/possible"}, {"name": "contributor/wanted"}],
+            comments=1,
+        )
+        outsider: list[GitHubComment] = [
+            {
+                "body": "Not a Traefik bug; Go's net/http server rejects malformed headers.",
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(proposal, "t", []),
+                "reporter proposal awaits maintainer acceptance",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(support, "t", support_followup),
+                "reporter follow-up seeks configuration guidance before implementation",
+            )
+            self.assertIsNone(scout.strategic_rejection(possible_bug, "t", outsider))
+            self.assertEqual(
+                scout.strategic_rejection(
+                    possible_bug,
+                    "t",
+                    [{**outsider[0], "author_association": "MEMBER"}],
+                ),
+                "maintainer confirms reported behavior is outside project code",
+            )
+
+    def test_maintainer_scope_and_owner_triage_regressions(self) -> None:
+        aws = issue(
+            html_url=(
+                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4884"
+            ),
+            title="Optimize HTTPRoute translation to combine multiple HTTP methods",
+            body="Group HTTP method matches into a single listener rule.",
+            labels=[{"name": "kind/feature"}, {"name": "gateway-api"}],
+            comments=1,
+        )
+        aws_comment: GitHubComment = {
+            "author_association": "COLLABORATOR",
+            "body": (
+                "Good idea for the simple case, but I don't think it generalizes "
+                "cleanly. We can only safely merge identical matches with the "
+                "same backend. The safe version is a narrow pass. Couple of "
+                "questions to size it: how many methods per path are you combining?"
+            ),
+        }
+        terraform = issue(
+            html_url="https://github.com/hashicorp/terraform/issues/37130",
+            title="Regression for certain third-party S3 backends",
+            body="There has to be a decision whether S3 v2 compatibility is supported.",
+            labels=[{"name": "bug"}, {"name": "backend/s3"}, {"name": "new"}],
+            comments=2,
+        )
+        owner_triage: GitHubComment = {
+            "author_association": "CONTRIBUTOR",
+            "body": (
+                "The AWS provider team at HashiCorp, codeowner for this "
+                "functionality, has been notified and will triage on their timeline."
+            ),
+        }
+        user_opinion: GitHubComment = {
+            "author_association": "NONE",
+            "body": "I would not change checksum defaults without guidance.",
+        }
+        approval: GitHubComment = {
+            "author_association": "MEMBER",
+            "body": "Ready for implementation; the scoped approach is approved.",
+        }
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertIsNone(scout.strategic_preflight_rejection(aws))
+            self.assertIsNone(scout.strategic_preflight_rejection(terraform))
+            self.assertEqual(
+                scout.strategic_rejection(aws, "t", [aws_comment]),
+                "maintainer implementation scope remains unresolved under project constraints",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(terraform, "t", [owner_triage, user_opinion]),
+                "implementation awaits owning team triage and scope decision",
+            )
+            check.assert_not_called()
+            self.assertIsNone(scout.strategic_rejection(aws, "t", [aws_comment, approval]))
+            self.assertIsNone(scout.strategic_rejection(terraform, "t", [owner_triage, approval]))
+            self.assertIsNone(scout.strategic_rejection(terraform, "t", [user_opinion]))
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Implement an accepted parser feature", labels=["help wanted"]),
+                    "t",
+                    [
+                        {
+                            "author_association": "COLLABORATOR",
+                            "body": "There are API limits; implement the accepted scoped parser fix.",
+                        }
+                    ],
+                )
+            )
+            self.assertEqual(check.call_count, 4)
+
+    def test_unscoped_diagnostic_reports_do_not_enter_strategic_queue(self) -> None:
+        loki = issue(
+            html_url="https://github.com/grafana/loki/issues/24870",
+            title="count_over_time metric query missing log entries",
+            body=(
+                "Grafana Cloud (Explore), Loki version: Unknown. Logs sample has "
+                "missing count_over_time entries. At Step 30s bars return; "
+                "at Step 1m they disappear."
+            ),
+            comments=0,
+        )
+        kubernetes = issue(
+            html_url="https://github.com/kubernetes/kubernetes/issues/136114",
+            title="[Failing Test] node-feature-discovery-e2e",
+            labels=["sig/node", "help wanted", "kind/failing-test", "needs-triage"],
+            body=(
+                "Testgrid https://testgrid.k8s.io/sig-node-node-feature-discovery "
+                "fails: Image gcr.io/k8s-staging-nfd/node-feature-discovery:v0.19 "
+                "not found."
+            ),
+            comments=9,
+        )
+        status: list[GitHubComment] = [
+            {
+                "body": "This request has been marked as needing help from a contributor.",
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        ready: list[GitHubComment] = [
+            {"body": "Ready for implementation", "author_association": "MEMBER"}
+        ]
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertEqual(
+                scout.strategic_preflight_rejection(loki),
+                "cloud-managed metric discrepancy awaiting product-layer investigation",
+            )
+            self.assertIsNone(scout.strategic_preflight_rejection(kubernetes))
+            self.assertEqual(
+                scout.strategic_rejection(loki, "t", []),
+                "cloud-managed metric discrepancy awaiting product-layer investigation",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(kubernetes, "t", status),
+                "failing-test image artifact awaits triage and code-change scope",
+            )
+            check.assert_not_called()
+            self.assertIsNone(scout.strategic_rejection(loki, "t", ready))
+            self.assertIsNone(scout.strategic_rejection(kubernetes, "t", ready))
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Fix deterministic parser bug", labels=["help wanted"]),
+                    "t",
+                    status,
+                )
+            )
+            self.assertEqual(check.call_count, 3)
+
+    def test_godebug_startup_diagnostic_waits_for_project_triage(self) -> None:
+        report = issue(
+            title="Tailscale can not be started on my NAS",
+            body=(
+                'tailscaled exits with fatal error: removed GODEBUG "tlskyber" '
+                'set to old value "0" in environment.'
+            ),
+            labels=[{"name": "OS-linux"}, {"name": "bug"}],
+            comments=1,
+        )
+        attachment: list[GitHubComment] = [
+            {"user": {"login": "reporter"}, "body": "Uploaded startup logs."}
+        ]
+        reason = "environment-specific startup diagnostic awaiting maintainer triage"
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertIsNone(scout.strategic_preflight_rejection(report))
+            self.assertEqual(scout.strategic_rejection(report, "t", attachment), reason)
+            check.assert_not_called()
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    report,
+                    "t",
+                    [
+                        *attachment,
+                        {"body": "Ready for implementation", "author_association": "OWNER"},
+                    ],
+                )
+            )
+            check.assert_called_once()
+
     def test_stale_strategic_issue_requires_label_removal(self) -> None:
         # Regression: Cilium #45913 was ranked while marked stale by automation.
         stale = issue(

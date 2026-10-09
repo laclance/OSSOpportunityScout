@@ -27,12 +27,13 @@ OSS Opportunity Scout is a package-owned scanner with:
 - exact final-effort preferences across both lanes, applied before selection limits
 - inclusive final-classification score thresholds and a 1–8 result limit
 - a [configuration reference](docs/CONFIGURATION.md) with generic examples and offline validation
-- a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full SHA pins, complete-transaction serialization, stale-write rejection, private recovery artifacts, and a durable recovery barrier
+- a [public action and generic manual-only private template](docs/PRIVATE_INSTANCE.md) with full-SHA-pinned external dependencies, main-or-reviewed-SHA scanner selection, complete-transaction serialization, stale-write rejection, private recovery artifacts, and a durable recovery barrier
 
 Coverage completeness is independent of warning thresholds, including quiet-run
-maintenance. Failed persistence is guarded by a durable private recovery marker, and
-authoritative direct-source language filtering occurs before bounded adaptive
-inspection. Historical state remains private; public examples never replace that
+maintenance. The distributed private workflow template uses a durable recovery
+marker after persistence failure; deployed instances must adopt and validate that
+template before relying on this barrier. Authoritative direct-source language
+filtering occurs before bounded adaptive inspection. Historical state remains private; public examples never replace that
 history.
 
 ## Deployment baseline
@@ -43,12 +44,12 @@ history.
 
 The [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves
 the implementation, acceptance, and recovery history behind this ownership model.
-No private scanner-pin upgrade is implicit.
+Private instances explicitly choose whether to follow upstream `main` on each scan or select a reviewed SHA; following `main` intentionally adopts new public changes automatically.
 
 Do not restore upstream scheduling or `scout-state` ownership. Any future schedule
 belongs to the private instance and requires a deliberate operational decision.
-Forks remain optional for code customization; instances consume reviewed immutable
-upstream or fork SHAs.
+Forks remain optional for code customization; the generic selector checks out
+public upstream `main` or a reviewed full SHA and records the resolved commit.
 
 ### Maintain the release baseline
 

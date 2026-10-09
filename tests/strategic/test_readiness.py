@@ -6,6 +6,139 @@ from opportunity_scout.types import GitHubComment
 from tests.helpers import comment, issue
 
 
+class UnscopedDiagnosticTests(unittest.TestCase):
+    def test_cloud_metric_step_discrepancy_requires_product_triage(self) -> None:
+        loki = issue(
+            title="count_over_time missing logs visible in sample",
+            body=(
+                "Grafana version: Grafana Cloud (Explore). Loki version: Unknown "
+                "(Grafana Cloud managed). Logs sample shows entries that "
+                "count_over_time omits. Setting Step to 30s restores bars, "
+                "while Step 1m hides them."
+            ),
+            comments=0,
+        )
+        reason = "cloud-managed metric discrepancy awaiting product-layer investigation"
+        self.assertEqual(readiness.unscoped_diagnostic_reason(loki), reason)
+        self.assertEqual(readiness.unscoped_diagnostic_reason(loki, []), reason)
+
+        with_comments = issue(**{**loki, "comments": 2})
+        self.assertIsNone(readiness.unscoped_diagnostic_reason(with_comments, []))
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                with_comments, [comment(body="I can reproduce this issue.")]
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                with_comments,
+                [comment(body="Ready for implementation", author_association="MEMBER")],
+            )
+        )
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                with_comments,
+                [comment(body="Contributions welcome", author_association="NONE")],
+            ),
+            reason,
+        )
+
+    def test_failing_test_image_not_found_is_not_implementation_scope(self) -> None:
+        failing = issue(
+            title="[Failing Test] [SIG-node] periodic-node-feature-discovery-e2e-test-master",
+            body=(
+                "### Which jobs are failing?\n"
+                "periodic-node-feature-discovery-e2e-test-master.Overall\n"
+                "### Testgrid link\n"
+                "https://testgrid.k8s.io/sig-node-node-feature-discovery\n"
+                "### Reason for failure\n"
+                "curl: (22) The requested URL returned error: 404\n"
+                "Image gcr.io/k8s-staging-nfd/node-feature-discovery:v0.19.0-devel "
+                "not found"
+            ),
+            labels=[
+                {"name": "sig/node"},
+                {"name": "help wanted"},
+                {"name": "kind/failing-test"},
+                {"name": "needs-triage"},
+            ],
+            comments=9,
+        )
+        reason = "failing-test image artifact awaits triage and code-change scope"
+        self.assertIsNone(readiness.unscoped_diagnostic_reason(failing, []))
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [
+                    comment(
+                        body="This request has been marked as needing help from a contributor.",
+                        author_association="CONTRIBUTOR",
+                    )
+                ],
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [comment(body="Ready for implementation", author_association="COLLABORATOR")],
+            )
+        )
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [comment(body="Ready for implementation", author_association="NONE")],
+            ),
+            reason,
+        )
+
+    def test_scoped_and_incomplete_diagnostics_are_not_held(self) -> None:
+        cloud = (
+            "Grafana Cloud. Loki version: Unknown. Logs sample differs from "
+            "count_over_time, Step 30s works; Step 1m does not."
+        )
+        for body in (
+            cloud.replace("Loki version: Unknown", "Loki version: 3.5.1"),
+            cloud.replace("Grafana Cloud", "self-hosted Grafana"),
+            cloud.replace("Logs sample", "unit test"),
+            cloud.replace("Step 30s", "Step 45s"),
+            cloud.replace("Step 1m", "Step 2m"),
+        ):
+            with self.subTest(body=body):
+                self.assertIsNone(
+                    readiness.unscoped_diagnostic_reason(issue(body=body, comments=0))
+                )
+
+        failing = issue(
+            body=(
+                "Testgrid https://testgrid.k8s.io/sig-node indicates image "
+                "gcr.io/project/image:missing not found."
+            ),
+            labels=["kind/failing-test", "needs-triage", "help wanted"],
+            comments=0,
+        )
+        self.assertIsNotNone(readiness.unscoped_diagnostic_reason(failing))
+        for labels in (
+            ["kind/failing-test", "help wanted"],
+            ["needs-triage", "help wanted"],
+            ["kind/failing-test", "triage/accepted", "help wanted"],
+        ):
+            with self.subTest(labels=labels):
+                self.assertIsNone(
+                    readiness.unscoped_diagnostic_reason(issue(**{**failing, "labels": labels}))
+                )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                issue(
+                    body="Unit test uses an image not found in expected snapshots.",
+                    labels=["help wanted", "kind/failing-test", "needs-triage"],
+                    comments=0,
+                )
+            )
+        )
+
+
 class ReadinessLabelTests(unittest.TestCase):
     def test_pending_label_dialects_and_ready_override(self) -> None:
         for labels_text in (
@@ -163,6 +296,111 @@ class MaintainerReadinessTests(unittest.TestCase):
                 ],
             ),
             (True, None),
+        )
+
+    def test_aws_route_optimization_awaits_bounded_implementation_scope(self) -> None:
+        proposal = issue(
+            title="Optimize HTTPRoute translation to combine multiple HTTP methods",
+            labels=[{"name": "kind/feature"}, {"name": "gateway-api"}],
+        )
+        maintainer = comment(
+            body=(
+                "This is a good idea for the simple case. But I don't think it "
+                "generalizes cleanly. We can only safely merge matches that are "
+                "identical in path/headers/query/hostname, go to the same backend, "
+                "and differ only by method. The safe implementation is a narrow "
+                "budget-aware pass. Couple of questions to size it: how many "
+                "methods per path are you combining, and how close to the rule limit?"
+            ),
+            author_association="COLLABORATOR",
+        )
+        hold = "maintainer implementation scope remains unresolved under project constraints"
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [maintainer]),
+            (False, hold),
+        )
+        approval = comment(
+            body="The constraints are agreed; ready for implementation.",
+            author_association="OWNER",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [maintainer, approval]),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [approval, maintainer]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                proposal, [{**maintainer, "author_association": "NONE"}]
+            ),
+            (None, None),
+        )
+
+    def test_terraform_owner_team_triage_is_not_a_contributor_veto(self) -> None:
+        report = issue(title="S3-compatible backend checksum regression")
+        owner_handoff = comment(
+            body=(
+                "The AWS provider team at HashiCorp, codeowner for this functionality, "
+                "has been notified and will triage on their timeline."
+            ),
+            author_association="CONTRIBUTOR",
+        )
+        compatibility = comment(
+            body=(
+                "The AWS provider team does not guarantee compatibility with "
+                "third-party S3 vendors."
+            ),
+            author_association="CONTRIBUTOR",
+        )
+        hold = "implementation awaits owning team triage and scope decision"
+        self.assertTrue(readiness.maintainer_comment_authority(owner_handoff))
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [owner_handoff, compatibility]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [compatibility]),
+            (None, None),
+        )
+        ready = comment(
+            body="We approve a targeted regression test and fix. Ready for implementation.",
+            author_association="MEMBER",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [owner_handoff, compatibility, ready]
+            ),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [ready, owner_handoff]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [{**owner_handoff, "author_association": "NONE"}]
+            ),
+            (None, None),
+        )
+
+    def test_architecture_discussion_without_pending_scope_remains_eligible(self) -> None:
+        feature = issue(labels=[{"name": "help wanted"}])
+        benign = comment(
+            body=(
+                "We can only safely merge identical routes, and there is a hard limit "
+                "on values. Implement the bounded optimization with regression tests."
+            ),
+            author_association="COLLABORATOR",
+        )
+        question = comment(
+            body="How many methods per path does the implementation test?",
+            author_association="COLLABORATOR",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(feature, [benign, question]),
+            (None, None),
         )
 
     def test_node_log_request_is_a_diagnostic_hold(self) -> None:
@@ -495,6 +733,36 @@ class MaintainerReadinessTests(unittest.TestCase):
                 comment,
             ),
             (False, "proposal is still gathering feedback"),
+        )
+
+    def test_non_project_bug_claim_requires_maintainer_authority(self) -> None:
+        report = issue(labels=[{"name": "kind/bug/possible"}, {"name": "contributor/wanted"}])
+        diagnosis: GitHubComment = {
+            "body": (
+                "Not a Traefik bug. Go's net/http server rejects the malformed "
+                "header before the handler executes."
+            ),
+            "author_association": "CONTRIBUTOR",
+        }
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [diagnosis]),
+            (None, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [{**diagnosis, "author_association": "MEMBER"}]
+            ),
+            (False, "maintainer confirms reported behavior is outside project code"),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    {**diagnosis, "author_association": "MEMBER"},
+                    {"body": "Ready for implementation", "author_association": "OWNER"},
+                ],
+            ),
+            (True, None),
         )
 
     def test_hold_reason_branches_are_directly_owned_here(self) -> None:
@@ -954,6 +1222,39 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
             "issue reporter says implementation design is still under discussion",
         )
 
+    def test_unapproved_module_split_proposal_requires_maintainer_acceptance(self) -> None:
+        grpc = issue(
+            user={"login": "author"},
+            comments=0,
+            title="Split client and server modules?",
+            body=(
+                "Proposed solution: refactor the public module into separate client "
+                "and server modules. This would be an API break, so feel free to "
+                "WONTFIX if you think it doesn't make sense."
+            ),
+        )
+        reason = "reporter proposal awaits maintainer acceptance"
+        self.assertEqual(readiness.reporter_design_discussion_reason(grpc, []), reason)
+        with_comments = issue(**{**grpc, "comments": 1})
+        self.assertIsNone(readiness.reporter_design_discussion_reason(with_comments, []))
+        commenter: list[GitHubComment] = [
+            {"user": {"login": "visitor"}, "body": "PRs welcome", "author_association": "NONE"}
+        ]
+        self.assertEqual(
+            readiness.reporter_design_discussion_reason(with_comments, commenter), reason
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                with_comments,
+                [{"body": "Ready for implementation", "author_association": "MEMBER"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                issue(body="Split modules with an approved implementation plan.", comments=0), []
+            )
+        )
+
     def test_open_design_discussion_requires_reporter_and_multiple_choices(self) -> None:
         item = issue(
             user={"login": "reporter"},
@@ -1227,6 +1528,77 @@ class ReporterSupportTriageTests(unittest.TestCase):
             with self.subTest(title=item.get("title")):
                 self.assertIsNone(readiness.reporter_support_triage_reason(item))
 
+    def test_removed_godebug_startup_diagnostic_awaits_project_triage(self) -> None:
+        tailscale = issue(
+            title="Tailscale can not be started after an update",
+            user={"login": "reporter"},
+            body=(
+                "tailscaled.service exited with status=2/INVALIDARGUMENT. "
+                'fatal error: removed GODEBUG "tlskyber" set to old value "0" '
+                "in environment. Removing the environment variable does not resolve "
+                "the issue. This happens on an upgraded NAS installation."
+            ),
+            labels=[{"name": "OS-linux"}, {"name": "bug"}],
+            comments=1,
+        )
+        attachment: GitHubComment = {
+            "user": {"login": "reporter"},
+            "body": "Attached additional diagnostic logs.",
+        }
+        reason = "environment-specific startup diagnostic awaiting maintainer triage"
+
+        # Preflight cannot reject when comments might carry a trusted approval.
+        self.assertIsNone(readiness.reporter_support_triage_reason(tailscale, []))
+        self.assertEqual(readiness.reporter_support_triage_reason(tailscale, [attachment]), reason)
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(issue(**{**tailscale, "comments": 0}), []),
+            reason,
+        )
+        self.assertEqual(
+            readiness.reporter_support_triage_reason(
+                tailscale,
+                [
+                    attachment,
+                    {"body": "Contributions welcome", "author_association": "NONE"},
+                ],
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                tailscale,
+                [
+                    attachment,
+                    {"body": "Ready for implementation", "author_association": "MEMBER"},
+                ],
+            )
+        )
+
+    def test_removed_godebug_triage_preserves_actionable_and_unrelated_reports(self) -> None:
+        sample = 'fatal error: removed GODEBUG "tlskyber" set to old value "0" in environment.'
+        candidates = (
+            issue(title="Service fails to start", body="Startup failure after upgrade."),
+            issue(title="Service fails to start", body="GODEBUG option was updated."),
+            issue(title="Runtime API change", body=sample),
+            issue(
+                title="Service fails to start",
+                body=sample + "\nSuggested fix: remove the old flag in cmd/launcher/main.go.",
+            ),
+            issue(
+                title="Service fails to start",
+                body=sample,
+                author_association="MEMBER",
+            ),
+            issue(
+                title="Service fails to start",
+                body=sample,
+                labels=[{"name": "contributor/wanted"}],
+            ),
+        )
+        for item in candidates:
+            with self.subTest(title=item.get("title"), body=item.get("body")):
+                self.assertIsNone(readiness.reporter_support_triage_reason(item, []))
+
     def test_terraform_reporter_waiting_for_design_review_is_not_ready(self) -> None:
         terraform = issue(
             body=(
@@ -1255,6 +1627,44 @@ class ReporterSupportTriageTests(unittest.TestCase):
         self.assertEqual(
             readiness.reporter_support_triage_reason(flux),
             "support/triage issue rather than a contributor task",
+        )
+
+    def test_reporter_config_followup_is_support_until_maintainer_ready(self) -> None:
+        flux = issue(
+            user={"login": "author"},
+            body="Vault Transit decryption is failing with a 403 response.",
+        )
+        followup: GitHubComment = {
+            "user": {"login": "author"},
+            "body": (
+                "I found the problem source: it requires a configmap with Vault auth "
+                "configuration. There is no documentation for it and I have no clue "
+                "how to specify the role name."
+            ),
+        }
+        reason = "reporter follow-up seeks configuration guidance before implementation"
+        self.assertEqual(readiness.reporter_support_triage_reason(flux, [followup]), reason)
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux, [{**followup, "user": {"login": "someone-else"}}]
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux, [followup, {**followup, "body": "The code path needs fixing."}]
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux,
+                [followup, {"body": "Ready for implementation", "author_association": "MEMBER"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                issue(user={"login": "author"}, body="Implement a documented role name option."),
+                [],
+            )
         )
 
     def test_pre_pr_workflow_instruction_does_not_imply_approval_gate(self) -> None:

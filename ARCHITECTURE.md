@@ -15,9 +15,9 @@ The architecture should make those lanes easy to reason about without forcing co
 
 The canonical public upstream remains the source of truth for scanner code and may run development/release CI and publish reusable execution machinery or generic templates. It must not operate persistent scout instances or own user schedules, private configuration, scout secrets, report destinations, scout state, or opportunity history.
 
-The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and the scanner pin. The repository holding private configuration/state also owns when the scout runs; its workflow invokes pinned public execution machinery. Upstream does not run a workflow that reaches into private state repositories.
+The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and scanner source selection. Its workflow checks out public scanner `main` or a validated reviewed full SHA into an isolated source directory and executes that local action, logging the resolved SHA. Upstream does not run a workflow that reaches into private state repositories.
 
-Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
+Forking is optional for code customization. The distributed default follows upstream `main` at scan time; operators can override a run with a reviewed full scanner SHA. Customized forks require an explicitly reviewed workflow change, while runtime ownership remains private.
 
 The public/private ownership migration is complete. The
 [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves its
@@ -32,10 +32,14 @@ the empty seed is distributed as `examples/seen_bounties.example.json`.
 
 ### Public action and private transaction template
 
-Root `action.yml` runs the scanner from its pinned `github.action_path` using
-isolated Python 3.12. It explicitly supplies config/state paths and separate
-discovery/delivery credentials, disables host reporting, and leaves Git transport
-to the caller. Scanner policy and local state semantics remain unchanged.
+Root `action.yml` runs the scanner from `github.action_path` using isolated
+Python 3.12. The private template validates `scanner_ref`, checks out public
+`main` or the selected full SHA into `.scout-scanner-source`, logs the actual
+checked-out commit, and invokes `uses: ./.scout-scanner-source`. External helper
+actions remain pinned to reviewed full SHAs. The scanner uses explicit config/state
+paths and separate discovery/delivery credentials, disables host reporting, and
+leaves Git transport to the caller. Following `main` permits subsequent upstream
+changes to execute with scanner credentials; reviewed-SHA override prevents that.
 
 `examples/private-instance/scout.yml` is an inactive distribution template, outside
 upstream workflows. The private caller restricts execution to its private default
@@ -98,11 +102,22 @@ GitHub + bounty-platform sources
 
 The important boundary is between **I/O** and **policy**. Network fetches gather evidence; pure functions should interpret that evidence whenever practical.
 
+Strategic effort calibration distinguishes compound upgrade/firewall/bridge/host-reboot
+regressions, macOS keychain failures under Tailscale SSH, and trusted maintainer
+warnings about changing default-field normalization. Such evidence raises effort,
+not contributor readiness; verified comments are reused without extra requests.
+
 For strategic readiness, a current `stale` or `lifecycle/stale` label holds an
 issue even if earlier maintainer comments indicated readiness. It becomes
 eligible for normal verification again when the stale label is removed.
 Only `OWNER`, `MEMBER`, and `COLLABORATOR` comments may approve implementation;
-contributor project-action comments can still provide hold evidence.
+contributor project-action comments can still provide hold evidence. Explicit owning-team
+triage handoffs and unresolved safe-scope questions hold strategic opportunities
+until a later trusted maintainer approval; ordinary contributor opinions do not.
+Cloud-managed metric discrepancies with unknown backend version and step-sensitive
+samples, and untriaged failing-test image-artifact incidents, also need diagnostic
+ownership and an implementation scope before being recommended. A later trusted
+maintainer readiness comment can clear those holds.
 
 ## Current modules
 
@@ -390,7 +405,7 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - Only direct lifecycle evidence of `closed` prunes a GitHub issue. `open`, ambiguous `404`/not-found, auth/rate-limit/server/network failures, malformed responses, and checker exceptions all retain the URL. Non-GitHub URLs remain seen and are excluded from GitHub maintenance until a platform-specific lifecycle policy exists.
 - Successful maintenance and newly reported URLs are persisted as one state snapshot. Complete quiet runs may persist maintenance alone; incomplete combined coverage or failed delivery persists neither maintenance nor newly reported URLs. A later reopen of a previously confirmed-closed issue is intentionally eligible to surface again.
 - `opportunity_scout.state` knows only the local state file, and Python state code contains no Git branch/worktree logic. Git transport belongs to the private instance workflow, which owns its state/history without an upstream state-branch contract.
-- `.scout/recovery-required` is private-instance coordination metadata, not seen-state. A normal run must fetch the current private default branch and reject that marker before scanner execution. Persistence failure must establish it from current remote history without overwriting `seen_bounties.json`; only deliberate operator recovery removes it. Queued-run cancellation remains defense in depth rather than the recovery correctness barrier.
+- In the distributed private workflow template, `.scout/recovery-required` is private-instance coordination metadata, not seen-state. Before execution, the template checks the current private default branch for the marker. Persistence failure establishes it from current remote history without overwriting `seen_bounties.json`; only deliberate operator recovery removes it. Queued-run cancellation remains defense in depth. Deployed instances may use older template copies and must verify their actual recovery gate before relying on this barrier.
 - GitHub API authentication and GitHub report publishing are separate concerns. `GITHUB_TOKEN` and `GITHUB_REPOSITORY` may be present for scanner API work, but host-repository report publishing requires explicit `GITHUB_REPORTS_ENABLED=true`. Reusable execution machinery must never publish ranked scout results merely because GitHub credentials and repository identity are available.
 - Private GitHub reporting requires both `PRIVATE_GITHUB_REPORTS_REPOSITORY` and `PRIVATE_GITHUB_REPORTS_TOKEN`; neither reuses or replaces the scanner GitHub authentication context. Before each private report issue is created, GitHub repository metadata must be retrieved with the private credential and report `private: true`. Missing, malformed, public, unauthenticated, or failed verification is a hard no-publish result.
 - Seen-state advances only after a configured delivery succeeds, and combined runs with incomplete discovery/verification coverage still do not advance it. An explicitly enabled GitHub report whose auto-close step fails remains a failed delivery for this transaction.
@@ -404,4 +419,6 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - `AGENTS.md` owns AI coding-agent execution rules.
 - `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
 - `ROADMAP.md` owns forward-looking work and sequencing.
+- `docs/CONFIGURATION.md` is the current configuration schema and offline-validation reference.
+- `docs/PRIVATE_INSTANCE.md` owns current private-template setup and recovery procedures; a deployed instance may still use an older copy.
 - `docs/PRIVATE_DEPLOYMENT_MIGRATION.md` is the completed migration/acceptance record: historical contracts, PR slices, recovery, provenance, and final ownership boundaries.
