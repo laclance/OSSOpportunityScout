@@ -26,7 +26,7 @@ OSS Opportunity Scout helps developers find open-source issues worth doing acros
 The public repository is the scanner source and distribution point, not a persistent scout instance. For supported recurring execution, use an independent private instance that owns its configuration, state, secrets, delivery, triggers, and scanner pin.
 
 1. Follow the [private instance guide](docs/PRIVATE_INSTANCE.md) to create or configure the independent private instance.
-2. Keep configuration, state, and secrets instance-owned, and consume scanner source through a reviewed immutable full SHA.
+2. Choose scanner source: the private workflow follows public `main` by default on each manual run, or accepts a reviewed 40-character SHA to pin a specific revision. The resolved SHA is recorded for traceability.
 3. Run the private workflow with your chosen delivery channels; public host-repository reports remain disabled by default.
 
 Forking is optional and intended only for scanner-code customization.
@@ -122,9 +122,12 @@ and rationale behind this ownership model.
 
 For the generic private deployment assets, see the [private instance guide](docs/PRIVATE_INSTANCE.md).
 The caller owns configuration, state/history, triggers, concurrency, credentials,
-delivery, and the full scanner SHA pin. Scanner-pin maintenance is manual by default;
-operators may optionally copy the narrow Dependabot example to receive reviewed
-update PRs while the workflow itself continues executing an immutable full SHA.
+delivery, and scanner revision selection. The manual workflow defaults to the current
+reviewed public `main`; supply `scanner_ref` as a reviewed full commit SHA to freeze
+a run to specific scanner code. It checks out the selected revision, records its
+actual SHA, and runs the local action without a mutable external `uses:` reference.
+Following `main` intentionally adopts new code on subsequent runs, so only use it
+if you trust the upstream release process and its credential access.
 Read the recovery procedure before rerunning a transaction whose delivery may have
 succeeded but persistence failed.
 

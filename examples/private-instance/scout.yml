@@ -1,10 +1,16 @@
 # Copy into .github/workflows/scout.yml in an independent PRIVATE repository.
-# Review the scanner SHA before adoption; upgrades are deliberate instance changes.
+# Scanner defaults to public main per run; use the optional input to pin a reviewed SHA.
 # All workflows writing this state must share the same concurrency group.
 name: Private OSS Opportunity Scout
 
 "on":
   workflow_dispatch:
+    inputs:
+      scanner_ref:
+        description: Public scanner revision (main or reviewed 40-character SHA)
+        required: false
+        type: string
+        default: main
 
 permissions: {}
 
@@ -69,9 +75,50 @@ jobs:
             exit 1
           fi
 
-      - name: Run pinned scanner source
+      - name: Validate scanner selection
+        id: scanner_ref
+        shell: bash
+        env:
+          SCANNER_REF: ${{ inputs.scanner_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          if test "$SCANNER_REF" = main; then
+            exit 0
+          fi
+          if [[ ! "$SCANNER_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::Scanner revision must be main or a reviewed, lowercase 40-character commit SHA.'
+            exit 1
+          fi
+
+      - name: Check out selected public scanner source
+        id: scanner_checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: laclance/OSSOpportunityScout
+          ref: ${{ inputs.scanner_ref || 'main' }}
+          path: .scout-scanner-source
+          persist-credentials: false
+
+      - name: Record resolved scanner revision
+        id: scanner_revision
+        shell: bash
+        working-directory: .scout-scanner-source
+        env:
+          SCANNER_REF: ${{ inputs.scanner_ref || 'main' }}
+        run: |
+          set -euo pipefail
+          resolved="$(git rev-parse --verify HEAD)"
+          if test "$SCANNER_REF" != main && test "$resolved" != "$SCANNER_REF"; then
+            echo '::error::Checked-out scanner revision differs from the selected SHA.'
+            exit 1
+          fi
+          printf 'sha=%s\n' "$resolved" >> "$GITHUB_OUTPUT"
+          printf 'Scanner ref: %s\nResolved scanner SHA: %s\n' "$SCANNER_REF" "$resolved"
+          printf '### Scanner source\n\nRequested: `%s`\nResolved: `%s`\n' "$SCANNER_REF" "$resolved" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run selected scanner source
         id: scan
-        uses: laclance/OSSOpportunityScout@6bacf9b5dcedd470740564c3d19c0dcc0620f8df # reviewed scanner-behavior baseline
+        uses: ./.scout-scanner-source
         timeout-minutes: 25
         with:
           config-path: scout.toml

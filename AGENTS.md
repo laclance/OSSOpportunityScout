@@ -39,26 +39,25 @@ For deployment/configuration/state-ownership work, additionally read [docs/PRIVA
 - Treat `last_checked_at` as the time a maintenance attempt was made, not proof that lifecycle confirmation succeeded.
 - The canonical public upstream is a distribution/development repository, not a persistent scout instance. Private instance repositories own actual scout workflows, configuration/state, triggers/schedules, concurrency, secrets, delivery configuration, persistence/history, and scanner pins. Forks are optional for code customization. Do not make public workflows reach into private repositories for scout state.
 - Coverage completeness is independent of warning thresholds: any recognized discovery/verification failure prevents both newly reported seen-state advancement and quiet-run maintenance persistence. Warning thresholds control diagnostics only.
-- Preserve immutable workflow references: external actions and external reusable workflows use reviewed full commit SHAs; same-repository reusable workflows may use GitHub's same-commit local reference syntax.
+- Preserve immutable external-action and external reusable-workflow references; same-repository reusable workflows use local syntax. The private scanner is a deliberate exception to *scanner source selection*: the manual workflow may check out public `main` or a validated reviewed full SHA and execute its local action. Never use an unpinned external `uses: owner/repo@main`; resolve and log the actual scanner commit before execution.
 
 ## Deployment invariants
 
 The public upstream owns scanner code, development/release CI, documentation, and
 reusable distribution assets. Independent private instances own workflows,
 configuration/state, triggers/schedules, concurrency, secrets, delivery,
-persistence/history, recovery, and scanner pins. When a scanner-behavior change is
-promoted to `main` and becomes the reviewed deployment baseline, update the
-distributed private-instance template pin and its approval regression in the same
-maintenance cycle; do not advance that pin for docs/CI/governance/Marketplace-only
-`main` commits. Reviewed SemVer project-release tags are optional update signals for
-Dependabot-managed private instances and must point to the reviewed promoted release
-commit for that release, normally the current `main` promotion commit. A release tag
-may therefore be newer than the scanner-behavior baseline and may include
-docs/CI/governance/Marketplace-only changes; that does not change the manual
-distributed-template pin policy above. Creating or pushing a release tag is a
-separate maintainer-authorized action; never use a moving tag as the runtime
-`uses:` reference. Manual SHA updates remain fully supported. Default `scout.toml`
-or explicit `--config PATH` is mandatory before state/network/delivery activity.
+persistence/history, recovery, and scanner pins. The distributed private workflow
+defaults to checking out current public `main` on each manually initiated run.
+The operator can instead select a reviewed 40-character scanner SHA. The workflow
+must validate the selection before checkout and log the resolved SHA before executing
+the scanner as a checked-out local action. All external `uses:` references remain
+full-SHA pinned; no dynamic expressions or moving refs are permitted in external
+`uses:` statements. Running latest `main` means future upstream changes can execute
+using private instance scanner credentials without another private workflow PR;
+keep upstream branch protection and review strict. Release tags are separate
+maintainer-authorized actions. The private instance owns whether to follow `main`
+or pin a specific run. Mandatory `scout.toml` or `--config PATH` validation
+continues before state/network/delivery activity.
 
 Do not recreate upstream `scout-state` ownership, restore upstream persistent
 scheduling, expose private evidence, or claim exactly-once delivery. Do not reopen
