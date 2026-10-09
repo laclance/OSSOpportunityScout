@@ -98,6 +98,11 @@ GitHub + bounty-platform sources
 
 The important boundary is between **I/O** and **policy**. Network fetches gather evidence; pure functions should interpret that evidence whenever practical.
 
+Strategic effort calibration distinguishes compound upgrade/firewall/bridge/host-reboot
+regressions, macOS keychain failures under Tailscale SSH, and trusted maintainer
+warnings about changing default-field normalization. Such evidence raises effort,
+not contributor readiness; verified comments are reused without extra requests.
+
 For strategic readiness, a current `stale` or `lifecycle/stale` label holds an
 issue even if earlier maintainer comments indicated readiness. It becomes
 eligible for normal verification again when the stale label is removed.
