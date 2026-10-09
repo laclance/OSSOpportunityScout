@@ -784,6 +784,12 @@ class VerificationTests(unittest.TestCase):
                 "author_association": "MEMBER",
             }
         ]
+        contributor_ready: list[GitHubComment] = [
+            {
+                "body": "We're marking this as ready for implementation; contributions welcome.",
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
         feature = issue(
             title="Add per-request metrics",
             labels=[{"name": "enhancement"}],
@@ -799,6 +805,10 @@ class VerificationTests(unittest.TestCase):
 
         with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertIsNone(scout.strategic_rejection(pending, "t", ready_comments))
+            self.assertEqual(
+                scout.strategic_rejection(pending, "t", contributor_ready),
+                "awaiting reproduction confirmation",
+            )
             self.assertIsNone(scout.strategic_rejection(feature, "t", []))
             self.assertIsNone(scout.strategic_rejection(proposal_without_hold, "t", []))
             self.assertEqual(

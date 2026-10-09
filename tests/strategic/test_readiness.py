@@ -144,6 +144,27 @@ class MaintainerReadinessTests(unittest.TestCase):
             )
         )
 
+    def test_contributor_project_action_cannot_approve_implementation(self) -> None:
+        contributor_ready = comment(
+            body="We're marking this as ready for implementation; contributions welcome.",
+            author_association="CONTRIBUTOR",
+        )
+        self.assertTrue(readiness.maintainer_comment_authority(contributor_ready))
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(issue(), [contributor_ready]),
+            (None, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                issue(),
+                [
+                    contributor_ready,
+                    comment(body="Ready for implementation.", author_association="MEMBER"),
+                ],
+            ),
+            (True, None),
+        )
+
     def test_node_log_request_is_a_diagnostic_hold(self) -> None:
         comments: list[GitHubComment] = [
             {
@@ -1012,6 +1033,32 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
         for comments in cases:
             with self.subTest(comments=comments):
                 self.assertIsNone(readiness.reporter_design_discussion_reason(item, comments))
+
+    def test_contributor_project_action_cannot_revive_withdrawn_implementation(self) -> None:
+        item = issue(user={"login": "reporter"})
+        withdrawn: GitHubComment = {
+            "user": {"login": "reporter"},
+            "body": "I closed my PR for now, leaving this open for the maintainers to decide.",
+        }
+        contributor_ready: GitHubComment = {
+            "user": {"login": "volunteer"},
+            "author_association": "CONTRIBUTOR",
+            "body": "We're marking this as ready for implementation; contributions welcome.",
+        }
+        maintainer_ready: GitHubComment = {
+            "user": {"login": "maintainer"},
+            "author_association": "MEMBER",
+            "body": "Contributions welcome.",
+        }
+        self.assertEqual(
+            readiness.reporter_design_discussion_reason(item, [withdrawn, contributor_ready]),
+            "issue reporter withdrew implementation pending maintainer decision",
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                item, [withdrawn, contributor_ready, maintainer_ready]
+            )
+        )
 
     def test_maintainer_ready_signal_revives_withdrawn_implementation(self) -> None:
         item = issue(user={"login": "reporter"})
