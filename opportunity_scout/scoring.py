@@ -326,6 +326,7 @@ def _host_reboot_network_regression(evidence: _IssueEvidence) -> bool:
     prose = evidence.prose.lower()
     return bool(
         re.search(r"\bupgrad(?:e|ed|ing)\b", prose)
+        and not re.search(r"\b(?:no|without)\s+(?:recent\s+)?upgrad\w*\b", prose)
         and re.search(r"\b(?:reboot|restart(?:ing)? (?:the )?(?:docker )?host)\b", prose)
         and re.search(r"\b(?:firewalld|iptables|ip6tables)\b", prose)
         and re.search(r"\b(?:custom )?bridge\b", prose)

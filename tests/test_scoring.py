@@ -276,9 +276,7 @@ class EffortCalibrationTests(unittest.TestCase):
             ),
             labels=[{"name": "area/networking/d/bridge"}],
         )
-        expected = scoring.EffortEstimate(
-            "1d+", ("environment/reproduction-heavy investigation",)
-        )
+        expected = scoring.EffortEstimate("1d+", ("environment/reproduction-heavy investigation",))
         self.assertEqual(scoring.estimate_effort_details(moby), expected)
         self.assertEqual(scoring.estimate_effort(moby), "1d+")
         negatives = (
@@ -316,9 +314,7 @@ class EffortCalibrationTests(unittest.TestCase):
         )
         self.assertEqual(
             scoring.estimate_effort_details(tailscale),
-            scoring.EffortEstimate(
-                "6–12h", ("macOS Tailscale SSH keychain reproduction/setup",)
-            ),
+            scoring.EffortEstimate("6–12h", ("macOS Tailscale SSH keychain reproduction/setup",)),
         )
         for item in (
             issue(title="Tailscale SSH login fails on macOS", body="SSH login is denied."),
