@@ -902,6 +902,58 @@ class SubmissionAndReporterResolutionTests(unittest.TestCase):
                 )
 
 
+class UpstreamToolReproductionTests(unittest.TestCase):
+    def test_golangci_lint_symlink_report_is_upstream_behavior(self) -> None:
+        report = issue(
+            title="Symbolic links for parent directories of module broken",
+            body="golangci-lint run /private/var/tmp/try-go fails outside main module.",
+            comments=2,
+        )
+        diagnosis: GitHubComment = {
+            "author_association": "NONE",
+            "body": (
+                "The behaviour comes from cmd/go rather than from golangci-lint.\n"
+                "And the same command without golangci-lint fails identically:\n"
+                "console: $ cd /linkroot/try-go && go vet /realroot/try-go\n"
+                "directory outside main module or its selected dependencies\n"
+                "There is nothing to fix on this side."
+            ),
+        }
+        reason = "independent upstream Go tool reproduction indicates no project-side fix"
+        self.assertEqual(readiness.upstream_tool_reproduction_reason(report, [diagnosis]), reason)
+        self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, []))
+        self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, None))
+
+        for missing in (
+            "comes from cmd/go rather than",
+            "same command without golangci-lint fails identically",
+            "go vet",
+            "nothing to fix on this side",
+        ):
+            with self.subTest(missing=missing):
+                partial = {**diagnosis, "body": diagnosis["body"].replace(missing, "")}
+                self.assertIsNone(readiness.upstream_tool_reproduction_reason(report, [partial]))
+
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(
+                report,
+                [{"body": "This is an upstream issue, do not fix.", "author_association": "NONE"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.upstream_tool_reproduction_reason(
+                report,
+                [
+                    diagnosis,
+                    {
+                        "body": "Ready for implementation; go ahead and implement",
+                        "author_association": "MEMBER",
+                    },
+                ],
+            )
+        )
+
+
 class MaintainerCurrentBehaviorTests(unittest.TestCase):
     def test_moby_current_default_save_load_preserves_digest(self) -> None:
         moby = issue(

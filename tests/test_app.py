@@ -768,6 +768,29 @@ class VerificationTests(unittest.TestCase):
                 "maintainer confirms reported behavior is outside project code",
             )
 
+    def test_upstream_go_tool_reproduction_is_not_an_actionable_issue(self) -> None:
+        report = issue(
+            html_url="https://github.com/golangci/golangci-lint/issues/4099",
+            title="Symbolic links for parent directories of module broken",
+            body="golangci-lint run /private/var/tmp/try-go fails typechecking.",
+            comments=1,
+        )
+        diagnosis: list[GitHubComment] = [
+            {
+                "author_association": "NONE",
+                "body": (
+                    "The behaviour comes from cmd/go rather than from golangci-lint. "
+                    "The same command without golangci-lint fails identically: "
+                    "$ go vet /realroot/try-go. There is nothing to fix on this side."
+                ),
+            }
+        ]
+        self.assertIsNone(scout.strategic_preflight_rejection(report))
+        self.assertEqual(
+            scout.strategic_rejection(report, "t", diagnosis),
+            "independent upstream Go tool reproduction indicates no project-side fix",
+        )
+
     def test_maintainer_scope_and_owner_triage_regressions(self) -> None:
         aws = issue(
             html_url=(
