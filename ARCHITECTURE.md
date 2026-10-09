@@ -114,6 +114,9 @@ Only `OWNER`, `MEMBER`, and `COLLABORATOR` comments may approve implementation;
 contributor project-action comments can still provide hold evidence. Explicit owning-team
 triage handoffs and unresolved safe-scope questions hold strategic opportunities
 until a later trusted maintainer approval; ordinary contributor opinions do not.
+A narrowly corroborated upstream-Go-tool diagnosis (standalone `go vet` reproduction,
+matching failure without the project CLI, explicit upstream attribution and no
+project-local fix) also holds strategic work, unless a trusted maintainer approves it.
 Cloud-managed metric discrepancies with unknown backend version and step-sensitive
 samples, and untriaged failing-test image-artifact incidents, also need diagnostic
 ownership and an implementation scope before being recommended. A later trusted

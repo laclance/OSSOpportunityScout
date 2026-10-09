@@ -70,6 +70,17 @@ _NON_PROJECT_CAUSE_RE: Final = re.compile(
     r"\b(?:net/http|standard library|upstream|third[- ]party)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_UPSTREAM_COMMAND_REPRO_RE: Final = re.compile(
+    r"\bsame command without [\w.-]+ fails identically\b", re.IGNORECASE
+)
+_UPSTREAM_GO_CAUSE_RE: Final = re.compile(
+    r"\bcomes from\s+[\x60]?cmd/go[\x60]?\s+rather than\b", re.IGNORECASE
+)
+_UPSTREAM_NO_LOCAL_FIX_RE: Final = re.compile(
+    r"\b(?:nothing to fix on this side|no (?:project[- ]side|repository[- ]side) fix)\b",
+    re.IGNORECASE,
+)
+
 _WRONG_APPROACH_MARKERS: Final = (
     "would be the wrong solution",
     "is the wrong solution",
@@ -709,6 +720,26 @@ def maintainer_issue_decision_reason(item: GitHubIssue) -> str | None:
         return "maintainer-authored issue is still deciding implementation semantics"
     if _MAINTAINER_FUTURE_OWNERSHIP_RE.search(body):
         return "maintainer-authored issue is planned as related project follow-up"
+    return None
+
+
+def upstream_tool_reproduction_reason(
+    item: GitHubIssue,
+    comments: list[GitHubComment] | None,
+) -> str | None:
+    """Hold upstream Go-tool behavior demonstrated without a project-local fix."""
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    for comment in comments or []:
+        body = str(comment.get("body") or "")
+        if (
+            _UPSTREAM_GO_CAUSE_RE.search(body)
+            and _UPSTREAM_COMMAND_REPRO_RE.search(body)
+            and re.search(r"\bgo vet\b", body, re.IGNORECASE)
+            and _UPSTREAM_NO_LOCAL_FIX_RE.search(body)
+        ):
+            return "independent upstream Go tool reproduction indicates no project-side fix"
     return None
 
 
