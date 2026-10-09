@@ -1346,7 +1346,7 @@ class ReporterSupportTriageTests(unittest.TestCase):
             issue(title="Runtime API change", body=sample),
             issue(
                 title="Service fails to start",
-                body=sample + "\\nSuggested fix: remove the old flag in cmd/launcher/main.go.",
+                body=sample + "\nSuggested fix: remove the old flag in cmd/launcher/main.go.",
             ),
             issue(
                 title="Service fails to start",

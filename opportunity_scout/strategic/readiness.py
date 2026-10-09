@@ -264,17 +264,17 @@ _REPORTER_GUIDANCE_REQUEST_RE: Final = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _REMOVED_GODEBUG_FATAL_RE: Final = re.compile(
-    r"\\bfatal error:\\s*removed\\s+godebug\\b.{0,180}\\bin environment\\b",
+    r"\bfatal error:\s*removed\s+godebug\b.{0,180}\bin environment\b",
     re.IGNORECASE | re.DOTALL,
 )
 _STARTUP_FAILURE_RE: Final = re.compile(
-    r"\\b(?:cannot|can not|can't|fails? to|unable to|won't)\\s+"
-    r"(?:be\\s+)?start(?:ed)?\\b",
+    r"\b(?:cannot|can not|can't|fails? to|unable to|won't)\s+"
+    r"(?:be\s+)?start(?:ed)?\b",
     re.IGNORECASE,
 )
 _PROPOSED_STARTUP_CODE_FIX_RE: Final = re.compile(
-    r"(?m)^\\s*(?:#{1,6}\\s*)?(?:proposed|suggested)\\s+fix:\\s*"
-    r"[^\\n]{0,160}\\b(?:cmd/|src/|[\\w.-]+\\.go)\\b",
+    r"(?m)^\s*(?:#{1,6}\s*)?(?:proposed|suggested)\s+fix:\s*"
+    r"[^\n]{0,160}\b(?:cmd/|src/|[\w.-]+\.go)\b",
     re.IGNORECASE,
 )
 _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
