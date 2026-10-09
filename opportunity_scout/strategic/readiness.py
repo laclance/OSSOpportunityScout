@@ -947,7 +947,13 @@ def reporter_support_triage_reason(
         and evidence.author_association not in TRUSTED_ASSOCIATIONS
         and not (
             evidence.label_set
-            & {"help wanted", "good first issue", "contributor/wanted", "triage/accepted", "refined"}
+            & {
+                "help wanted",
+                "good first issue",
+                "contributor/wanted",
+                "triage/accepted",
+                "refined",
+            }
         )
         and (comments or not int(item.get("comments") or 0))
         and maintainer_readiness_comment_state(item, comments)[0] is not True

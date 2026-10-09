@@ -1295,10 +1295,10 @@ class ReporterSupportTriageTests(unittest.TestCase):
             title="Tailscale can not be started after an update",
             user={"login": "reporter"},
             body=(
-                'tailscaled.service exited with status=2/INVALIDARGUMENT. '
+                "tailscaled.service exited with status=2/INVALIDARGUMENT. "
                 'fatal error: removed GODEBUG "tlskyber" set to old value "0" '
-                'in environment. Removing the environment variable does not resolve '
-                'the issue. This happens on an upgraded NAS installation.'
+                "in environment. Removing the environment variable does not resolve "
+                "the issue. This happens on an upgraded NAS installation."
             ),
             labels=[{"name": "OS-linux"}, {"name": "bug"}],
             comments=1,
@@ -1337,9 +1337,7 @@ class ReporterSupportTriageTests(unittest.TestCase):
         )
 
     def test_removed_godebug_triage_preserves_actionable_and_unrelated_reports(self) -> None:
-        sample = (
-            'fatal error: removed GODEBUG "tlskyber" set to old value "0" in environment.'
-        )
+        sample = 'fatal error: removed GODEBUG "tlskyber" set to old value "0" in environment.'
         candidates = (
             issue(title="Service fails to start", body="Startup failure after upgrade."),
             issue(title="Service fails to start", body="GODEBUG option was updated."),

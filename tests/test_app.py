@@ -790,7 +790,10 @@ class VerificationTests(unittest.TestCase):
                 scout.strategic_rejection(
                     report,
                     "t",
-                    [*attachment, {"body": "Ready for implementation", "author_association": "OWNER"}],
+                    [
+                        *attachment,
+                        {"body": "Ready for implementation", "author_association": "OWNER"},
+                    ],
                 )
             )
             check.assert_called_once()
