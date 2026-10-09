@@ -44,6 +44,7 @@ _CONTRIBUTOR_AUTHORITY_MARKERS: Final = (
     "we're closing this",
     "we are closing this",
     "prevailing wisdom on the maintainer team",
+    "codeowner for this functionality, has been notified and will triage",
 )
 _READY_MARKERS: Final = (
     "ready for implementation",
@@ -83,6 +84,23 @@ _WRONG_APPROACH_MARKERS: Final = (
     "should be implemented as a provider function",
     "should live in a provider",
     "should be done in a provider",
+)
+_SAFE_SCOPE_CONSTRAINT_RE: Final = re.compile(
+    r"\b(?:don't|do not)\s+think\s+(?:it|this)\s+generalizes?\s+cleanly\b|"
+    r"\b(?:we\s+)?can\s+only\s+safely\s+merge\b|"
+    r"\b(?:safe|safest)\s+(?:is|would be)\s+a\s+narrow\b",
+    re.IGNORECASE,
+)
+_OPEN_SCOPE_QUESTION_RE: Final = re.compile(
+    r"\bquestions?\s+to\s+size\s+it\b|"
+    r"\bneed\s+to\s+(?:decide|agree|settle)\s+(?:on\s+)?"
+    r"(?:the\s+)?(?:scope|design|ownership)\b|"
+    r"\bhow\s+many\s+methods\b.{0,120}\b(?:path|route)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_OWNER_TRIAGE_RE: Final = re.compile(
+    r"\bcodeowners?\b.{0,120}\bhas\s+been\s+notified\s+and\s+will\s+triage\b",
+    re.IGNORECASE | re.DOTALL,
 )
 _DISCUSSION_MARKERS: Final = (
     "needs discussion",
@@ -408,6 +426,8 @@ _REASON_INVESTIGATION = "maintainer says issue still needs investigation"
 _REASON_REPRODUCTION = "maintainer says reproduction is still required"
 _REASON_WAIT = "maintainer asked contributors to wait before implementation"
 _REASON_CLARIFICATION = "maintainer says issue still needs clarification"
+_REASON_SCOPE = "maintainer implementation scope remains unresolved under project constraints"
+_REASON_OWNER_TRIAGE = "implementation awaits owning team triage and scope decision"
 _REASON_PROPOSAL_FEEDBACK = "proposal is still gathering feedback"
 _REASON_UMBRELLA = "umbrella tracking issue, not a single implementation task"
 
@@ -565,6 +585,10 @@ def _maintainer_hold_reason(body: str, proposal_stage: bool) -> tuple[str | None
         return "maintainer confirms reported behavior is outside project code", False
     if _contains_any(body, _WRONG_APPROACH_MARKERS):
         return _REASON_WRONG_APPROACH, False
+    if _OWNER_TRIAGE_RE.search(body):
+        return _REASON_OWNER_TRIAGE, False
+    if _SAFE_SCOPE_CONSTRAINT_RE.search(body) and _OPEN_SCOPE_QUESTION_RE.search(body):
+        return _REASON_SCOPE, False
     if _contains_any(body, _DISCUSSION_MARKERS):
         return _REASON_DISCUSSION, False
     if _contains_any(body, _INVESTIGATION_MARKERS):

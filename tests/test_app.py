@@ -768,6 +768,78 @@ class VerificationTests(unittest.TestCase):
                 "maintainer confirms reported behavior is outside project code",
             )
 
+    def test_maintainer_scope_and_owner_triage_regressions(self) -> None:
+        aws = issue(
+            html_url=(
+                "https://github.com/kubernetes-sigs/aws-load-balancer-controller/issues/4884"
+            ),
+            title="Optimize HTTPRoute translation to combine multiple HTTP methods",
+            body="Group HTTP method matches into a single listener rule.",
+            labels=[{"name": "kind/feature"}, {"name": "gateway-api"}],
+            comments=1,
+        )
+        aws_comment: GitHubComment = {
+            "author_association": "COLLABORATOR",
+            "body": (
+                "Good idea for the simple case, but I don't think it generalizes "
+                "cleanly. We can only safely merge identical matches with the "
+                "same backend. The safe version is a narrow pass. Couple of "
+                "questions to size it: how many methods per path are you combining?"
+            ),
+        }
+        terraform = issue(
+            html_url="https://github.com/hashicorp/terraform/issues/37130",
+            title="Regression for certain third-party S3 backends",
+            body="There has to be a decision whether S3 v2 compatibility is supported.",
+            labels=[{"name": "bug"}, {"name": "backend/s3"}, {"name": "new"}],
+            comments=2,
+        )
+        owner_triage: GitHubComment = {
+            "author_association": "CONTRIBUTOR",
+            "body": (
+                "The AWS provider team at HashiCorp, codeowner for this "
+                "functionality, has been notified and will triage on their timeline."
+            ),
+        }
+        user_opinion: GitHubComment = {
+            "author_association": "NONE",
+            "body": "I would not change checksum defaults without guidance.",
+        }
+        approval: GitHubComment = {
+            "author_association": "MEMBER",
+            "body": "Ready for implementation; the scoped approach is approved.",
+        }
+        with patch.object(scout, "strategic_competition_reason", return_value=None) as check:
+            self.assertIsNone(scout.strategic_preflight_rejection(aws))
+            self.assertIsNone(scout.strategic_preflight_rejection(terraform))
+            self.assertEqual(
+                scout.strategic_rejection(aws, "t", [aws_comment]),
+                "maintainer implementation scope remains unresolved under project constraints",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(terraform, "t", [owner_triage, user_opinion]),
+                "implementation awaits owning team triage and scope decision",
+            )
+            check.assert_not_called()
+            self.assertIsNone(scout.strategic_rejection(aws, "t", [aws_comment, approval]))
+            self.assertIsNone(
+                scout.strategic_rejection(terraform, "t", [owner_triage, approval])
+            )
+            self.assertIsNone(scout.strategic_rejection(terraform, "t", [user_opinion]))
+            self.assertIsNone(
+                scout.strategic_rejection(
+                    issue(title="Implement an accepted parser feature", labels=["help wanted"]),
+                    "t",
+                    [
+                        {
+                            "author_association": "COLLABORATOR",
+                            "body": "There are API limits; implement the accepted scoped parser fix.",
+                        }
+                    ],
+                )
+            )
+            self.assertEqual(check.call_count, 4)
+
     def test_godebug_startup_diagnostic_waits_for_project_triage(self) -> None:
         report = issue(
             title="Tailscale can not be started on my NAS",
