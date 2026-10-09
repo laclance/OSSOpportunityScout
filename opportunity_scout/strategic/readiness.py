@@ -918,6 +918,40 @@ def reward_history_reason(item: GitHubIssue) -> str | None:
     return None
 
 
+def unscoped_diagnostic_reason(
+    item: GitHubIssue, comments: list[GitHubComment] | None = None
+) -> str | None:
+    """Hold narrowly evidenced diagnostics without an accepted implementation scope."""
+    evidence = _issue_evidence(item)
+    body = evidence.body_lower
+
+    # Source-only inspection must not bypass later maintainer approval in comments.
+    if int(item.get("comments") or 0) and not comments:
+        return None
+    if maintainer_readiness_comment_state(item, comments)[0] is True:
+        return None
+
+    if (
+        "grafana cloud" in body
+        and "loki version: unknown" in body
+        and "logs sample" in body
+        and "count_over_time" in evidence.text
+        and re.search(r"\b30\s*s\b", body)
+        and re.search(r"\b1\s*m\b", body)
+    ):
+        return "cloud-managed metric discrepancy awaiting product-layer investigation"
+
+    if (
+        "kind/failing-test" in evidence.label_set
+        and "needs-triage" in evidence.label_set
+        and "testgrid.k8s.io" in body
+        and re.search(r"\bimage\b[^\n]{0,160}\bnot found\b", body)
+    ):
+        return "failing-test image artifact awaits triage and code-change scope"
+
+    return None
+
+
 def reporter_support_triage_reason(
     item: GitHubIssue, comments: list[GitHubComment] | None = None
 ) -> str | None:

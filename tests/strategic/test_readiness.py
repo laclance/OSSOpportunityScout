@@ -6,6 +6,141 @@ from opportunity_scout.types import GitHubComment
 from tests.helpers import comment, issue
 
 
+class UnscopedDiagnosticTests(unittest.TestCase):
+    def test_cloud_metric_step_discrepancy_requires_product_triage(self) -> None:
+        loki = issue(
+            title="count_over_time missing logs visible in sample",
+            body=(
+                "Grafana version: Grafana Cloud (Explore). Loki version: Unknown "
+                "(Grafana Cloud managed). Logs sample shows entries that "
+                "count_over_time omits. Setting Step to 30s restores bars, "
+                "while Step 1m hides them."
+            ),
+            comments=0,
+        )
+        reason = "cloud-managed metric discrepancy awaiting product-layer investigation"
+        self.assertEqual(readiness.unscoped_diagnostic_reason(loki), reason)
+        self.assertEqual(readiness.unscoped_diagnostic_reason(loki, []), reason)
+
+        with_comments = issue(**{**loki, "comments": 2})
+        self.assertIsNone(readiness.unscoped_diagnostic_reason(with_comments, []))
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                with_comments, [comment(body="I can reproduce this issue.")]
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                with_comments,
+                [comment(body="Ready for implementation", author_association="MEMBER")],
+            )
+        )
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                with_comments,
+                [comment(body="Contributions welcome", author_association="NONE")],
+            ),
+            reason,
+        )
+
+    def test_failing_test_image_not_found_is_not_implementation_scope(self) -> None:
+        failing = issue(
+            title="[Failing Test] [SIG-node] periodic-node-feature-discovery-e2e-test-master",
+            body=(
+                "### Which jobs are failing?\n"
+                "periodic-node-feature-discovery-e2e-test-master.Overall\n"
+                "### Testgrid link\n"
+                "https://testgrid.k8s.io/sig-node-node-feature-discovery\n"
+                "### Reason for failure\n"
+                "curl: (22) The requested URL returned error: 404\n"
+                "Image gcr.io/k8s-staging-nfd/node-feature-discovery:v0.19.0-devel "
+                "not found"
+            ),
+            labels=[
+                {"name": "sig/node"},
+                {"name": "help wanted"},
+                {"name": "kind/failing-test"},
+                {"name": "needs-triage"},
+            ],
+            comments=9,
+        )
+        reason = "failing-test image artifact awaits triage and code-change scope"
+        self.assertIsNone(readiness.unscoped_diagnostic_reason(failing, []))
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [
+                    comment(
+                        body="This request has been marked as needing help from a contributor.",
+                        author_association="CONTRIBUTOR",
+                    )
+                ],
+            ),
+            reason,
+        )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [comment(body="Ready for implementation", author_association="COLLABORATOR")],
+            )
+        )
+        self.assertEqual(
+            readiness.unscoped_diagnostic_reason(
+                failing,
+                [comment(body="Ready for implementation", author_association="NONE")],
+            ),
+            reason,
+        )
+
+    def test_scoped_and_incomplete_diagnostics_are_not_held(self) -> None:
+        cloud = (
+            "Grafana Cloud. Loki version: Unknown. Logs sample differs from "
+            "count_over_time, Step 30s works; Step 1m does not."
+        )
+        for body in (
+            cloud.replace("Loki version: Unknown", "Loki version: 3.5.1"),
+            cloud.replace("Grafana Cloud", "self-hosted Grafana"),
+            cloud.replace("Logs sample", "unit test"),
+            cloud.replace("Step 30s", "Step 45s"),
+            cloud.replace("Step 1m", "Step 2m"),
+        ):
+            with self.subTest(body=body):
+                self.assertIsNone(
+                    readiness.unscoped_diagnostic_reason(issue(body=body, comments=0))
+                )
+
+        failing = issue(
+            body=(
+                "Testgrid https://testgrid.k8s.io/sig-node indicates image "
+                "gcr.io/project/image:missing not found."
+            ),
+            labels=["kind/failing-test", "needs-triage", "help wanted"],
+            comments=0,
+        )
+        self.assertIsNotNone(readiness.unscoped_diagnostic_reason(failing))
+        for labels in (
+            ["kind/failing-test", "help wanted"],
+            ["needs-triage", "help wanted"],
+            ["kind/failing-test", "triage/accepted", "help wanted"],
+        ):
+            with self.subTest(labels=labels):
+                self.assertIsNone(
+                    readiness.unscoped_diagnostic_reason(
+                        issue(**{**failing, "labels": labels})
+                    )
+                )
+        self.assertIsNone(
+            readiness.unscoped_diagnostic_reason(
+                issue(
+                    body="Unit test uses an image not found in expected snapshots.",
+                    labels=["help wanted", "kind/failing-test", "needs-triage"],
+                    comments=0,
+                )
+            )
+        )
+
+
 class ReadinessLabelTests(unittest.TestCase):
     def test_pending_label_dialects_and_ready_override(self) -> None:
         for labels_text in (
