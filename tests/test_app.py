@@ -816,9 +816,7 @@ class VerificationTests(unittest.TestCase):
         reason = "feature proposal needs maintainer agreement on design or trust boundary"
         with patch.object(scout, "strategic_competition_reason", return_value=None):
             self.assertEqual(scout.strategic_rejection(proposal, "t", [refusal]), reason)
-            self.assertIsNone(
-                scout.strategic_rejection(proposal, "t", [refusal, approved])
-            )
+            self.assertIsNone(scout.strategic_rejection(proposal, "t", [refusal, approved]))
 
     def test_upstream_go_tool_reproduction_is_not_an_actionable_issue(self) -> None:
         report = issue(

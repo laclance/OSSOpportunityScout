@@ -458,15 +458,11 @@ class MaintainerReadinessTests(unittest.TestCase):
                     (False, wait),
                 )
                 self.assertEqual(
-                    readiness.maintainer_readiness_comment_state(
-                        report, [negative, approved]
-                    ),
+                    readiness.maintainer_readiness_comment_state(report, [negative, approved]),
                     (True, None),
                 )
                 self.assertEqual(
-                    readiness.maintainer_readiness_comment_state(
-                        report, [approved, negative]
-                    ),
+                    readiness.maintainer_readiness_comment_state(report, [approved, negative]),
                     (False, wait),
                 )
 
@@ -498,7 +494,7 @@ class MaintainerReadinessTests(unittest.TestCase):
     def test_maintainer_issue_body_negation_is_not_approval(self) -> None:
         pending = issue(
             author_association="MEMBER",
-            body="Not ready for implementation: need to decide API semantics.",
+            body="Not ready for implementation: we still need to decide API semantics.",
         )
         self.assertEqual(
             readiness.maintainer_issue_decision_reason(pending),
@@ -1049,10 +1045,9 @@ class UpstreamToolReproductionTests(unittest.TestCase):
             reason,
         )
         self.assertIsNone(
-            readiness.upstream_tool_reproduction_reason(
-                item, [diagnosis, denial, approval]
-            )
+            readiness.upstream_tool_reproduction_reason(item, [diagnosis, denial, approval])
         )
+
 
 class MaintainerCurrentBehaviorTests(unittest.TestCase):
     def test_moby_current_default_save_load_preserves_digest(self) -> None:
@@ -1438,9 +1433,7 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
             reason,
         )
         self.assertIsNone(
-            readiness.unapproved_architecture_proposal_reason(
-                proposal, [refusal, approval]
-            )
+            readiness.unapproved_architecture_proposal_reason(proposal, [refusal, approval])
         )
 
     def test_ordinary_features_and_partial_proposals_remain_eligible(self) -> None:
