@@ -822,9 +822,7 @@ class VerificationTests(unittest.TestCase):
             )
             check.assert_not_called()
             self.assertIsNone(scout.strategic_rejection(aws, "t", [aws_comment, approval]))
-            self.assertIsNone(
-                scout.strategic_rejection(terraform, "t", [owner_triage, approval])
-            )
+            self.assertIsNone(scout.strategic_rejection(terraform, "t", [owner_triage, approval]))
             self.assertIsNone(scout.strategic_rejection(terraform, "t", [user_opinion]))
             self.assertIsNone(
                 scout.strategic_rejection(

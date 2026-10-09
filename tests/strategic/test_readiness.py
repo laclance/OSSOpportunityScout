@@ -224,9 +224,7 @@ class MaintainerReadinessTests(unittest.TestCase):
         hold = "implementation awaits owning team triage and scope decision"
         self.assertTrue(readiness.maintainer_comment_authority(owner_handoff))
         self.assertEqual(
-            readiness.maintainer_readiness_comment_state(
-                report, [owner_handoff, compatibility]
-            ),
+            readiness.maintainer_readiness_comment_state(report, [owner_handoff, compatibility]),
             (False, hold),
         )
         self.assertEqual(
@@ -244,9 +242,7 @@ class MaintainerReadinessTests(unittest.TestCase):
             (True, None),
         )
         self.assertEqual(
-            readiness.maintainer_readiness_comment_state(
-                report, [ready, owner_handoff]
-            ),
+            readiness.maintainer_readiness_comment_state(report, [ready, owner_handoff]),
             (False, hold),
         )
         self.assertEqual(
