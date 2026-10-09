@@ -577,7 +577,7 @@ def _strategic_classification_rejection(
     """Return ordered policy rejections that are pure over supplied issue evidence."""
     for reason in (
         security_disclosure_reason(item),
-        reporter_support_triage_reason(item),
+        reporter_support_triage_reason(item, comments),
         reporter_design_discussion_reason(item, comments),
         reporter_external_infrastructure_reason(item, comments),
         manual_tracking_issue_reason(item, comments),
