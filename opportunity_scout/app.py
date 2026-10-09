@@ -719,6 +719,13 @@ class _RepositoryContext:
     guide: str | None
 
 
+@dataclass(frozen=True, slots=True)
+class _PendingPaidCandidate:
+    issue: GitHubIssue
+    platform_signal: str | None
+    is_platform: bool
+
+
 def _resolve_verification_source(
     item: GitHubIssue,
     token: str | None,
@@ -982,8 +989,8 @@ def _collect_direct_paid_candidates(
     search_results: list[SearchQueryResult] | None,
     *,
     scout_preferences: preferences.ScoutPreferences,
-) -> list[tuple[GitHubIssue, str | None, bool]]:
-    pending: list[tuple[GitHubIssue, str | None, bool]] = []
+) -> list[_PendingPaidCandidate]:
+    pending: list[_PendingPaidCandidate] = []
 
     if search_results is None:
         search_results = [
@@ -1018,7 +1025,7 @@ def _collect_direct_paid_candidates(
             if not selection.repository_excluded(
                 repo, scout_preferences
             ) and paid.is_clean_candidate(item):
-                pending.append((item, None, False))
+                pending.append(_PendingPaidCandidate(issue=item, platform_signal=None, is_platform=False))
 
     return pending
 
@@ -1031,7 +1038,7 @@ def _collect_platform_paid_candidates(
     examples: list[RejectionRecord],
     *,
     scout_preferences: preferences.ScoutPreferences,
-) -> list[tuple[GitHubIssue, str | None, bool]]:
+) -> list[_PendingPaidCandidate]:
     # Official platform feeds can expose funded issues that contain no bounty
     # keywords on GitHub at all. Fetch their source issues concurrently, then
     # apply the same source-authoritative verification as direct discoveries.
@@ -1083,7 +1090,7 @@ def _collect_platform_paid_candidates(
         platform_hydration_requests,
     )
 
-    pending: list[tuple[GitHubIssue, str | None, bool]] = []
+    pending: list[_PendingPaidCandidate] = []
     for (source_url, platform_signal), (platform_item, source_failure) in zip(
         platform_sources,
         platform_items,
@@ -1101,13 +1108,19 @@ def _collect_platform_paid_candidates(
             )
             continue
         if platform_item and paid.is_clean_candidate(platform_item):
-            pending.append((platform_item, platform_signal, True))
+            pending.append(
+                _PendingPaidCandidate(
+                    issue=platform_item,
+                    platform_signal=platform_signal,
+                    is_platform=True,
+                )
+            )
 
     return pending
 
 
 def _verify_paid_candidates(
-    pending: list[tuple[GitHubIssue, str | None, bool]],
+    pending: list[_PendingPaidCandidate],
     token: str | None,
     repo_cache: dict[str, RepositoryMetadata],
     guide_cache: dict[str, str | None],
@@ -1117,21 +1130,17 @@ def _verify_paid_candidates(
     scout_preferences: preferences.ScoutPreferences,
 ) -> list[Candidate]:
     def verify_paid(
-        row: tuple[GitHubIssue, str | None, bool],
-    ) -> tuple[
-        tuple[GitHubIssue, str | None, bool],
-        tuple[Candidate | None, str | None],
-    ]:
-        item, platform_signal, _ = row
+        row: _PendingPaidCandidate,
+    ) -> tuple[_PendingPaidCandidate, tuple[Candidate | None, str | None]]:
         return (
             row,
             verify(
-                item,
+                row.issue,
                 token,
                 repo_cache,
                 guide_cache,
                 require_paid=True,
-                payment_signal_override=platform_signal,
+                payment_signal_override=row.platform_signal,
                 scout_preferences=scout_preferences,
             ),
         )
@@ -1147,9 +1156,10 @@ def _verify_paid_candidates(
     )
 
     found: list[Candidate] = []
-    for (item, _, is_platform), (candidate, reason) in verification_results:
+    for row, (candidate, reason) in verification_results:
+        item = row.issue
         url = str(item.get("html_url") or "")
-        kind = "platform" if is_platform else "paid"
+        kind = "platform" if row.is_platform else "paid"
         if reason:
             add_reject(rejected, examples, item, reason)
             print(f"Skipping {kind} candidate {url}: {reason}")
