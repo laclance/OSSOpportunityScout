@@ -15,10 +15,7 @@ from tests.workflow_references import validate_workflow_references
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "examples" / "private-instance" / "scout.yml"
-DEPENDABOT_EXAMPLE = ROOT / "examples" / "private-instance" / "dependabot.yml"
 ACTION = ROOT / "action.yml"
-
-APPROVED_DISTRIBUTED_SCANNER_SHA = "6bacf9b5dcedd470740564c3d19c0dcc0620f8df"
 
 
 def document(path: Path) -> dict[str, Any]:
@@ -39,30 +36,24 @@ def shell_step(
 
 
 class PrivateInstanceContractTests(unittest.TestCase):
-    def test_optional_dependabot_config_only_updates_the_scanner_action(self) -> None:
-        config = document(DEPENDABOT_EXAMPLE)
-        self.assertEqual(config["version"], 2)
-        self.assertEqual(len(config["updates"]), 1)
-        update = config["updates"][0]
-        self.assertEqual(update["package-ecosystem"], "github-actions")
-        self.assertEqual(update["directory"], "/")
-        self.assertEqual(update["schedule"], {"interval": "weekly"})
-        self.assertEqual(
-            update["allow"],
-            [{"dependency-name": "laclance/OSSOpportunityScout"}],
-        )
-        self.assertNotIn("groups", update)
-
-        template_text = TEMPLATE.read_text(encoding="utf-8")
-        self.assertNotIn("dependabot", template_text.lower())
-        scanner = document(TEMPLATE)["jobs"]["scout"]["steps"][4]["uses"]
-        self.assertRegex(scanner, r"^laclance/OSSOpportunityScout@[0-9a-f]{40}$")
-        self.assertNotIn("@main", scanner)
-
     def test_parsed_workflow_ownership_permissions_serialization_and_pins(self) -> None:
         workflow = document(TEMPLATE)
         validate_workflow_references(workflow)
-        self.assertEqual(workflow["on"], {"workflow_dispatch": None})
+        self.assertEqual(
+            workflow["on"],
+            {
+                "workflow_dispatch": {
+                    "inputs": {
+                        "scanner_ref": {
+                            "description": "Public scanner revision (main or reviewed 40-character SHA)",
+                            "required": False,
+                            "type": "string",
+                            "default": "main",
+                        }
+                    }
+                }
+            },
+        )
         self.assertEqual(workflow["permissions"], {})
         self.assertEqual(
             workflow["concurrency"],
@@ -96,6 +87,9 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 None,
                 "base",
                 "recovery_gate",
+                "scanner_ref",
+                "scanner_checkout",
+                "scanner_revision",
                 "scan",
                 "persist",
                 "transaction",
@@ -106,11 +100,19 @@ class PrivateInstanceContractTests(unittest.TestCase):
         )
         self.assertEqual(steps[1]["with"]["ref"], "${{ github.event.repository.default_branch }}")
         recovery_gate = steps[3]
-        scan = steps[4]
-        self.assertEqual(
-            scan["uses"],
-            "laclance/OSSOpportunityScout@" + APPROVED_DISTRIBUTED_SCANNER_SHA,
-        )
+        validate = steps[4]
+        checkout = steps[5]
+        revision = steps[6]
+        scan = steps[7]
+        self.assertEqual(validate["env"]["SCANNER_REF"], "${{ inputs.scanner_ref || 'main' }}")
+        self.assertEqual(checkout["with"]["repository"], "laclance/OSSOpportunityScout")
+        self.assertEqual(checkout["with"]["ref"], "${{ inputs.scanner_ref || 'main' }}")
+        self.assertEqual(checkout["with"]["path"], ".scout-scanner-source")
+        self.assertIs(checkout["with"]["persist-credentials"], False)
+        self.assertEqual(revision["working-directory"], ".scout-scanner-source")
+        self.assertIn("git rev-parse --verify HEAD", revision["run"])
+        self.assertIn("GITHUB_STEP_SUMMARY", revision["run"])
+        self.assertEqual(scan["uses"], "./.scout-scanner-source")
         self.assertEqual(scan["with"]["config-path"], "scout.toml")
         self.assertEqual(scan["with"]["state-path"], "seen_bounties.json")
         self.assertEqual(scan["with"]["github-token"], "${{ github.token }}")
@@ -124,13 +126,13 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertNotIn("GITHUB_REPORTS_ENABLED", str(workflow))
         self.assertNotIn("if", recovery_gate)
         self.assertIn(".scout/recovery-required", recovery_gate["run"])
-        self.assertTrue(steps[5]["continue-on-error"])
+        self.assertTrue(steps[8]["continue-on-error"])
         self.assertNotIn("continue-on-error", scan)
         self.assertNotIn(
-            "if", steps[5]
+            "if", steps[8]
         )  # Default success() still skips Git persistence on scan failure.
-        self.assertEqual(steps[5]["env"]["SCOUT_BASE_SHA"], "${{ steps.base.outputs.sha }}")
-        transaction = steps[6]
+        self.assertEqual(steps[8]["env"]["SCOUT_BASE_SHA"], "${{ steps.base.outputs.sha }}")
+        transaction = steps[9]
         self.assertEqual(transaction["if"], "${{ always() }}")
         self.assertEqual(transaction["env"]["SCAN_OUTCOME"], "${{ steps.scan.outcome }}")
         self.assertEqual(
@@ -140,7 +142,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertEqual(transaction["env"]["PERSIST_OUTCOME"], "${{ steps.persist.outcome }}")
         self.assertIn("mode=exact-state", transaction["run"])
         self.assertIn("mode=reconstruct", transaction["run"])
-        recovery = steps[7]
+        recovery = steps[10]
         self.assertEqual(
             recovery["if"],
             "${{ always() && steps.transaction.outputs.mode == 'exact-state' && github.event.repository.private == true }}",
@@ -149,7 +151,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertEqual(recovery["with"]["retention-days"], 3)
         self.assertEqual(recovery["with"]["if-no-files-found"], "error")
         self.assertIn("github.run_attempt", recovery["with"]["name"])
-        recovery_barrier = steps[8]
+        recovery_barrier = steps[11]
         self.assertEqual(
             recovery_barrier["if"],
             "${{ always() && steps.transaction.outputs.required == 'true' }}",
@@ -160,7 +162,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
         self.assertIn(".scout/recovery-required", recovery_barrier["run"])
         self.assertIn("push origin", recovery_barrier["run"])
         self.assertNotIn("push --force", recovery_barrier["run"])
-        recovery_handoff = steps[9]
+        recovery_handoff = steps[12]
         self.assertEqual(
             recovery_handoff["if"],
             "${{ always() && steps.transaction.outputs.required == 'true' }}",
@@ -177,7 +179,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
         )
         self.assertIn("required=true", recovery_handoff["run"])
         self.assertIn("recovery_mode=", recovery_handoff["run"])
-        self.assertNotIn("--force", steps[5]["run"])
+        self.assertNotIn("--force", steps[8]["run"])
 
         cancel_job = workflow["jobs"]["cancel_queued"]
         self.assertEqual(cancel_job["needs"], "scout")
@@ -218,7 +220,10 @@ class PrivateInstanceContractTests(unittest.TestCase):
 
         for step in steps + cancel_steps + document(ACTION)["runs"]["steps"]:
             if "uses" in step:
-                self.assertRegex(step["uses"], r"^[\w/-]+@[0-9a-f]{40}$")
+                if step["uses"].startswith("./"):
+                    self.assertEqual(step["uses"], "./.scout-scanner-source")
+                else:
+                    self.assertRegex(step["uses"], r"^[\w/-]+@[0-9a-f]{40}$")
             else:
                 self.assertEqual(step["shell"], "bash")
                 self.assertNotIn("${{", step["run"])
@@ -226,6 +231,71 @@ class PrivateInstanceContractTests(unittest.TestCase):
                     ["bash", "-n"], input=step["run"], capture_output=True, text=True
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_scanner_revision_is_validated_before_checkout(self) -> None:
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][4]
+        with tempfile.TemporaryDirectory() as tmp:
+            for ref, expected in (
+                ("main", 0),
+                ("a" * 40, 0),
+                ("", 1),
+                ("dev", 1),
+                ("v1.0.12", 1),
+                ("A" * 40, 1),
+                ("a" * 39, 1),
+                ("a" * 40 + "; echo unexpected", 1),
+            ):
+                with self.subTest(ref=ref):
+                    result = shell_step(step, Path(tmp), {"SCANNER_REF": ref})
+                    self.assertEqual(result.returncode, expected, result.stderr)
+
+    def test_resolved_revision_records_exact_checked_out_commit(self) -> None:
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / ".scout-scanner-source"
+            source.mkdir()
+            subprocess.run(["git", "init", "-q", str(source)], check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(source),
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.org",
+                    "commit",
+                    "--allow-empty",
+                    "-qm",
+                    "fixture",
+                ],
+                check=True,
+            )
+            sha = subprocess.check_output(
+                ["git", "-C", str(source), "rev-parse", "HEAD"], text=True
+            ).strip()
+            for ref, expected in (("main", 0), (sha, 0), ("b" * 40, 1)):
+                with self.subTest(ref=ref):
+                    output = root / "output"
+                    summary = root / "summary"
+                    result = shell_step(
+                        step,
+                        source,
+                        {
+                            "SCANNER_REF": ref,
+                            "GITHUB_OUTPUT": str(output),
+                            "GITHUB_STEP_SUMMARY": str(summary),
+                        },
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    if expected == 0:
+                        self.assertEqual(output.read_text(), f"sha={sha}\n")
+                        self.assertIn(sha, summary.read_text())
+                    if output.exists():
+                        output.unlink()
+                    if summary.exists():
+                        summary.unlink()
 
     def test_private_and_default_branch_guards(self) -> None:
         step = document(TEMPLATE)["jobs"]["scout"]["steps"][0]
@@ -244,7 +314,7 @@ class PrivateInstanceContractTests(unittest.TestCase):
                 self.assertEqual(result.returncode, expected)
 
     def test_transaction_recovery_classification_is_causal(self) -> None:
-        step = document(TEMPLATE)["jobs"]["scout"]["steps"][6]
+        step = document(TEMPLATE)["jobs"]["scout"]["steps"][9]
         cases = (
             ("success", "false", "success", {"required": "false", "mode": "none"}),
             ("success", "false", "failure", {"required": "true", "mode": "exact-state"}),
@@ -628,9 +698,9 @@ class StateTransactionTests(unittest.TestCase):
         steps = workflow["jobs"]["scout"]["steps"]
         self.restore = steps[2]
         self.recovery_gate = steps[3]
-        self.persist = steps[5]
-        self.transaction = steps[6]
-        self.recovery_barrier = steps[8]
+        self.persist = steps[8]
+        self.transaction = steps[9]
+        self.recovery_barrier = steps[11]
         self.cancel_queued = workflow["jobs"]["cancel_queued"]["steps"][0]
         self.output = self.folder / "output"
         self.environment["GITHUB_OUTPUT"] = str(self.output)

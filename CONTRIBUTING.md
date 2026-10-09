@@ -87,10 +87,13 @@ examples.
 For action/template changes, follow the [offline deployment checks](docs/PRIVATE_INSTANCE.md#offline-validation).
 They parse YAML and execute Bash against local temporary Git repositories; do not
 create a live private instance or trigger delivery to validate distribution assets.
-Keep pins immutable, state reads inside serialization, and recovery uploads private.
-External actions and external reusable workflows must use reviewed full 40-character
-commit SHAs; same-repository reusable workflows may use GitHub's same-commit local
-reference syntax (`./.github/workflows/...`).
+Keep external action pins immutable, state reads inside serialization, and recovery
+uploads private. External actions and external reusable workflows must use reviewed
+full 40-character commit SHAs; same-repository reusable workflows may use GitHub's
+same-commit local syntax (`./.github/workflows/...`). Private scanner selection
+may use public `main` or a validated reviewed SHA through a separate checkout,
+followed by a local action (`uses: ./.scout-scanner-source`); do not add mutable
+external action references or weaken recovery preflight.
 
 Keep each PR focused on one behavior or one refactoring boundary. Finish the logical change before running `make format`, then run `make quality`. Prefer committing the finalized formatted result with the logical change rather than adding repeated formatter-only commits.
 

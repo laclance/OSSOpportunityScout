@@ -15,9 +15,9 @@ The architecture should make those lanes easy to reason about without forcing co
 
 The canonical public upstream remains the source of truth for scanner code and may run development/release CI and publish reusable execution machinery or generic templates. It must not operate persistent scout instances or own user schedules, private configuration, scout secrets, report destinations, scout state, or opportunity history.
 
-The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and the scanner pin. The repository holding private configuration/state also owns when the scout runs; its workflow invokes pinned public execution machinery. Upstream does not run a workflow that reaches into private state repositories.
+The independent private instance repository owns `scout.toml`, `seen_bounties.json`, the actual scout workflow, `workflow_dispatch`, any future schedule, concurrency, secrets, delivery configuration, state persistence/history, and scanner source selection. Its workflow checks out public scanner `main` or a validated reviewed full SHA into an isolated source directory and executes that local action, logging the resolved SHA. Upstream does not run a workflow that reaches into private state repositories.
 
-Forking is optional for code customization. Default instances consume pinned upstream code directly; customized instances may consume a pinned fork while keeping runtime ownership private.
+Forking is optional for code customization. The distributed default follows upstream `main` at scan time; operators can override a run with a reviewed full scanner SHA. Customized forks require an explicitly reviewed workflow change, while runtime ownership remains private.
 
 The public/private ownership migration is complete. The
 [completed migration record](docs/PRIVATE_DEPLOYMENT_MIGRATION.md) preserves its
@@ -32,10 +32,14 @@ the empty seed is distributed as `examples/seen_bounties.example.json`.
 
 ### Public action and private transaction template
 
-Root `action.yml` runs the scanner from its pinned `github.action_path` using
-isolated Python 3.12. It explicitly supplies config/state paths and separate
-discovery/delivery credentials, disables host reporting, and leaves Git transport
-to the caller. Scanner policy and local state semantics remain unchanged.
+Root `action.yml` runs the scanner from `github.action_path` using isolated
+Python 3.12. The private template validates `scanner_ref`, checks out public
+`main` or the selected full SHA into `.scout-scanner-source`, logs the actual
+checked-out commit, and invokes `uses: ./.scout-scanner-source`. External helper
+actions remain pinned to reviewed full SHAs. The scanner uses explicit config/state
+paths and separate discovery/delivery credentials, disables host reporting, and
+leaves Git transport to the caller. Following `main` permits subsequent upstream
+changes to execute with scanner credentials; reviewed-SHA override prevents that.
 
 `examples/private-instance/scout.yml` is an inactive distribution template, outside
 upstream workflows. The private caller restricts execution to its private default
