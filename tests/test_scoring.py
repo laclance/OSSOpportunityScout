@@ -147,6 +147,48 @@ class EffortCalibrationTests(unittest.TestCase):
         self.assertEqual(estimate.bucket, "1d+")
         self.assertIn("backward-compatibility", estimate.reasons[0])
 
+    def test_report_19_explicit_api_break_raises_architectural_effort(self) -> None:
+        grpc = issue(
+            title="refactor into separate client and server modules to reduce CVE fire drills?",
+            body=(
+                "Refactor google.golang.org/grpc into separate grpc/client and "
+                "grpc/server modules, with a third shared module. "
+                "I recognize that this would be an API break and probably annoying "
+                "in other ways, so feel free to WONTFIX if it doesn't make sense."
+            ),
+            labels=[{"name": "Type: Feature"}],
+        )
+        estimate = scoring.estimate_effort_details(grpc)
+        self.assertEqual(
+            estimate,
+            scoring.EffortEstimate("1d+", ("backward-compatibility or persisted-state risk",)),
+        )
+        self.assertEqual(scoring.strategic_priority_score(75, estimate.bucket, "none")[0], 72)
+
+    def test_api_break_scope_signal_requires_explicit_positive_statement(self) -> None:
+        for statement in (
+            "This might be an API break.",
+            "This will be an API break.",
+            "The refactor could be an API break.",
+        ):
+            with self.subTest(statement=statement):
+                self.assertEqual(
+                    scoring.estimate_effort(issue(title="Split client modules", body=statement)),
+                    "1d+",
+                )
+
+        for statement in (
+            "This would not be an API break.",
+            "No API break is expected.",
+            "An earlier API break is unrelated to this metadata change.",
+        ):
+            with self.subTest(statement=statement):
+                estimate = scoring.estimate_effort_details(
+                    issue(title="Update client metadata type", body=statement)
+                )
+                self.assertEqual(estimate.bucket, "3–6h")
+                self.assertEqual(estimate.reasons, ("moderate implementation scope",))
+
     def test_fenced_diagnostics_do_not_inflate_effort(self) -> None:
         fence = chr(96) * 3
         huge_dump = "x" * 18000

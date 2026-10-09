@@ -305,6 +305,7 @@ def _compatibility_risk(evidence: _IssueEvidence) -> bool:
     compatibility_risk = bool(
         re.search(
             r"\b(?:backward[- ]incompatible|backwards? compatibility|"
+            r"(?:would|will|could|may|might)\s+be\s+(?:an?\s+)?api\s+break|"
             r"compatibility (?:risk|break|constraint)|persisted (?:state|data)|"
             r"existing deployments?|wire format|on-disk format)\b",
             evidence.text,
