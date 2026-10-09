@@ -120,8 +120,10 @@ A narrowly corroborated upstream-Go-tool diagnosis (standalone `go vet` reproduc
 matching failure without the project CLI, explicit upstream attribution and no
 project-local fix) also holds strategic work, unless a trusted maintainer approves it.
 Explicitly undecided public APIs, proposals contingent on agreement about interfaces,
-and proxy-controlled trusted log labels are not implementation-ready without
-project acceptance. This narrow gate recognizes source-only cases with no discussion,
+and proposed proxy-controlled trusted log labels are not implementation-ready without
+project acceptance. The proxy-label hold requires feature-request evidence and
+does not treat existing-header regressions as unapproved proposals. This narrow gate
+recognizes source-only cases with no discussion,
 defers when comments are still unfetched, and honors trusted maintainer approval or
 project-ready labels; normal feature requests are not categorically excluded.
 Cloud-managed metric discrepancies with unknown backend version and step-sensitive

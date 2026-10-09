@@ -322,6 +322,20 @@ _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
     r"(?:preferred|right)\s+(?:design|approach|direction))\b",
     re.IGNORECASE | re.DOTALL,
 )
+_PROPOSED_PROXY_HEADER_RE: Final = re.compile(
+    r"\b(?:add|introduce|propose|request)\s+(?:(?:a|an|the)\s+)?"
+    r"(?:new\s+)?optional\s+http\s+header\b",
+    re.IGNORECASE,
+)
+_EXISTING_PROXY_HEADER_FAILURE_RE: Final = re.compile(
+    r"\b(?:regression|no\s+longer|stopped\s+working|previously\s+supported|"
+    r"used\s+to\s+(?:work|set|force|apply)|existing\s+(?:(?:optional|http|auth|authentication|proxy)\s+)*header)\b",
+    re.IGNORECASE,
+)
+_PROXY_FEATURE_LABELS: Final = frozenset(
+    {"feature", "feature-request", "enhancement", "type/feature", "kind/feature", "type/enhancement", "kind/proposal"}
+)
+
 _REPORTER_UNAPPROVED_PROPOSAL_RE: Final = re.compile(
     r"\b(?:feel free to|it(?:'s| is) (?:fine|okay|ok) to)\s+"
     r"(?:wontfix|close|reject)\b",
@@ -852,9 +866,23 @@ def unapproved_architecture_proposal_reason(
     body = evidence.normalized_body_lower
     undecided_api = "do not suggest specific api" in body
     pending_interface = "after agreement on the interface" in body
-    proxy_label_trust = all(
-        marker in body
-        for marker in ("optional http header", "reverse proxy", "force a label", "authentication")
+    proxy_feature_request = (
+        "feature request" in body
+        or "describe the solution you'd like" in body
+        or _PROPOSED_PROXY_HEADER_RE.search(f"{evidence.title}\n{body}") is not None
+        or bool(evidence.label_set & _PROXY_FEATURE_LABELS)
+    )
+    # The same technical phrases can describe a broken, already-supported header.
+    existing_header_failure = _EXISTING_PROXY_HEADER_FAILURE_RE.search(
+        f"{evidence.title}\n{body}"
+    )
+    proxy_label_trust = (
+        proxy_feature_request
+        and existing_header_failure is None
+        and all(
+            marker in body
+            for marker in ("optional http header", "reverse proxy", "force a label", "authentication")
+        )
     )
     if undecided_api or pending_interface or proxy_label_trust:
         return "feature proposal needs maintainer agreement on design or trust boundary"
