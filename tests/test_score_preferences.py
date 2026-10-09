@@ -21,7 +21,12 @@ from opportunity_scout import (
     state,
 )
 from opportunity_scout.strategic import discovery, verification
-from opportunity_scout.types import Candidate, IssueRow, RepositoryMetadata, SourceFailureReason
+from opportunity_scout.types import (
+    Candidate,
+    RepositoryMetadata,
+    SourceFailureReason,
+    StrategicPreviewRow,
+)
 from tests.helpers import candidate, issue
 from tests.test_run import FIXED_TIME, dependencies
 
@@ -235,7 +240,7 @@ class RefreshedScoreTests(unittest.TestCase):
                 self.assertEqual(paid_checks.call_count, int(final_paid))
 
     def test_threshold_rejections_do_not_settle_repository_slots(self) -> None:
-        rows: list[IssueRow] = []
+        rows: list[StrategicPreviewRow] = []
         outcomes: list[tuple[Candidate | None, str | None]] = []
         for index in range(7):
             source = issue(html_url=f"https://github.com/example/project/issues/{index + 1}")
