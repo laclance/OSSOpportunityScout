@@ -1435,6 +1435,74 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
             readiness.unapproved_architecture_proposal_reason(proposal, [refusal, approval])
         )
 
+    def test_proxy_header_hold_requires_feature_intent_not_existing_regression(self) -> None:
+        feature = issue(
+            title="Force label through HTTP Header",
+            labels=["type/feature"],
+            comments=0,
+            body=(
+                "Is your feature request related to a problem? Please describe. "
+                "Describe the solution you'd like: An optional HTTP header that allows "
+                "the reverse proxy doing authentication to force a label on every log entry."
+            ),
+        )
+        proposed = issue(
+            title="Add optional HTTP header",
+            comments=0,
+            body=(
+                "Please add an optional HTTP header so the reverse proxy doing "
+                "authentication can force a label on every log entry."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        for candidate in (feature, proposed):
+            with self.subTest(title=candidate["title"]):
+                self.assertEqual(
+                    readiness.unapproved_architecture_proposal_reason(candidate, []),
+                    reason,
+                )
+
+        existing_regressions = (
+            issue(
+                title="Regression: trusted log labels dropped after upgrade",
+                labels=["type/feature"],
+                comments=0,
+                body=(
+                    "The existing optional HTTP header from the reverse proxy doing "
+                    "authentication must force a label on every log entry, but it no "
+                    "longer works since the upgrade."
+                ),
+            ),
+            issue(
+                title="Proxy authentication header stopped working",
+                labels=["bug"],
+                comments=0,
+                body=(
+                    "The optional HTTP header from the reverse proxy doing "
+                    "authentication used to force a label, but fails after upgrading."
+                ),
+            ),
+            issue(
+                title="Existing header parsing bug",
+                comments=0,
+                body=(
+                    "The existing optional HTTP header passed by our reverse proxy "
+                    "doing authentication should force a label, but does not."
+                ),
+            ),
+            issue(
+                title="Header parsing bug",
+                comments=0,
+                body=(
+                    "The optional HTTP header from the reverse proxy doing "
+                    "authentication should force a label, but it does not."
+                ),
+            ),
+        )
+        for candidate in existing_regressions:
+            with self.subTest(title=candidate["title"]):
+                self.assertIsNone(readiness.unapproved_architecture_proposal_reason(candidate, []))
+
     def test_ordinary_features_and_partial_proposals_remain_eligible(self) -> None:
         cases = (
             issue(title="Add per-request metrics", labels=["enhancement"], comments=0),

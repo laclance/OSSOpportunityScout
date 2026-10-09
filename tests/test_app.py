@@ -799,6 +799,33 @@ class VerificationTests(unittest.TestCase):
                 )
             )
 
+    def test_existing_proxy_header_bug_is_not_an_unapproved_feature(self) -> None:
+        regression = issue(
+            title="Regression: proxy labels dropped after update",
+            labels=["bug"],
+            comments=0,
+            body=(
+                "Our existing optional HTTP header from the reverse proxy doing "
+                "authentication should force a label on each log entry, but it no "
+                "longer works."
+            ),
+        )
+        feature = issue(
+            title="Force label through HTTP Header",
+            labels=["type/feature"],
+            comments=0,
+            body=(
+                "Feature request: introduce an optional HTTP header that lets the "
+                "reverse proxy doing authentication force a label on every log entry."
+            ),
+        )
+        reason = "feature proposal needs maintainer agreement on design or trust boundary"
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertIsNone(scout.strategic_preflight_rejection(regression))
+            self.assertIsNone(scout.strategic_rejection(regression, "t", []))
+            self.assertEqual(scout.strategic_preflight_rejection(feature), reason)
+            self.assertEqual(scout.strategic_rejection(feature, "t", []), reason)
+
     def test_negated_maintainer_readiness_cannot_release_strategic_hold(self) -> None:
         proposal = issue(
             title="Snapshotter interface design",
