@@ -165,6 +165,111 @@ class MaintainerReadinessTests(unittest.TestCase):
             (True, None),
         )
 
+    def test_aws_route_optimization_awaits_bounded_implementation_scope(self) -> None:
+        proposal = issue(
+            title="Optimize HTTPRoute translation to combine multiple HTTP methods",
+            labels=[{"name": "kind/feature"}, {"name": "gateway-api"}],
+        )
+        maintainer = comment(
+            body=(
+                "This is a good idea for the simple case. But I don't think it "
+                "generalizes cleanly. We can only safely merge matches that are "
+                "identical in path/headers/query/hostname, go to the same backend, "
+                "and differ only by method. The safe implementation is a narrow "
+                "budget-aware pass. Couple of questions to size it: how many "
+                "methods per path are you combining, and how close to the rule limit?"
+            ),
+            author_association="COLLABORATOR",
+        )
+        hold = "maintainer implementation scope remains unresolved under project constraints"
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [maintainer]),
+            (False, hold),
+        )
+        approval = comment(
+            body="The constraints are agreed; ready for implementation.",
+            author_association="OWNER",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [maintainer, approval]),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(proposal, [approval, maintainer]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                proposal, [{**maintainer, "author_association": "NONE"}]
+            ),
+            (None, None),
+        )
+
+    def test_terraform_owner_team_triage_is_not_a_contributor_veto(self) -> None:
+        report = issue(title="S3-compatible backend checksum regression")
+        owner_handoff = comment(
+            body=(
+                "The AWS provider team at HashiCorp, codeowner for this functionality, "
+                "has been notified and will triage on their timeline."
+            ),
+            author_association="CONTRIBUTOR",
+        )
+        compatibility = comment(
+            body=(
+                "The AWS provider team does not guarantee compatibility with "
+                "third-party S3 vendors."
+            ),
+            author_association="CONTRIBUTOR",
+        )
+        hold = "implementation awaits owning team triage and scope decision"
+        self.assertTrue(readiness.maintainer_comment_authority(owner_handoff))
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [owner_handoff, compatibility]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [compatibility]),
+            (None, None),
+        )
+        ready = comment(
+            body="We approve a targeted regression test and fix. Ready for implementation.",
+            author_association="MEMBER",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [owner_handoff, compatibility, ready]
+            ),
+            (True, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [ready, owner_handoff]),
+            (False, hold),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [{**owner_handoff, "author_association": "NONE"}]
+            ),
+            (None, None),
+        )
+
+    def test_architecture_discussion_without_pending_scope_remains_eligible(self) -> None:
+        feature = issue(labels=[{"name": "help wanted"}])
+        benign = comment(
+            body=(
+                "We can only safely merge identical routes, and there is a hard limit "
+                "on values. Implement the bounded optimization with regression tests."
+            ),
+            author_association="COLLABORATOR",
+        )
+        question = comment(
+            body="How many methods per path does the implementation test?",
+            author_association="COLLABORATOR",
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(feature, [benign, question]),
+            (None, None),
+        )
+
     def test_node_log_request_is_a_diagnostic_hold(self) -> None:
         comments: list[GitHubComment] = [
             {
