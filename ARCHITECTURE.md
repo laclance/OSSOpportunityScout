@@ -415,4 +415,6 @@ an incomplete state commit. `tests/test_run.py` and `tests/test_app.py` cover th
 - `AGENTS.md` owns AI coding-agent execution rules.
 - `ARCHITECTURE.md` owns shared current boundaries, flow, and invariants.
 - `ROADMAP.md` owns forward-looking work and sequencing.
+- `docs/CONFIGURATION.md` is the current configuration schema and offline-validation reference.
+- `docs/PRIVATE_INSTANCE.md` owns current private-template setup and recovery procedures; a deployed instance may still use an older copy.
 - `docs/PRIVATE_DEPLOYMENT_MIGRATION.md` is the completed migration/acceptance record: historical contracts, PR slices, recovery, provenance, and final ownership boundaries.

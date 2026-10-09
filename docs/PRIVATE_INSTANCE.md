@@ -83,9 +83,12 @@ The distribution assets do not perform instance setup or state migration.
 
 ## Private instance acceptance checklist
 
-The original migrated instance completed these gates with operational evidence kept
-private. Every new independent instance should establish equivalent evidence for
-itself; recovery or offline checks alone do not complete operational acceptance.
+The original migrated instance completed Slice 6 operational acceptance before the
+durable recovery marker and queued-run cancellation were added to the public
+template. Those later safeguards need separate adoption and live validation in
+each deployed workflow; a successful scan does not prove they are installed.
+Every new independent instance must establish its own private evidence. Offline
+checks alone do not establish operational acceptance.
 Resolve the instance repository, personal preferences, delivery destinations, and
 secure provisioning of the separate report credential before dependent actions.
 Keep the following evidence in private storage or the confirmed private instance:
@@ -130,9 +133,10 @@ claims.
 Public tracker/PR updates contain only non-sensitive status and public source/check
 identifiers. Keep personal repository identities, preferences, secrets, state
 contents/counts, opportunity URLs, run IDs, recovery hashes, and operational logs
-private. The original migrated instance completed these gates; operational evidence
-remains private. Every new independent instance must prove equivalent gates for
-itself.
+private. The historical Slice 6 acceptance record does not establish that
+the deployed instance adopted or validated the later recovery marker and
+cancellation safeguards. Verify the deployed workflow separately against the
+current template before relying on those protections.
 
 ## Action inputs and credentials
 
