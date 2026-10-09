@@ -723,7 +723,6 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
-
     def test_latest_report_readiness_regressions(self) -> None:
         proposal = issue(
             body="Split client and server modules. Feel free to WONTFIX if this makes no sense.",

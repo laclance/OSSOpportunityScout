@@ -497,7 +497,6 @@ class MaintainerReadinessTests(unittest.TestCase):
             (False, "proposal is still gathering feedback"),
         )
 
-
     def test_non_project_bug_claim_requires_maintainer_authority(self) -> None:
         report = issue(labels=[{"name": "kind/bug/possible"}, {"name": "contributor/wanted"}])
         diagnosis: GitHubComment = {
@@ -985,7 +984,6 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
             "issue reporter says implementation design is still under discussion",
         )
 
-
     def test_unapproved_module_split_proposal_requires_maintainer_acceptance(self) -> None:
         grpc = issue(
             user={"login": "author"},
@@ -1321,7 +1319,6 @@ class ReporterSupportTriageTests(unittest.TestCase):
             readiness.reporter_support_triage_reason(flux),
             "support/triage issue rather than a contributor task",
         )
-
 
     def test_reporter_config_followup_is_support_until_maintainer_ready(self) -> None:
         flux = issue(
