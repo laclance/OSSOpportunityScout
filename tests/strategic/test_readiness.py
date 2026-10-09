@@ -1318,7 +1318,7 @@ class UnapprovedArchitectureProposalTests(unittest.TestCase):
                             **{
                                 **candidate,
                                 "author_association": "OWNER",
-                                "body": candidate["body"] + " Ready for implementation.",
+                                "body": str(candidate["body"]) + " Ready for implementation.",
                             }
                         ),
                         [],
