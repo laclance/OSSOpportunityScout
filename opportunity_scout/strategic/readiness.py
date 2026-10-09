@@ -333,7 +333,15 @@ _EXISTING_PROXY_HEADER_FAILURE_RE: Final = re.compile(
     re.IGNORECASE,
 )
 _PROXY_FEATURE_LABELS: Final = frozenset(
-    {"feature", "feature-request", "enhancement", "type/feature", "kind/feature", "type/enhancement", "kind/proposal"}
+    {
+        "feature",
+        "feature-request",
+        "enhancement",
+        "type/feature",
+        "kind/feature",
+        "type/enhancement",
+        "kind/proposal",
+    }
 )
 
 _REPORTER_UNAPPROVED_PROPOSAL_RE: Final = re.compile(
@@ -873,15 +881,18 @@ def unapproved_architecture_proposal_reason(
         or bool(evidence.label_set & _PROXY_FEATURE_LABELS)
     )
     # The same technical phrases can describe a broken, already-supported header.
-    existing_header_failure = _EXISTING_PROXY_HEADER_FAILURE_RE.search(
-        f"{evidence.title}\n{body}"
-    )
+    existing_header_failure = _EXISTING_PROXY_HEADER_FAILURE_RE.search(f"{evidence.title}\n{body}")
     proxy_label_trust = (
         proxy_feature_request
         and existing_header_failure is None
         and all(
             marker in body
-            for marker in ("optional http header", "reverse proxy", "force a label", "authentication")
+            for marker in (
+                "optional http header",
+                "reverse proxy",
+                "force a label",
+                "authentication",
+            )
         )
     )
     if undecided_api or pending_interface or proxy_label_trust:
