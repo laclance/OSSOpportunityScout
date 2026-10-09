@@ -723,13 +723,14 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
-    def test_stale_strategic_issue_requires_trusted_readiness_confirmation(self) -> None:
+    def test_stale_strategic_issue_requires_label_removal(self) -> None:
         # Regression: Cilium #45913 was ranked while marked stale by automation.
         stale = issue(
             html_url="https://github.com/cilium/cilium/issues/45913",
             title="Gateway API hostNetwork TLS Passthrough regression",
             labels=[{"name": "kind/bug"}, {"name": "stale"}],
             comments=4,
+            updated_at="2026-10-08T01:54:20Z",
         )
         reason = "stale issue awaiting maintainer re-triage"
         bot_comment: list[GitHubComment] = [
@@ -748,6 +749,7 @@ class VerificationTests(unittest.TestCase):
             {
                 "body": "Confirmed still reproducible; contributions welcome.",
                 "author_association": "MEMBER",
+                "created_at": "2026-06-01T00:00:00Z",
             }
         ]
 
@@ -755,7 +757,13 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(scout.strategic_rejection(stale, "t", bot_comment), reason)
             self.assertEqual(scout.strategic_rejection(stale, "t", contributor_comment), reason)
             check.assert_not_called()
-            self.assertIsNone(scout.strategic_rejection(stale, "t", maintainer_ready))
+            # Earlier readiness cannot override the current stale label.
+            self.assertEqual(scout.strategic_rejection(stale, "t", maintainer_ready), reason)
+            check.assert_not_called()
+
+            # Once the stale label is removed, readiness can be evaluated normally.
+            cleared = issue(labels=[{"name": "kind/bug"}], comments=4)
+            self.assertIsNone(scout.strategic_rejection(cleared, "t", maintainer_ready))
             check.assert_called_once()
 
             # Generic readiness labels are not evidence that a stale issue was revived.

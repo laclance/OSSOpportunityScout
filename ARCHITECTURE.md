@@ -98,6 +98,8 @@ GitHub + bounty-platform sources
 
 The important boundary is between **I/O** and **policy**. Network fetches gather evidence; pure functions should interpret that evidence whenever practical.
 
+For strategic readiness, a current `stale` or `lifecycle/stale` label holds an issue even if earlier maintainer comments indicated readiness. It becomes eligible for normal verification again when the stale label is removed.
+
 ## Current modules
 
 | Module | Responsibility | Boundary |

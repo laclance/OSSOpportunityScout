@@ -646,7 +646,7 @@ def strategic_rejection(
     if abandoned_reason:
         return abandoned_reason
 
-    stale_reason = stale_lifecycle_reason(item, comment_ready is True)
+    stale_reason = stale_lifecycle_reason(item)
     if stale_reason:
         return stale_reason
 
