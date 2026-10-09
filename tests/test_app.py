@@ -23,7 +23,7 @@ from opportunity_scout.types import (
     GitHubIssue,
     RejectionRecord,
     RepositoryMetadata,
-    SearchBatch,
+    SearchQueryResult,
     SourceFailureReason,
 )
 from tests.helpers import FakeResponse
@@ -2139,14 +2139,14 @@ class DiscoveryTests(unittest.TestCase):
 class FormattingAndMainTests(unittest.TestCase):
     def test_main_prefetches_all_discovery_searches_before_paid_work(self) -> None:
         order: list[str] = []
-        paid_prefetch: list[SearchBatch] = [("paid-q", {"items": []})]
-        strategic_prefetch: list[SearchBatch] = [("global-q", {"items": []})]
+        paid_prefetch: list[SearchQueryResult] = [("paid-q", {"items": []})]
+        strategic_prefetch: list[SearchQueryResult] = [("global-q", {"items": []})]
 
         def prefetch(
             _token: str | None,
             *,
             scout_preferences: preferences.ScoutPreferences,
-        ) -> tuple[list[SearchBatch], list[SearchBatch]]:
+        ) -> tuple[list[SearchQueryResult], list[SearchQueryResult]]:
             order.append("searches")
             return paid_prefetch, strategic_prefetch
 

@@ -12,19 +12,21 @@ from opportunity_scout.strategic import discovery, verification
 from opportunity_scout.types import (
     Candidate,
     GitHubIssue,
-    IssueRow,
     RejectionRecord,
     SourceFailureReason,
+    StrategicPreviewRow,
 )
 from tests.helpers import candidate, issue
 
 
-def row(item: GitHubIssue, *, priority: int = 80, career: int = 80, cash: int = 0) -> IssueRow:
+def row(
+    item: GitHubIssue, *, priority: int = 80, career: int = 80, cash: int = 0
+) -> StrategicPreviewRow:
     return priority, career, cash, item
 
 
 def selection(
-    ranked_by_repo: dict[str, list[IssueRow]],
+    ranked_by_repo: dict[str, list[StrategicPreviewRow]],
     audit: list[RejectionRecord] | None = None,
 ) -> discovery.StrategicDiscoverySelection:
     return discovery.StrategicDiscoverySelection(
@@ -309,7 +311,7 @@ class StrategicVerificationTests(unittest.TestCase):
         self.assertEqual(empty.candidates, [])
         self.assertEqual((empty.network_checked_rows, empty.selected_rows), (0, 0))
 
-        ranked: dict[str, list[IssueRow]] = {}
+        ranked: dict[str, list[StrategicPreviewRow]] = {}
         for index in range(9):
             repo = f"r{index}/r{index}"
             item_ = issue(html_url=f"https://github.com/{repo}/issues/1")
