@@ -263,6 +263,20 @@ _REPORTER_GUIDANCE_REQUEST_RE: Final = re.compile(
     r".{0,180}\b(?:how\s+to|configur(?:e|ation)|use|using|supply|provide|add|set\s*up)\b",
     re.IGNORECASE | re.DOTALL,
 )
+_REMOVED_GODEBUG_FATAL_RE: Final = re.compile(
+    r"\bfatal error:\s*removed\s+godebug\b.{0,180}\bin environment\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_STARTUP_FAILURE_RE: Final = re.compile(
+    r"\b(?:cannot|can not|can't|fails? to|unable to|won't)\s+"
+    r"(?:be\s+)?start(?:ed)?\b",
+    re.IGNORECASE,
+)
+_PROPOSED_STARTUP_CODE_FIX_RE: Final = re.compile(
+    r"(?m)^\s*(?:#{1,6}\s*)?(?:proposed|suggested)\s+fix:\s*"
+    r"[^\n]{0,160}\b(?:cmd/|src/|[\w.-]+\.go)\b",
+    re.IGNORECASE,
+)
 _REPORTER_IMPLEMENTATION_APPROVAL_RE: Final = re.compile(
     r"\bbefore\s+(?:another\s+|an?\s+)?(?:implementation\s+)?(?:pr|pull request)\b"
     r".{0,260}\b(?:maintainers?\b.{0,100}\b(?:review|approve)|"
@@ -923,6 +937,28 @@ def reporter_support_triage_reason(
                 and maintainer_readiness_comment_state(item, comments)[0] is not True
             ):
                 return "reporter follow-up seeks configuration guidance before implementation"
+
+    # Treat a removed Go runtime flag as startup triage, not an inferred code task.
+    # Defer source-only preflight when comments may contain maintainer approval.
+    if (
+        _REMOVED_GODEBUG_FATAL_RE.search(evidence.body_lower)
+        and _STARTUP_FAILURE_RE.search(evidence.title_lower)
+        and not _PROPOSED_STARTUP_CODE_FIX_RE.search(evidence.body_lower)
+        and evidence.author_association not in TRUSTED_ASSOCIATIONS
+        and not (
+            evidence.label_set
+            & {
+                "help wanted",
+                "good first issue",
+                "contributor/wanted",
+                "triage/accepted",
+                "refined",
+            }
+        )
+        and (comments or not int(item.get("comments") or 0))
+        and maintainer_readiness_comment_state(item, comments)[0] is not True
+    ):
+        return "environment-specific startup diagnostic awaiting maintainer triage"
     return None
 
 
