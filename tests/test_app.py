@@ -723,6 +723,52 @@ class VerificationTests(unittest.TestCase):
         ):
             self.assertEqual(scout.strategic_rejection(issue(), "t"), "comment hold")
 
+
+    def test_latest_report_readiness_regressions(self) -> None:
+        proposal = issue(
+            body="Split client and server modules. Feel free to WONTFIX if this makes no sense.",
+            comments=0,
+            user={"login": "author"},
+        )
+        support = issue(user={"login": "author"}, comments=1)
+        support_followup: list[GitHubComment] = [
+            {
+                "user": {"login": "author"},
+                "body": (
+                    "I found the problem source in the Vault configmap. "
+                    "I have no clue how to specify the role name."
+                ),
+            }
+        ]
+        possible_bug = issue(
+            labels=[{"name": "kind/bug/possible"}, {"name": "contributor/wanted"}],
+            comments=1,
+        )
+        outsider: list[GitHubComment] = [
+            {
+                "body": "Not a Traefik bug; Go's net/http server rejects malformed headers.",
+                "author_association": "CONTRIBUTOR",
+            }
+        ]
+        with patch.object(scout, "strategic_competition_reason", return_value=None):
+            self.assertEqual(
+                scout.strategic_rejection(proposal, "t", []),
+                "reporter proposal awaits maintainer acceptance",
+            )
+            self.assertEqual(
+                scout.strategic_rejection(support, "t", support_followup),
+                "reporter follow-up seeks configuration guidance before implementation",
+            )
+            self.assertIsNone(scout.strategic_rejection(possible_bug, "t", outsider))
+            self.assertEqual(
+                scout.strategic_rejection(
+                    possible_bug,
+                    "t",
+                    [{**outsider[0], "author_association": "MEMBER"}],
+                ),
+                "maintainer confirms reported behavior is outside project code",
+            )
+
     def test_stale_strategic_issue_requires_label_removal(self) -> None:
         # Regression: Cilium #45913 was ranked while marked stale by automation.
         stale = issue(

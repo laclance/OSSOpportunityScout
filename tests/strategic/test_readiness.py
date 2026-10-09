@@ -497,6 +497,37 @@ class MaintainerReadinessTests(unittest.TestCase):
             (False, "proposal is still gathering feedback"),
         )
 
+
+    def test_non_project_bug_claim_requires_maintainer_authority(self) -> None:
+        report = issue(labels=[{"name": "kind/bug/possible"}, {"name": "contributor/wanted"}])
+        diagnosis: GitHubComment = {
+            "body": (
+                "Not a Traefik bug. Go's net/http server rejects the malformed "
+                "header before the handler executes."
+            ),
+            "author_association": "CONTRIBUTOR",
+        }
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(report, [diagnosis]),
+            (None, None),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report, [{**diagnosis, "author_association": "MEMBER"}]
+            ),
+            (False, "maintainer confirms reported behavior is outside project code"),
+        )
+        self.assertEqual(
+            readiness.maintainer_readiness_comment_state(
+                report,
+                [
+                    {**diagnosis, "author_association": "MEMBER"},
+                    {"body": "Ready for implementation", "author_association": "OWNER"},
+                ],
+            ),
+            (True, None),
+        )
+
     def test_hold_reason_branches_are_directly_owned_here(self) -> None:
         regular = issue(title="Network bug")
         proposal = issue(title="Network metrics", labels=[{"name": "kind/proposal"}])
@@ -954,6 +985,40 @@ class ReporterDesignDiscussionTests(unittest.TestCase):
             "issue reporter says implementation design is still under discussion",
         )
 
+
+    def test_unapproved_module_split_proposal_requires_maintainer_acceptance(self) -> None:
+        grpc = issue(
+            user={"login": "author"},
+            comments=0,
+            title="Split client and server modules?",
+            body=(
+                "Proposed solution: refactor the public module into separate client "
+                "and server modules. This would be an API break, so feel free to "
+                "WONTFIX if you think it doesn't make sense."
+            ),
+        )
+        reason = "reporter proposal awaits maintainer acceptance"
+        self.assertEqual(readiness.reporter_design_discussion_reason(grpc, []), reason)
+        with_comments = issue(**{**grpc, "comments": 1})
+        self.assertIsNone(readiness.reporter_design_discussion_reason(with_comments, []))
+        commenter: list[GitHubComment] = [
+            {"user": {"login": "visitor"}, "body": "PRs welcome", "author_association": "NONE"}
+        ]
+        self.assertEqual(
+            readiness.reporter_design_discussion_reason(with_comments, commenter), reason
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                with_comments,
+                [{"body": "Ready for implementation", "author_association": "MEMBER"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_design_discussion_reason(
+                issue(body="Split modules with an approved implementation plan.", comments=0), []
+            )
+        )
+
     def test_open_design_discussion_requires_reporter_and_multiple_choices(self) -> None:
         item = issue(
             user={"login": "reporter"},
@@ -1255,6 +1320,45 @@ class ReporterSupportTriageTests(unittest.TestCase):
         self.assertEqual(
             readiness.reporter_support_triage_reason(flux),
             "support/triage issue rather than a contributor task",
+        )
+
+
+    def test_reporter_config_followup_is_support_until_maintainer_ready(self) -> None:
+        flux = issue(
+            user={"login": "author"},
+            body="Vault Transit decryption is failing with a 403 response.",
+        )
+        followup: GitHubComment = {
+            "user": {"login": "author"},
+            "body": (
+                "I found the problem source: it requires a configmap with Vault auth "
+                "configuration. There is no documentation for it and I have no clue "
+                "how to specify the role name."
+            ),
+        }
+        reason = "reporter follow-up seeks configuration guidance before implementation"
+        self.assertEqual(readiness.reporter_support_triage_reason(flux, [followup]), reason)
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux, [{**followup, "user": {"login": "someone-else"}}]
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux, [followup, {**followup, "body": "The code path needs fixing."}]
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                flux,
+                [followup, {"body": "Ready for implementation", "author_association": "MEMBER"}],
+            )
+        )
+        self.assertIsNone(
+            readiness.reporter_support_triage_reason(
+                issue(user={"login": "author"}, body="Implement a documented role name option."),
+                [],
+            )
         )
 
     def test_pre_pr_workflow_instruction_does_not_imply_approval_gate(self) -> None:
